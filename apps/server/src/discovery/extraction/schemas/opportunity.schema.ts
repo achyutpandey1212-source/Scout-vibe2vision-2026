@@ -61,4 +61,38 @@ export const OpportunitySchema = z.object({
   sourceDomain: z.string().nullable().default(null),
   sourceType: SourceTypeSchema,
   confidence: z.number().min(0).max(1).default(0.5),
+  intelligence: z
+    .object({
+      normalizedOrganization: z.string().nullable().default(null),
+      normalizedDeadline: z.string().nullable().default(null),
+      daysRemaining: z.number().nullable().default(null),
+      expired: z.boolean().default(false),
+      metadata: z
+        .object({
+          country: z.string().nullable().default(null),
+          state: z.string().nullable().default(null),
+          city: z.string().nullable().default(null),
+          isGovernment: z.boolean().default(false),
+          isRemote: z.boolean().default(false),
+          isPaid: z.boolean().default(false),
+          hasDeadline: z.boolean().default(false),
+          requiresResume: z.boolean().default(false),
+          requiresPortfolio: z.boolean().default(false),
+          requiresExperience: z.boolean().default(false),
+          requiresDegree: z.boolean().default(false),
+        })
+        .nullable()
+        .default(null),
+      version: z.string().default('1.0'),
+      enriched: z.boolean().default(false),
+      lastEnrichedAt: z
+        .preprocess((arg) => {
+          if (typeof arg === 'string' || arg instanceof Date) return new Date(arg);
+          return arg;
+        }, z.date())
+        .nullable()
+        .default(null),
+    })
+    .nullable()
+    .optional(),
 });

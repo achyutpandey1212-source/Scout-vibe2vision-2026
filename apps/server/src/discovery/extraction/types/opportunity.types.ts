@@ -67,6 +67,30 @@ export interface Opportunity {
   rawPageId: string;
   aiMetadata: AIMetadata;
   hash: string;
+  intelligence?: OpportunityIntelligence | null;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface OpportunityIntelligence {
+  normalizedOrganization: string | null;
+  normalizedDeadline: string | null;
+  daysRemaining: number | null;
+  expired: boolean;
+  metadata: {
+    country: string | null;
+    state: string | null;
+    city: string | null;
+    isGovernment: boolean;
+    isRemote: boolean;
+    isPaid: boolean;
+    hasDeadline: boolean;
+    requiresResume: boolean;
+    requiresPortfolio: boolean;
+    requiresExperience: boolean;
+    requiresDegree: boolean;
+  } | null;
+  version: string;
+  enriched: boolean;
+  lastEnrichedAt: Date | null;
 }
