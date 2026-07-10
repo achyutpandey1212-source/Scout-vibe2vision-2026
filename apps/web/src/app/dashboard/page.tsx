@@ -1,32 +1,49 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { DashboardLayout } from '@/components/layout';
 import { Typography, Grid, Stack, UniversalLoader, PageTransition, Button } from '@/components/ui';
 import { FeaturedOpportunityCard, OpportunityCard } from '@/components/opportunity';
 import { DashboardHero, ScoutIntelligencePanel, RecommendationStrip } from '@/components/dashboard';
-import { mockOpportunities, MockOpportunity } from '@/lib/mock';
 import { ROUTES } from '@/lib/constants/routes';
 import { SpotlightSearch } from '@/components/dashboard/SpotlightSearch';
-import { Search, Compass } from 'lucide-react';
+import { Search, Compass, AlertCircle } from 'lucide-react';
 import { HiddenGemCard } from '@/components/opportunity/HiddenGemCard';
+import { useAuth } from '@/context/auth-context';
+import {
+  recommendationsApi,
+  opportunitiesApi,
+  bookmarksApi,
+  profileApi,
+  Opportunity,
+  Recommendation,
+} from '@/lib/api';
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+  const router = useRouter();
+
+  // Page States
   const [pageLoading, setPageLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'recommended' | 'all'>('recommended');
 
-  // Infinite scroll sizing
-  const [visibleCount, setVisibleCount] = useState(12);
+  // API Data
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [catalog, setCatalog] = useState<Opportunity[]>([]);
+  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
+  const [profileName, setProfileName] = useState<string | null>(null);
 
-  // Search & Filter controls for the "All Opportunities" (Explore Catalog)
+  // Catalog Pagination & Filter states
+  const [page, setPage] = useState(1);
+  const [hasNext, setHasNext] = useState(false);
+  const [totalCatalogCount, setTotalCatalogCount] = useState(0);
   const [feedQuery, setFeedQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<'match' | 'deadline'>('match');
-
-  const router = useRouter();
 
   const loadingMessages = [
     "Finding today's matches...",
@@ -58,54 +75,119 @@ export default function DashboardPage() {
     };
   }, []);
 
+  // Fetch initial dashboard and user data
+  const loadDashboardData = async () => {
+    try {
+      setError(null);
+      // Fetch recommendations, bookmarks, and profile concurrently
+      const [recRes, bookmarkRes, profileRes] = await Promise.all([
+        recommendationsApi.list(),
+        bookmarksApi.list(),
+        profileApi.get().catch((err) => {
+          console.warn('Dashboard profile fetch failed:', err);
+          return null;
+        }),
+      ]);
+
+      if (recRes.data?.success) {
+        setRecommendations(recRes.data.data);
+      }
+      if (bookmarkRes.data?.success) {
+        const bookmarkedList: Opportunity[] = bookmarkRes.data.data;
+        setBookmarkedIds(new Set(bookmarkedList.map((opp) => opp._id)));
+      }
+      if (profileRes && profileRes.data?.success) {
+        const p = profileRes.data.data;
+        if (p?.identity?.preferredName) {
+          setProfileName(p.identity.preferredName);
+        }
+      }
+    } catch (err: any) {
+      console.error('Failed to load dashboard data:', err);
+      setError('We are having trouble connecting to Scout right now. Please try again.');
+    }
+  };
+
+  // Fetch paginated catalog opportunities
+  const loadCatalogData = useCallback(
+    async (pageNum: number, shouldAppend: boolean) => {
+      try {
+        const res = await opportunitiesApi.list({
+          page: pageNum,
+          limit: 12,
+          category: categoryFilter,
+          q: feedQuery,
+          sortBy,
+        });
+
+        if (res.data?.success) {
+          const newOpportunities = res.data.data;
+          if (shouldAppend) {
+            setCatalog((prev) => [...prev, ...newOpportunities]);
+          } else {
+            setCatalog(newOpportunities);
+          }
+          setTotalCatalogCount(res.data.pagination?.total || 0);
+          setHasNext(res.data.pagination?.hasNext || false);
+          setPage(pageNum);
+        }
+      } catch (err) {
+        console.error('Failed to load catalog:', err);
+      }
+    },
+    [categoryFilter, feedQuery, sortBy],
+  );
+
+  // Trigger loading catalog on filters/search changes
+  useEffect(() => {
+    if (activeTab === 'all') {
+      loadCatalogData(1, false);
+    }
+  }, [activeTab, loadCatalogData]);
+
   const handleCardClick = (id: string) => {
     router.push(ROUTES.OPPORTUNITY(id));
   };
 
-  // Find opportunities by types
-  const featuredOpp = mockOpportunities.find((o) => o.isFeatured) || mockOpportunities[0];
-  const hiddenGems = mockOpportunities.filter((o) => o.isHiddenGem);
+  // Bookmark toggler with Optimistic UI updates
+  const handleBookmarkToggle = async (opportunityId: string) => {
+    const isBookmarked = bookmarkedIds.has(opportunityId);
+    const updatedBookmarks = new Set(bookmarkedIds);
 
-  // Recommended matches: personalized (MatchScore >= 80)
-  const recommendedOpps = mockOpportunities.filter((o) => o.matchScore >= 80 && !o.isFeatured);
+    if (isBookmarked) {
+      updatedBookmarks.delete(opportunityId);
+    } else {
+      updatedBookmarks.add(opportunityId);
+    }
+    setBookmarkedIds(updatedBookmarks); // optimistic
 
-  // All opportunities: dynamic filters/sort/search
-  const processedAllOpps = mockOpportunities
-    .filter((opp) => {
-      // 1. Search Query
-      const matchesSearch =
-        opp.title.toLowerCase().includes(feedQuery.toLowerCase()) ||
-        opp.organization.toLowerCase().includes(feedQuery.toLowerCase()) ||
-        opp.tags.some((t) => t.toLowerCase().includes(feedQuery.toLowerCase()));
-
-      // 2. Category Filter
-      const matchesCategory = categoryFilter === 'ALL' || opp.category === categoryFilter;
-
-      return matchesSearch && matchesCategory;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'deadline') {
-        return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+    try {
+      if (isBookmarked) {
+        await bookmarksApi.remove(opportunityId);
+      } else {
+        await bookmarksApi.add(opportunityId);
       }
-      return b.matchScore - a.matchScore;
-    });
+    } catch (err) {
+      console.error('Failed to save bookmark status:', err);
+      // rollback on failure
+      const rollbackBookmarks = new Set(bookmarkedIds);
+      if (isBookmarked) {
+        rollbackBookmarks.add(opportunityId);
+      } else {
+        rollbackBookmarks.delete(opportunityId);
+      }
+      setBookmarkedIds(rollbackBookmarks);
+    }
+  };
 
-  // Recycle items to simulate a massive dataset of 2,314 items (Infinite scrolling)
-  const baseList = processedAllOpps.length > 0 ? processedAllOpps : mockOpportunities;
-  const recycledAllOpps: MockOpportunity[] = [];
-  for (let i = 0; i < 48; i++) {
-    const original = baseList[i % baseList.length];
-    recycledAllOpps.push({
-      ...original,
-      id: `${original.id}-recycled-${i}`,
-      title:
-        i >= baseList.length
-          ? `${original.title} (Batch ${Math.floor(i / baseList.length) + 1})`
-          : original.title,
-    });
-  }
+  // Setup references
+  const featuredRec = recommendations[0];
+  const featuredOpp = featuredRec?.opportunity;
+  const hiddenGems = recommendations.filter((r) => r.opportunity.isHiddenGem);
+  const recommendedOpps = recommendations.filter(
+    (r) => r.recommendationScore >= 75 && r !== featuredRec,
+  );
 
-  // Extract unique categories for filter dropdown
   const categories = ['ALL', 'SCHOLARSHIP', 'INTERNSHIP', 'FELLOWSHIP', 'GRANT'];
 
   return (
@@ -115,64 +197,104 @@ export default function DashboardPage() {
           <UniversalLoader
             messages={loadingMessages}
             intervalMs={450}
-            onComplete={() => setPageLoading(false)}
+            onComplete={() => {
+              loadDashboardData().then(() => setPageLoading(false));
+            }}
           />
         </div>
       ) : (
         <DashboardLayout>
           <PageTransition>
             <Stack gap="xl" className="pb-16 max-w-5xl mx-auto space-y-12">
-              {/* Conditional rendering depending on tab: Curated Dashboard vs Explore Catalog */}
-              {activeTab === 'recommended' ? (
+              {error ? (
+                <div className="p-6 rounded-3xl border border-rose-200/50 bg-rose-50/30 dark:bg-rose-950/10 flex items-start gap-4">
+                  <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <Typography variant="heading-s" className="text-sm font-medium text-foreground">
+                      Unable to Sync with Scout
+                    </Typography>
+                    <Typography variant="body" className="text-xs text-secondary/80 font-light">
+                      {error}
+                    </Typography>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="mt-2"
+                      onClick={loadDashboardData}
+                    >
+                      Retry Connection
+                    </Button>
+                  </div>
+                </div>
+              ) : activeTab === 'recommended' ? (
                 <>
                   {/* 1. Greeting Hero Section */}
-                  <DashboardHero userName="Maya" />
+                  <DashboardHero
+                    userName={profileName || user?.name || user?.displayName || 'User'}
+                    matchCount={recommendations.length}
+                  />
 
                   {/* 2. Today's Scout Brief Section */}
-                  <ScoutIntelligencePanel />
+                  <ScoutIntelligencePanel
+                    opportunityCount={totalCatalogCount || recommendations.length * 11}
+                    matchCount={recommendations.length}
+                    bookmarkCount={bookmarkedIds.size}
+                  />
 
                   {/* 3. Featured Match Section */}
-                  <Stack gap="sm" className="space-y-4">
-                    <div className="border-b border-border/40 pb-3 flex items-center justify-between">
-                      <Typography variant="heading-m" className="font-normal font-sans">
-                        Featured Match
-                      </Typography>
-                      <span className="text-xs text-secondary/60 font-light">
-                        Highest compatibility today
-                      </span>
-                    </div>
-                    <FeaturedOpportunityCard
-                      title={featuredOpp.title}
-                      organization={featuredOpp.organization}
-                      description={featuredOpp.description}
-                      deadline={featuredOpp.deadline}
-                      matchScore={featuredOpp.matchScore}
-                      tags={featuredOpp.tags}
-                      isBookmarked={true}
-                      isWomenOnly={featuredOpp.isWomenOnly}
-                      stipend={featuredOpp.stipend}
-                      onBookmarkToggle={() => {}}
-                      onApplyClick={() => handleCardClick(featuredOpp.id)}
-                    />
-                  </Stack>
+                  {featuredOpp && (
+                    <Stack gap="sm" className="space-y-4">
+                      <div className="border-b border-border/40 pb-3 flex items-center justify-between">
+                        <Typography variant="heading-m" className="font-normal font-sans">
+                          Featured Match
+                        </Typography>
+                        <span className="text-xs text-secondary/60 font-light">
+                          Highest compatibility today
+                        </span>
+                      </div>
+                      <FeaturedOpportunityCard
+                        title={featuredOpp.title}
+                        organization={featuredOpp.organization}
+                        description={featuredOpp.description}
+                        deadline={featuredOpp.deadline || 'Flexible'}
+                        matchScore={featuredRec.recommendationScore}
+                        tags={featuredOpp.tags}
+                        isBookmarked={bookmarkedIds.has(featuredOpp._id)}
+                        isWomenOnly={
+                          featuredOpp.isWomenOnly ||
+                          featuredOpp.genderEligibility?.toLowerCase().includes('women') ||
+                          featuredOpp.genderEligibility?.toLowerCase().includes('female')
+                        }
+                        stipend={
+                          featuredOpp.stipend != null
+                            ? `₹${Number(featuredOpp.stipend).toLocaleString()}`
+                            : undefined
+                        }
+                        onBookmarkToggle={() => handleBookmarkToggle(featuredOpp._id)}
+                        onApplyClick={() => handleCardClick(featuredOpp._id)}
+                      />
+                    </Stack>
+                  )}
 
                   {/* 4. Hidden Gems Strip */}
-                  <RecommendationStrip
-                    title="Hidden Gems"
-                    description="Low-competition matching opportunities discovered recently."
-                  >
-                    {hiddenGems.map((gem) => (
-                      <HiddenGemCard
-                        key={gem.id}
-                        title={gem.title}
-                        organization={gem.organization}
-                        matchScore={gem.matchScore}
-                        isBookmarked={gem.id === 'opp-qualcomm-wetech'}
-                        onBookmarkToggle={() => {}}
-                        onApplyClick={() => handleCardClick(gem.id)}
-                      />
-                    ))}
-                  </RecommendationStrip>
+                  {hiddenGems.length > 0 && (
+                    <RecommendationStrip
+                      title="Hidden Gems"
+                      description="Low-competition matching opportunities discovered recently."
+                    >
+                      {hiddenGems.map((gem) => (
+                        <HiddenGemCard
+                          key={gem.opportunity._id}
+                          title={gem.opportunity.title}
+                          organization={gem.opportunity.organization}
+                          matchScore={gem.recommendationScore}
+                          isBookmarked={bookmarkedIds.has(gem.opportunity._id)}
+                          onBookmarkToggle={() => handleBookmarkToggle(gem.opportunity._id)}
+                          onApplyClick={() => handleCardClick(gem.opportunity._id)}
+                        />
+                      ))}
+                    </RecommendationStrip>
+                  )}
                 </>
               ) : (
                 /* Explore Catalog Title Header (Dashboard curated headers hidden) */
@@ -192,10 +314,7 @@ export default function DashboardPage() {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-border/40 pb-4 gap-4">
                   <div className="flex gap-2 bg-accent/25 p-1 rounded-full border border-border/40">
                     <button
-                      onClick={() => {
-                        setActiveTab('recommended');
-                        setVisibleCount(12);
-                      }}
+                      onClick={() => setActiveTab('recommended')}
                       className={`px-5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-200 ${
                         activeTab === 'recommended'
                           ? 'bg-card text-foreground shadow-sm'
@@ -205,10 +324,7 @@ export default function DashboardPage() {
                       Dashboard Curated
                     </button>
                     <button
-                      onClick={() => {
-                        setActiveTab('all');
-                        setVisibleCount(12);
-                      }}
+                      onClick={() => setActiveTab('all')}
                       className={`px-5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-200 ${
                         activeTab === 'all'
                           ? 'bg-card text-foreground shadow-sm'
@@ -222,7 +338,7 @@ export default function DashboardPage() {
                   <span className="text-xs text-secondary/50 font-light select-none">
                     {activeTab === 'recommended'
                       ? 'AI-personalized matches curated for your profile'
-                      : `Displaying ${processedAllOpps.length} base opportunities in index`}
+                      : `Displaying ${totalCatalogCount} opportunities in index`}
                   </span>
                 </div>
 
@@ -279,55 +395,92 @@ export default function DashboardPage() {
 
                 {/* Tab content rendering */}
                 {activeTab === 'recommended' ? (
-                  <Grid cols={1} colsSm={2} colsLg={3} gap="md">
-                    {recommendedOpps.map((opp) => (
-                      <OpportunityCard
-                        key={opp.id}
-                        title={opp.title}
-                        organization={opp.organization}
-                        deadline={opp.deadline}
-                        tags={opp.tags}
-                        matchScore={opp.matchScore}
-                        isBookmarked={opp.id === 'opp-zenkai-mern'}
-                        isWomenOnly={opp.isWomenOnly}
-                        stipend={opp.stipend}
-                        onBookmarkToggle={() => {}}
-                        onApplyClick={() => handleCardClick(opp.id)}
-                        onCardClick={() => handleCardClick(opp.id)}
-                      />
-                    ))}
-                  </Grid>
-                ) : processedAllOpps.length > 0 ? (
+                  recommendedOpps.length > 0 ? (
+                    <Grid cols={1} colsSm={2} colsLg={3} gap="md">
+                      {recommendedOpps.map((rec) => (
+                        <OpportunityCard
+                          key={rec.opportunity._id}
+                          title={rec.opportunity.title}
+                          organization={rec.opportunity.organization}
+                          deadline={rec.opportunity.deadline || 'Flexible'}
+                          tags={rec.opportunity.tags}
+                          matchScore={rec.recommendationScore}
+                          isBookmarked={bookmarkedIds.has(rec.opportunity._id)}
+                          isWomenOnly={
+                            rec.opportunity.isWomenOnly ||
+                            rec.opportunity.genderEligibility?.toLowerCase().includes('women') ||
+                            rec.opportunity.genderEligibility?.toLowerCase().includes('female')
+                          }
+                          stipend={
+                            rec.opportunity.stipend != null
+                              ? `₹${Number(rec.opportunity.stipend).toLocaleString()}`
+                              : undefined
+                          }
+                          onBookmarkToggle={() => handleBookmarkToggle(rec.opportunity._id)}
+                          onApplyClick={() => handleCardClick(rec.opportunity._id)}
+                          onCardClick={() => handleCardClick(rec.opportunity._id)}
+                        />
+                      ))}
+                    </Grid>
+                  ) : (
+                    <div className="py-16 text-center flex flex-col items-center justify-center space-y-4">
+                      <div className="text-secondary/40 shrink-0 select-none">
+                        <Compass
+                          className="w-12 h-12 stroke-[1.2] animate-spin"
+                          style={{ animationDuration: '20s' }}
+                        />
+                      </div>
+                      <Typography variant="heading-s" className="text-sm font-medium">
+                        No matches available
+                      </Typography>
+                      <Typography
+                        variant="body"
+                        className="text-xs text-secondary/60 max-w-sm mx-auto font-light leading-relaxed"
+                      >
+                        Scout is analyzing opportunities in the background. Your personalized feed
+                        will show up here.
+                      </Typography>
+                    </div>
+                  )
+                ) : catalog.length > 0 ? (
                   <div className="space-y-8">
                     <Grid cols={1} colsSm={2} colsLg={3} gap="md">
-                      {recycledAllOpps.slice(0, visibleCount).map((opp) => (
+                      {catalog.map((opp) => (
                         <OpportunityCard
-                          key={opp.id}
+                          key={opp._id}
                           title={opp.title}
                           organization={opp.organization}
-                          deadline={opp.deadline}
+                          deadline={opp.deadline || 'Flexible'}
                           tags={opp.tags}
-                          matchScore={opp.matchScore}
-                          isBookmarked={opp.id.startsWith('opp-zenkai-mern')}
-                          isWomenOnly={opp.isWomenOnly}
-                          stipend={opp.stipend}
-                          onBookmarkToggle={() => {}}
-                          onApplyClick={() => handleCardClick(opp.id.split('-recycled')[0])}
-                          onCardClick={() => handleCardClick(opp.id.split('-recycled')[0])}
+                          matchScore={90} // Default score for catalog item without recommendations evaluation
+                          isBookmarked={bookmarkedIds.has(opp._id)}
+                          isWomenOnly={
+                            opp.isWomenOnly ||
+                            opp.genderEligibility?.toLowerCase().includes('women') ||
+                            opp.genderEligibility?.toLowerCase().includes('female')
+                          }
+                          stipend={
+                            opp.stipend != null
+                              ? `₹${Number(opp.stipend).toLocaleString()}`
+                              : undefined
+                          }
+                          onBookmarkToggle={() => handleBookmarkToggle(opp._id)}
+                          onApplyClick={() => handleCardClick(opp._id)}
+                          onCardClick={() => handleCardClick(opp._id)}
                         />
                       ))}
                     </Grid>
 
-                    {/* Infinite scroll layout container */}
+                    {/* Pagination / Load more controls */}
                     <div className="pt-8 text-center space-y-4 border-t border-border/40">
                       <Typography variant="caption" className="text-secondary/60 font-light block">
-                        Showing {Math.min(visibleCount, 2314)} of 2,314 opportunities
+                        Showing {catalog.length} of {totalCatalogCount} opportunities
                       </Typography>
-                      {visibleCount < 48 && (
+                      {hasNext && (
                         <Button
                           variant="secondary"
                           size="sm"
-                          onClick={() => setVisibleCount((prev) => prev + 12)}
+                          onClick={() => loadCatalogData(page + 1, true)}
                         >
                           Load More Opportunities
                         </Button>
@@ -335,7 +488,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 ) : (
-                  // Search empty state with Compass Illustration
+                  // Search empty state
                   <div className="py-16 text-center flex flex-col items-center justify-center space-y-4">
                     <div className="text-secondary/40 shrink-0 select-none">
                       <Compass
@@ -360,7 +513,7 @@ export default function DashboardPage() {
               </Stack>
 
               {/* 6. Scout Insights (only on curated dashboard) */}
-              {activeTab === 'recommended' && (
+              {activeTab === 'recommended' && recommendations.length > 0 && (
                 <div className="border-t border-border/40 pt-10 select-none">
                   <Grid cols={1} colsMd={3} gap="lg">
                     <div className="p-6 rounded-2xl bg-accent/10 border border-border/30 space-y-2">
@@ -395,7 +548,7 @@ export default function DashboardPage() {
                         variant="body"
                         className="text-xs text-secondary/70 font-light leading-relaxed"
                       >
-                        Qualcomm Scholars and SWE Travel Grant are currently receiving 15% fewer
+                        Google Scholars and Qualcomm Travel Grants are currently receiving 15% fewer
                         applicant clicks than similar listings.
                       </Typography>
                     </div>
@@ -413,8 +566,8 @@ export default function DashboardPage() {
                         variant="body"
                         className="text-xs text-secondary/70 font-light leading-relaxed"
                       >
-                        WTM Scholarship deadline is 2 weeks away. We suggest preparing essay drafts
-                        by this Friday.
+                        The highest match scholarship deadline is approaching. We suggest preparing
+                        essay drafts by this Friday.
                       </Typography>
                     </div>
                   </Grid>

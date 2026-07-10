@@ -37,6 +37,38 @@ export class UserRepository {
       lastSeenAt: now,
     };
 
+    // 1. Try finding by firebaseUid first
+    let user = await UserModel.findOne({ firebaseUid: uid });
+
+    if (user) {
+      // User found by UID, update details
+      return (await UserModel.findOneAndUpdate(
+        { firebaseUid: uid },
+        { $set: updateData },
+        { returnDocument: 'after' },
+      )) as IUser;
+    }
+
+    // 2. If not found by UID, try finding by email to link/merge accounts (prevent dup email error)
+    if (data.email && data.email.trim() !== '') {
+      user = await UserModel.findOne({ email: data.email });
+      if (user) {
+        // Link the existing email account to this Firebase UID
+        return (await UserModel.findOneAndUpdate(
+          { email: data.email },
+          {
+            $set: {
+              firebaseUid: uid,
+              provider: data.provider || user.provider || 'google.com',
+              ...updateData,
+            },
+          },
+          { returnDocument: 'after' },
+        )) as IUser;
+      }
+    }
+
+    // 3. Neither found, perform insert/upsert
     return (await UserModel.findOneAndUpdate(
       { firebaseUid: uid },
       {

@@ -16,7 +16,8 @@ export interface MockOpportunity {
   eligibility: string;
   benefits: string;
   requirements: string[];
-  sourceUrl: string;
+  applicationUrl: string;
+  sourceURL: string;
 }
 
 export const mockOpportunities: MockOpportunity[] = [
@@ -47,7 +48,9 @@ export const mockOpportunities: MockOpportunity[] = [
       'Write two essay responses detailing technical leadership and career aspirations',
       'Provide a reference contact',
     ],
-    sourceUrl:
+    applicationUrl:
+      'https://buildyourfuture.withgoogle.com/scholarships/women-techmakers-scholars-program',
+    sourceURL:
       'https://buildyourfuture.withgoogle.com/scholarships/women-techmakers-scholars-program',
   },
   {
@@ -77,7 +80,8 @@ export const mockOpportunities: MockOpportunity[] = [
       'One letter of recommendation from a university faculty member',
       'Short essay responses',
     ],
-    sourceUrl: 'https://www.iie.org/programs/wetech',
+    applicationUrl: 'https://www.iie.org/programs/wetech',
+    sourceURL: 'https://www.iie.org/programs/wetech',
   },
   {
     id: 'opp-zenkai-mern',
@@ -104,7 +108,8 @@ export const mockOpportunities: MockOpportunity[] = [
       'Complete a take-home coding challenge (implementing a simple React component and API)',
       'Technical interview covering JavaScript fundamentals and React rendering cycles',
     ],
-    sourceUrl: 'https://labs.zenkai.dev/careers',
+    applicationUrl: 'https://labs.zenkai.dev/careers',
+    sourceURL: 'https://labs.zenkai.dev/careers',
   },
   {
     id: 'opp-swe-grant',
@@ -132,7 +137,8 @@ export const mockOpportunities: MockOpportunity[] = [
       'Submit essay detailing how attending the conference will impact your career path',
       'Letter of endorsement from SWE collegiate section advisor or dean',
     ],
-    sourceUrl: 'https://swe.org/scholarships-and-grants',
+    applicationUrl: 'https://swe.org/scholarships-and-grants',
+    sourceURL: 'https://swe.org/scholarships-and-grants',
   },
   {
     id: 'opp-notion-pm',
@@ -159,7 +165,8 @@ export const mockOpportunities: MockOpportunity[] = [
       'Submit a case study analysis answering: "How can Notion improve database onboarding for students?"',
       'Product sense and execution interviews',
     ],
-    sourceUrl: 'https://www.notion.so/careers',
+    applicationUrl: 'https://www.notion.so/careers',
+    sourceURL: 'https://www.notion.so/careers',
   },
   {
     id: 'opp-microsoft-res',
@@ -186,6 +193,7 @@ export const mockOpportunities: MockOpportunity[] = [
       'Statement of Purpose describing research interests',
       'Three letters of recommendation',
     ],
-    sourceUrl: 'https://www.microsoft.com/en-us/research/lab/microsoft-research-india/',
+    applicationUrl: 'https://www.microsoft.com/en-us/research/lab/microsoft-research-india/',
+    sourceURL: 'https://www.microsoft.com/en-us/research/lab/microsoft-research-india/',
   },
 ];

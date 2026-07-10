@@ -55,9 +55,7 @@ export default function Home() {
     if (user) {
       router.push(ROUTES.DASHBOARD);
     } else {
-      signIn().then(() => {
-        router.push(ROUTES.DASHBOARD);
-      });
+      router.push(ROUTES.LOGIN);
     }
   };
 

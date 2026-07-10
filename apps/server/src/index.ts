@@ -4,6 +4,8 @@ import { env, db, redis, firebase } from '@/config';
 import { authRouter } from './auth';
 import { profileRouter } from './profile';
 import { recommendationRouter } from './intelligence/recommendation';
+import { opportunityRouter } from './discovery/routes/opportunity.routes';
+import { bookmarkRouter } from './auth/routes/bookmark.routes';
 
 const app = express();
 const port = env.PORT;
@@ -56,6 +58,12 @@ app.use('/api/v1/profile', profileRouter);
 
 // Register Recommendations Router
 app.use('/api/v1/recommendations', recommendationRouter);
+
+// Register Opportunities Router
+app.use('/api/v1/opportunities', opportunityRouter);
+
+// Register Bookmarks Router
+app.use('/api/v1/bookmarks', bookmarkRouter);
 
 // Bootstrapping the services
 async function bootstrap() {

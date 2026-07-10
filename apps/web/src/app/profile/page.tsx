@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { DashboardLayout } from '@/components/layout';
 import {
@@ -21,7 +22,6 @@ import {
   Divider,
   PageTransition,
 } from '@/components/ui';
-import { mockProfile, UserProfileDetails } from '@/lib/mock';
 import {
   Mail,
   MapPin,
@@ -32,58 +32,120 @@ import {
   Trash2,
   Settings,
   ShieldCheck,
+  AlertCircle,
+  LogOut,
 } from 'lucide-react';
+import { useAuth } from '@/context/auth-context';
+import { profileApi } from '@/lib/api';
 
 export default function ProfilePage() {
+  const { user, signOut } = useAuth();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [profile, setProfile] = useState<UserProfileDetails>(mockProfile);
 
-  // Intermediate form states
-  const [locationVal, setLocationVal] = useState(profile.location);
-  const [stageVal, setStageVal] = useState(profile.stage);
+  // Full DB Profile State
+  const [rawProfile, setRawProfile] = useState<any>(null);
+
+  // Layout presentation bindings
+  const [name, setName] = useState('');
+  const [locationVal, setLocationVal] = useState('');
+  const [stageVal, setStageVal] = useState('');
+  const [dreams, setDreams] = useState<string[]>([]);
+  const [interests, setInterests] = useState<string[]>([]);
+
+  // Companion Settings bindings
+  const [dailyBrief, setDailyBrief] = useState(true);
+  const [weeklyDigest, setWeeklyDigest] = useState(false);
+  const [exploreFrequency, setExploreFrequency] = useState<'6h' | '12h' | '24h'>('6h');
+  const [minimumMatchScore, setMinimumMatchScore] = useState(75);
+
+  // Temporary Form additions
   const [newDreamVal, setNewDreamVal] = useState('');
   const [newInterestVal, setNewInterestVal] = useState('');
 
-  const handleSave = () => {
-    setProfile((prev) => ({
-      ...prev,
-      location: locationVal,
-      stage: stageVal,
-    }));
-    setIsEditing(false);
+  const fetchProfile = async () => {
+    try {
+      setError(null);
+      const res = await profileApi.get();
+      if (res.data?.success) {
+        const p = res.data.data;
+        setRawProfile(p);
+
+        // Map database fields to the UI schema
+        setName(
+          p.identity?.preferredName || user?.displayName || user?.email?.split('@')[0] || 'User',
+        );
+        setLocationVal(p.educationDetail?.college || 'New Delhi, India');
+        setStageVal(p.educationDetail?.course || 'Final Year BCA Student');
+        setDreams(
+          p.whyHere && p.whyHere.length > 0
+            ? p.whyHere
+            : [
+                'Secure a full-time product engineering role at a design-driven tech company.',
+                'Build applications that solve real information inequality problems.',
+              ],
+        );
+        setInterests(
+          p.workPreferences && p.workPreferences.length > 0
+            ? p.workPreferences
+            : ['React JS', 'Node JS', 'UI Design'],
+        );
+      }
+    } catch (err) {
+      console.error('Failed to load profile details:', err);
+      setError('Unable to synchronize profile parameters. Please retry.');
+    }
+  };
+
+  const handleSave = async () => {
+    if (!rawProfile) return;
+    try {
+      const updatedProfile = {
+        ...rawProfile,
+        identity: {
+          ...rawProfile.identity,
+          preferredName: name,
+        },
+        educationDetail: {
+          ...rawProfile.educationDetail,
+          college: locationVal,
+          course: stageVal,
+        },
+        whyHere: dreams,
+        workPreferences: interests,
+      };
+
+      const res = await profileApi.update(updatedProfile);
+      if (res.data?.success) {
+        setRawProfile(res.data.data);
+      }
+      setIsEditing(false);
+    } catch (err) {
+      console.error('Failed to save profile changes:', err);
+      setError('Failed to update profile changes on backend. Retrying.');
+    }
   };
 
   const handleAddDream = () => {
     if (!newDreamVal.trim()) return;
-    setProfile((prev) => ({
-      ...prev,
-      dreams: [...prev.dreams, newDreamVal.trim()],
-    }));
+    setDreams((prev) => [...prev, newDreamVal.trim()]);
     setNewDreamVal('');
   };
 
   const handleRemoveDream = (idx: number) => {
-    setProfile((prev) => ({
-      ...prev,
-      dreams: prev.dreams.filter((_, i) => i !== idx),
-    }));
+    setDreams((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const handleAddInterest = () => {
     if (!newInterestVal.trim()) return;
-    setProfile((prev) => ({
-      ...prev,
-      interests: [...prev.interests, newInterestVal.trim()],
-    }));
+    setInterests((prev) => [...prev, newInterestVal.trim()]);
     setNewInterestVal('');
   };
 
   const handleRemoveInterest = (item: string) => {
-    setProfile((prev) => ({
-      ...prev,
-      interests: prev.interests.filter((x) => x !== item),
-    }));
+    setInterests((prev) => prev.filter((x) => x !== item));
   };
 
   const loadingMessages = ['Opening profile vaults...', 'Assembling your preferences...', 'Ready.'];
@@ -95,7 +157,9 @@ export default function ProfilePage() {
           <UniversalLoader
             messages={loadingMessages}
             intervalMs={300}
-            onComplete={() => setLoading(false)}
+            onComplete={() => {
+              fetchProfile().then(() => setLoading(false));
+            }}
           />
         </div>
       ) : (
@@ -112,26 +176,53 @@ export default function ProfilePage() {
                     Scout parses these details to match high-relevance opportunities.
                   </Typography>
                 </Stack>
-                {isEditing ? (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={handleSave}
-                    iconLeft={<Check className="w-3.5 h-3.5" />}
-                  >
-                    Save Profile
-                  </Button>
-                ) : (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setIsEditing(true)}
-                    iconLeft={<Edit2 className="w-3.5 h-3.5" />}
-                  >
-                    Edit Profile
-                  </Button>
-                )}
+                <div className="flex items-center gap-2">
+                  {isEditing ? (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={handleSave}
+                      iconLeft={<Check className="w-3.5 h-3.5" />}
+                    >
+                      Save Profile
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setIsEditing(true)}
+                        iconLeft={<Edit2 className="w-3.5 h-3.5" />}
+                      >
+                        Edit Profile
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => signOut().then(() => router.push('/'))}
+                        iconLeft={<LogOut className="w-3.5 h-3.5 text-rose-500" />}
+                        className="text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
+                      >
+                        Logout
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
+
+              {error && (
+                <div className="p-6 rounded-3xl border border-rose-200/50 bg-rose-50/30 dark:bg-rose-950/10 flex items-start gap-4">
+                  <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <Typography variant="heading-s" className="text-sm font-medium text-foreground">
+                      Profile Sync Issue
+                    </Typography>
+                    <Typography variant="body" className="text-xs text-secondary/80 font-light">
+                      {error}
+                    </Typography>
+                  </div>
+                </div>
+              )}
 
               <Grid cols={1} colsMd={12} gap="lg" className="items-start">
                 {/* Left Column: Identity & Situation Profile (8 cols) */}
@@ -141,15 +232,23 @@ export default function ProfilePage() {
                       {/* Identification header */}
                       <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 border-b border-border/40 pb-6 text-center sm:text-left">
                         <div className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center font-normal text-2xl border-2 border-primary/20 select-none shrink-0">
-                          {profile.name.charAt(0)}
+                          {name.charAt(0)}
                         </div>
                         <div className="space-y-1">
-                          <Typography variant="heading-m" className="font-medium">
-                            {profile.name}
-                          </Typography>
+                          {isEditing ? (
+                            <TextInput
+                              value={name}
+                              onChange={(e) => setName(e.target.value)}
+                              placeholder="Name"
+                            />
+                          ) : (
+                            <Typography variant="heading-m" className="font-medium">
+                              {name}
+                            </Typography>
+                          )}
                           <div className="flex items-center gap-2 text-xs text-secondary/70">
                             <Mail className="w-3.5 h-3.5" />
-                            <span>{profile.email}</span>
+                            <span>{user?.email || 'email@example.com'}</span>
                           </div>
                         </div>
                       </div>
@@ -160,18 +259,18 @@ export default function ProfilePage() {
                           <div className="flex items-center gap-2 text-secondary/65 select-none">
                             <MapPin className="w-4 h-4 text-primary" />
                             <Typography variant="label" className="text-[10px]">
-                              Location
+                              Location (College)
                             </Typography>
                           </div>
                           {isEditing ? (
                             <TextInput
                               value={locationVal}
                               onChange={(e) => setLocationVal(e.target.value)}
-                              placeholder="Enter your location..."
+                              placeholder="Enter your location/college..."
                             />
                           ) : (
                             <Typography variant="body" className="font-normal pl-6">
-                              {profile.location}
+                              {locationVal}
                             </Typography>
                           )}
                         </Stack>
@@ -180,7 +279,7 @@ export default function ProfilePage() {
                           <div className="flex items-center gap-2 text-secondary/65 select-none">
                             <ShieldCheck className="w-4 h-4 text-primary" />
                             <Typography variant="label" className="text-[10px]">
-                              Career Stage
+                              Career Stage (Course)
                             </Typography>
                           </div>
                           {isEditing ? (
@@ -191,7 +290,7 @@ export default function ProfilePage() {
                             />
                           ) : (
                             <Typography variant="body" className="font-normal pl-6">
-                              {profile.stage}
+                              {stageVal}
                             </Typography>
                           )}
                         </Stack>
@@ -229,7 +328,7 @@ export default function ProfilePage() {
                         )}
 
                         <ul className="space-y-3.5 pl-6 list-disc text-sm font-light text-foreground/80 leading-relaxed">
-                          {profile.dreams.map((dream, idx) => (
+                          {dreams.map((dream, idx) => (
                             <li key={idx} className="relative group">
                               <span>{dream}</span>
                               {isEditing && (
@@ -282,7 +381,7 @@ export default function ProfilePage() {
                         )}
 
                         <div className="flex flex-wrap gap-2.5">
-                          {profile.interests.map((item) => (
+                          {interests.map((item) => (
                             <Chip
                               key={item}
                               label={item}
@@ -320,29 +419,13 @@ export default function ProfilePage() {
                         </Typography>
                         <Switch
                           label="Receive daily match summaries"
-                          checked={profile.companionPreferences.dailyBrief}
-                          onChange={(e) =>
-                            setProfile((prev) => ({
-                              ...prev,
-                              companionPreferences: {
-                                ...prev.companionPreferences,
-                                dailyBrief: !prev.companionPreferences.dailyBrief,
-                              },
-                            }))
-                          }
+                          checked={dailyBrief}
+                          onChange={() => setDailyBrief(!dailyBrief)}
                         />
                         <Switch
                           label="Weekly digest newsletter"
-                          checked={profile.companionPreferences.weeklyDigest}
-                          onChange={(e) =>
-                            setProfile((prev) => ({
-                              ...prev,
-                              companionPreferences: {
-                                ...prev.companionPreferences,
-                                weeklyDigest: !prev.companionPreferences.weeklyDigest,
-                              },
-                            }))
-                          }
+                          checked={weeklyDigest}
+                          onChange={() => setWeeklyDigest(!weeklyDigest)}
                         />
                       </Stack>
 
@@ -351,16 +434,8 @@ export default function ProfilePage() {
                       <Stack gap="sm">
                         <Select
                           label="Scout Explore Frequency"
-                          value={profile.companionPreferences.exploreFrequency}
-                          onChange={(e) =>
-                            setProfile((prev) => ({
-                              ...prev,
-                              companionPreferences: {
-                                ...prev.companionPreferences,
-                                exploreFrequency: e.target.value as any,
-                              },
-                            }))
-                          }
+                          value={exploreFrequency}
+                          onChange={(e) => setExploreFrequency(e.target.value as any)}
                         >
                           <option value="6h">Every 6 Hours (Recommended)</option>
                           <option value="12h">Every 12 Hours</option>
@@ -372,17 +447,9 @@ export default function ProfilePage() {
 
                       <Stack gap="sm">
                         <Slider
-                          label={`Minimum Match Confidence Score: ${profile.companionPreferences.minimumMatchScore}%`}
-                          value={profile.companionPreferences.minimumMatchScore.toString()}
-                          onChange={(e) =>
-                            setProfile((prev) => ({
-                              ...prev,
-                              companionPreferences: {
-                                ...prev.companionPreferences,
-                                minimumMatchScore: parseInt(e.target.value),
-                              },
-                            }))
-                          }
+                          label={`Minimum Match Confidence Score: ${minimumMatchScore}%`}
+                          value={minimumMatchScore.toString()}
+                          onChange={(e) => setMinimumMatchScore(parseInt(e.target.value))}
                         />
                       </Stack>
                     </CardContent>

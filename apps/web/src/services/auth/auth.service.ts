@@ -1,4 +1,13 @@
-import { signInWithPopup, signOut as fbSignOut, onAuthStateChanged, User } from 'firebase/auth';
+import {
+  signInWithPopup,
+  signOut as fbSignOut,
+  onAuthStateChanged,
+  User,
+  signInWithEmailAndPassword as fbSignInWithEmail,
+  createUserWithEmailAndPassword as fbCreateUserWithEmail,
+  signInAnonymously as fbSignInAnonymously,
+  updateProfile,
+} from 'firebase/auth';
 import { auth, googleProvider } from '@/lib/firebase/client';
 
 export class AuthService {
@@ -13,6 +22,48 @@ export class AuthService {
       return result.user;
     } catch (error) {
       console.error('Error during Google Sign In:', error);
+      throw error;
+    }
+  }
+
+  async loginWithEmail(email: string, pass: string): Promise<User> {
+    if (!auth || !auth.app) {
+      throw new Error('Firebase Auth is not initialized.');
+    }
+    try {
+      const result = await fbSignInWithEmail(auth, email, pass);
+      return result.user;
+    } catch (error) {
+      console.error('Error during Email Sign In:', error);
+      throw error;
+    }
+  }
+
+  async signupWithEmail(email: string, pass: string, name: string): Promise<User> {
+    if (!auth || !auth.app) {
+      throw new Error('Firebase Auth is not initialized.');
+    }
+    try {
+      const result = await fbCreateUserWithEmail(auth, email, pass);
+      await updateProfile(result.user, {
+        displayName: name,
+      });
+      return result.user;
+    } catch (error) {
+      console.error('Error during Email Sign Up:', error);
+      throw error;
+    }
+  }
+
+  async signInAsGuest(): Promise<User> {
+    if (!auth || !auth.app) {
+      throw new Error('Firebase Auth is not initialized.');
+    }
+    try {
+      const result = await fbSignInAnonymously(auth);
+      return result.user;
+    } catch (error) {
+      console.error('Error during Guest Sign In:', error);
       throw error;
     }
   }
@@ -39,3 +90,4 @@ export class AuthService {
 }
 
 export const authService = new AuthService();
+export default authService;

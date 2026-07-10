@@ -26,7 +26,11 @@ interface AuthContextType {
   user: ScoutUser | null;
   firebaseUser: FirebaseUser | null;
   loading: boolean;
-  signIn: () => Promise<void>;
+  signIn: () => Promise<void>; // Default Google Auth
+  signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, pass: string) => Promise<void>;
+  signUpWithEmail: (email: string, pass: string, name: string) => Promise<void>;
+  signInAsGuest: () => Promise<void>;
   signOut: () => Promise<void>;
   syncWithBackend: () => Promise<void>;
 }
@@ -83,13 +87,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  const signIn = async () => {
+  const signInWithGoogle = async () => {
     setLoading(true);
     try {
       await authService.loginWithGoogle();
       await syncWithBackend();
     } catch (error) {
-      console.error('Sign in failed:', error);
+      console.error('Google Sign in failed:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Google sign in default mapper
+  const signIn = signInWithGoogle;
+
+  const signInWithEmail = async (email: string, pass: string) => {
+    setLoading(true);
+    try {
+      await authService.loginWithEmail(email, pass);
+      await syncWithBackend();
+    } catch (error) {
+      console.error('Email Sign in failed:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signUpWithEmail = async (email: string, pass: string, name: string) => {
+    setLoading(true);
+    try {
+      await authService.signupWithEmail(email, pass, name);
+      await syncWithBackend();
+    } catch (error) {
+      console.error('Email Sign up failed:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signInAsGuest = async () => {
+    setLoading(true);
+    try {
+      await authService.signInAsGuest();
+      await syncWithBackend();
+    } catch (error) {
+      console.error('Guest Sign in failed:', error);
       throw error;
     } finally {
       setLoading(false);
@@ -111,7 +157,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, firebaseUser, loading, signIn, signOut, syncWithBackend }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        firebaseUser,
+        loading,
+        signIn,
+        signInWithGoogle,
+        signInWithEmail,
+        signUpWithEmail,
+        signInAsGuest,
+        signOut,
+        syncWithBackend,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

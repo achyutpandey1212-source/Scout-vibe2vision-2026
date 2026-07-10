@@ -3,10 +3,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Compass, X } from 'lucide-react';
-import { mockOpportunities, MockOpportunity } from '@/lib/mock';
 import { OrigamiDecoration, Typography } from '../ui';
 import { useRouter } from 'next/navigation';
 import { ROUTES } from '@/lib/constants/routes';
+import { opportunitiesApi, Opportunity } from '@/lib/api';
 
 interface SpotlightSearchProps {
   isOpen: boolean;
@@ -15,6 +15,8 @@ interface SpotlightSearchProps {
 
 export const SpotlightSearch: React.FC<SpotlightSearchProps> = ({ isOpen, onClose }) => {
   const [query, setQuery] = useState('');
+  const [results, setResults] = useState<Opportunity[]>([]);
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -26,6 +28,7 @@ export const SpotlightSearch: React.FC<SpotlightSearchProps> = ({ isOpen, onClos
       }, 50);
     } else {
       setQuery('');
+      setResults([]);
     }
   }, [isOpen]);
 
@@ -40,14 +43,30 @@ export const SpotlightSearch: React.FC<SpotlightSearchProps> = ({ isOpen, onClos
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  const filtered =
-    query.trim() === ''
-      ? []
-      : mockOpportunities.filter((opp) => {
-          const text =
-            `${opp.title} ${opp.organization} ${opp.description} ${opp.tags.join(' ')}`.toLowerCase();
-          return text.includes(query.toLowerCase());
-        });
+  // Debounced API Search
+  useEffect(() => {
+    if (query.trim() === '') {
+      setResults([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    const delayDebounce = setTimeout(async () => {
+      try {
+        const res = await opportunitiesApi.list({ q: query, limit: 5 });
+        if (res.data?.success) {
+          setResults(res.data.data);
+        }
+      } catch (err) {
+        console.error('Spotlight search query failed:', err);
+      } finally {
+        setLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounce);
+  }, [query]);
 
   const handleSelect = (id: string) => {
     router.push(ROUTES.OPPORTUNITY(id));
@@ -58,7 +77,7 @@ export const SpotlightSearch: React.FC<SpotlightSearchProps> = ({ isOpen, onClos
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[999] flex items-start justify-center pt-[15vh] px-4">
-          {/* Backdrop (no blur filters to maintain 60fps) */}
+          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.5 }}
@@ -77,7 +96,9 @@ export const SpotlightSearch: React.FC<SpotlightSearchProps> = ({ isOpen, onClos
           >
             {/* Search Input Area */}
             <div className="flex items-center px-4 py-3.5 border-b border-border/40 gap-3">
-              <Search className="w-5 h-5 text-secondary/60 shrink-0" />
+              <Search
+                className={`w-5 h-5 text-secondary/60 shrink-0 ${loading ? 'animate-pulse text-primary' : ''}`}
+              />
               <input
                 ref={inputRef}
                 type="text"
@@ -102,12 +123,12 @@ export const SpotlightSearch: React.FC<SpotlightSearchProps> = ({ isOpen, onClos
                     Type to search through all matching Scout streams.
                   </Typography>
                 </div>
-              ) : filtered.length > 0 ? (
+              ) : results.length > 0 ? (
                 <div className="space-y-1">
-                  {filtered.map((opp) => (
+                  {results.map((opp) => (
                     <button
-                      key={opp.id}
-                      onClick={() => handleSelect(opp.id)}
+                      key={opp._id}
+                      onClick={() => handleSelect(opp._id)}
                       className="w-full text-left p-3 rounded-2xl hover:bg-accent/45 transition-colors duration-150 flex items-center justify-between gap-4 outline-none focus:bg-accent"
                     >
                       <div className="min-w-0">
@@ -121,16 +142,23 @@ export const SpotlightSearch: React.FC<SpotlightSearchProps> = ({ isOpen, onClos
                           variant="caption"
                           className="text-[10px] text-secondary/70 truncate"
                         >
-                          {opp.organization} • {opp.deadline}
+                          {opp.organization} • {opp.deadline || 'Flexible'}
                         </Typography>
                       </div>
                       <div className="shrink-0 flex items-center gap-1.5 bg-primary/5 border border-primary/10 px-2 py-0.5 rounded-full">
-                        <span className="text-[10px] font-semibold text-primary">
-                          {opp.matchScore}% Match
-                        </span>
+                        <span className="text-[10px] font-semibold text-primary">Match</span>
                       </div>
                     </button>
                   ))}
+                </div>
+              ) : loading ? (
+                <div className="py-10 text-center space-y-2">
+                  <Typography
+                    variant="body"
+                    className="text-secondary/60 text-xs font-light animate-pulse"
+                  >
+                    Scouting database catalog...
+                  </Typography>
                 </div>
               ) : (
                 // Encouraging search empty state
@@ -173,3 +201,4 @@ export const SpotlightSearch: React.FC<SpotlightSearchProps> = ({ isOpen, onClos
     </AnimatePresence>
   );
 };
+export default SpotlightSearch;

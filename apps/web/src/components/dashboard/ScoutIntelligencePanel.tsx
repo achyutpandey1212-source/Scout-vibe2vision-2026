@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Eye, Bookmark, TrendingUp, CheckCircle, Sparkles } from 'lucide-react';
+import { Eye, Bookmark, TrendingUp, CheckCircle } from 'lucide-react';
 import { Typography, Grid } from '../ui';
 
 interface StatProps {
@@ -32,7 +32,17 @@ const IntelligenceStat: React.FC<StatProps> = ({ label, value, icon, description
   </div>
 );
 
-export const ScoutIntelligencePanel: React.FC = () => {
+interface ScoutIntelligencePanelProps {
+  opportunityCount?: number;
+  matchCount?: number;
+  bookmarkCount?: number;
+}
+
+export const ScoutIntelligencePanel: React.FC<ScoutIntelligencePanelProps> = ({
+  opportunityCount = 2314,
+  matchCount = 11,
+  bookmarkCount = 3,
+}) => {
   return (
     <div className="space-y-8 select-none py-4">
       {/* Editorial Title */}
@@ -57,8 +67,10 @@ export const ScoutIntelligencePanel: React.FC = () => {
                 variant="body"
                 className="text-sm font-light text-foreground/90 leading-relaxed"
               >
-                <span className="font-medium text-foreground">3 exceptional matches</span>{' '}
-                identified based on your engineering profile
+                <span className="font-medium text-foreground">
+                  {matchCount} exceptional matches
+                </span>{' '}
+                identified based on your profile
               </Typography>
             </li>
             <li className="flex items-start gap-3">
@@ -67,8 +79,8 @@ export const ScoutIntelligencePanel: React.FC = () => {
                 variant="body"
                 className="text-sm font-light text-foreground/90 leading-relaxed"
               >
-                <span className="font-medium text-foreground">2 critical deadlines</span>{' '}
-                approaching this week
+                <span className="font-medium text-foreground">Scout is tracking</span> deadlines and
+                competition indexes for you
               </Typography>
             </li>
             <li className="flex items-start gap-3">
@@ -77,8 +89,8 @@ export const ScoutIntelligencePanel: React.FC = () => {
                 variant="body"
                 className="text-sm font-light text-foreground/90 leading-relaxed"
               >
-                <span className="font-medium text-foreground">1 hidden gem</span> with low
-                competition discovered overnight
+                Curated opportunities with low competition highlighted as{' '}
+                <span className="font-medium text-foreground">Gems</span>
               </Typography>
             </li>
             <li className="flex items-start gap-3">
@@ -87,8 +99,7 @@ export const ScoutIntelligencePanel: React.FC = () => {
                 variant="body"
                 className="text-sm font-light text-foreground/90 leading-relaxed"
               >
-                <span className="font-medium text-foreground">7 secondary opportunities</span> worth
-                reviewing at your convenience
+                Review recommended listings at your convenience
               </Typography>
             </li>
           </ul>
@@ -101,23 +112,23 @@ export const ScoutIntelligencePanel: React.FC = () => {
               label="Crawled Sources"
               value="413 Streams"
               icon={<Eye className="w-4 h-4 text-primary" />}
-              description="Last scanned 2h ago"
+              description="Scanned in background"
             />
             <IntelligenceStat
               label="Discovered Items"
-              value="2,314 Opportunities"
+              value={`${opportunityCount} Items`}
               icon={<TrendingUp className="w-4 h-4 text-primary" />}
               description="Global Scout index"
             />
             <IntelligenceStat
               label="Relevance Fit"
-              value="11 Matches"
+              value={`${matchCount} Matches`}
               icon={<CheckCircle className="w-4 h-4 text-primary" />}
               description="Match confidence > 75%"
             />
             <IntelligenceStat
               label="Saved items"
-              value="3 bookmarks"
+              value={`${bookmarkCount} bookmarks`}
               icon={<Bookmark className="w-4 h-4 text-primary" />}
               description="Active tracking"
             />
@@ -127,3 +138,4 @@ export const ScoutIntelligencePanel: React.FC = () => {
     </div>
   );
 };
+export default ScoutIntelligencePanel;

@@ -10,9 +10,14 @@ export class AuthService {
   static async syncUser(claims: FirebaseClaims): Promise<IUser> {
     const existing = await UserRepository.findByFirebaseUid(claims.uid);
 
+    let sanitizedEmail = claims.email;
+    if (!sanitizedEmail || sanitizedEmail.trim() === '' || claims.provider === 'anonymous') {
+      sanitizedEmail = `anonymous_${claims.uid}@scout.guest`;
+    }
+
     const user = await UserRepository.upsertUser(claims.uid, {
-      email: claims.email,
-      displayName: claims.name,
+      email: sanitizedEmail,
+      displayName: claims.name || 'Scout User',
       photoURL: claims.picture,
       emailVerified: claims.emailVerified,
       provider: claims.provider,

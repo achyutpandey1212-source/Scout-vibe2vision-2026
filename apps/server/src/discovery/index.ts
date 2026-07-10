@@ -11,3 +11,4 @@ export { OpportunityRepository } from './persistence/opportunity.repository';
 export { DiscoveryRunModel } from './persistence/discovery-run.model';
 export type { IDiscoveryRun } from './persistence/discovery-run.model';
 export * from './orchestrator';
+export { opportunityRouter } from './routes/opportunity.routes';

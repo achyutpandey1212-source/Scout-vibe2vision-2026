@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { DashboardLayout } from '@/components/layout';
 import {
@@ -15,18 +15,40 @@ import {
   PageTransition,
 } from '@/components/ui';
 import { OpportunityCard } from '@/components/opportunity';
-import { mockBookmarks } from '@/lib/mock';
 import { useRouter } from 'next/navigation';
 import { ROUTES } from '@/lib/constants/routes';
-import { HeartOff } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
+import { bookmarksApi, Opportunity } from '@/lib/api';
 
 export default function BookmarksPage() {
   const [loading, setLoading] = useState(true);
-  const [bookmarks, setBookmarks] = useState(mockBookmarks);
+  const [error, setError] = useState<string | null>(null);
+  const [bookmarks, setBookmarks] = useState<Opportunity[]>([]);
   const router = useRouter();
 
-  const handleRemoveBookmark = (id: string) => {
-    setBookmarks((prev) => prev.filter((item) => item.id !== id));
+  const fetchBookmarks = async () => {
+    try {
+      setError(null);
+      const res = await bookmarksApi.list();
+      if (res.data?.success) {
+        setBookmarks(res.data.data);
+      }
+    } catch (err) {
+      console.error('Failed to load bookmarks:', err);
+      setError('Unable to retrieve your bookmarks right now. Please try again.');
+    }
+  };
+
+  const handleRemoveBookmark = async (id: string) => {
+    const previousBookmarks = [...bookmarks];
+    setBookmarks((prev) => prev.filter((item) => item._id !== id)); // optimistic UI
+
+    try {
+      await bookmarksApi.remove(id);
+    } catch (err) {
+      console.error('Failed to delete bookmark:', err);
+      setBookmarks(previousBookmarks); // rollback on error
+    }
   };
 
   const handleCardClick = (id: string) => {
@@ -42,7 +64,9 @@ export default function BookmarksPage() {
           <UniversalLoader
             messages={loadingMessages}
             intervalMs={300}
-            onComplete={() => setLoading(false)}
+            onComplete={() => {
+              fetchBookmarks().then(() => setLoading(false));
+            }}
           />
         </div>
       ) : (
@@ -58,22 +82,43 @@ export default function BookmarksPage() {
                 </Typography>
               </div>
 
-              {bookmarks.length > 0 ? (
+              {error ? (
+                <div className="p-6 rounded-3xl border border-rose-200/50 bg-rose-50/30 dark:bg-rose-950/10 flex items-start gap-4">
+                  <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <Typography variant="heading-s" className="text-sm font-medium text-foreground">
+                      Failed to Retrieve Saved Items
+                    </Typography>
+                    <Typography variant="body" className="text-xs text-secondary/80 font-light">
+                      {error}
+                    </Typography>
+                    <Button variant="secondary" size="sm" className="mt-2" onClick={fetchBookmarks}>
+                      Retry loading
+                    </Button>
+                  </div>
+                </div>
+              ) : bookmarks.length > 0 ? (
                 <Grid cols={1} colsSm={2} colsLg={3} gap="md">
                   {bookmarks.map((opp) => (
                     <OpportunityCard
-                      key={opp.id}
+                      key={opp._id}
                       title={opp.title}
                       organization={opp.organization}
-                      deadline={opp.deadline}
+                      deadline={opp.deadline || 'Flexible'}
                       tags={opp.tags}
-                      matchScore={opp.matchScore}
+                      matchScore={90} // default match score reference placeholder
                       isBookmarked={true}
-                      isWomenOnly={opp.isWomenOnly}
-                      stipend={opp.stipend}
-                      onBookmarkToggle={() => handleRemoveBookmark(opp.id)}
-                      onApplyClick={() => handleCardClick(opp.id)}
-                      onCardClick={() => handleCardClick(opp.id)}
+                      isWomenOnly={
+                        opp.isWomenOnly ||
+                        opp.genderEligibility?.toLowerCase().includes('women') ||
+                        opp.genderEligibility?.toLowerCase().includes('female')
+                      }
+                      stipend={
+                        opp.stipend != null ? `₹${Number(opp.stipend).toLocaleString()}` : undefined
+                      }
+                      onBookmarkToggle={() => handleRemoveBookmark(opp._id)}
+                      onApplyClick={() => handleCardClick(opp._id)}
+                      onCardClick={() => handleCardClick(opp._id)}
                     />
                   ))}
                 </Grid>
