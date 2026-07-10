@@ -1,7 +1,7 @@
 import express, { Response } from 'express';
 import cors from 'cors';
 import { env, db, redis, firebase } from '@/config';
-import { requireAuth, AuthenticatedRequest } from '@/middleware/auth';
+import { authRouter } from './auth';
 
 const app = express();
 const port = env.PORT;
@@ -46,28 +46,8 @@ app.get('/api/v1/health', async (req, res) => {
   });
 });
 
-// Auth Verification Endpoint - GET /api/v1/auth/me
-app.get('/api/v1/auth/me', requireAuth, (req: AuthenticatedRequest, res: Response) => {
-  if (!req.user) {
-    return res.status(401).json({
-      success: false,
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'User session not resolved',
-      },
-    });
-  }
-
-  res.json({
-    success: true,
-    data: {
-      uid: req.user.uid,
-      email: req.user.email || '',
-      name: req.user.name || '',
-      picture: req.user.picture || '',
-    },
-  });
-});
+// Register Auth Router
+app.use('/api/v1/auth', authRouter);
 
 // Bootstrapping the services
 async function bootstrap() {

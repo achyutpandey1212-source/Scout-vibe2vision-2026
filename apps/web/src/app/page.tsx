@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useAuth } from '@/context/auth-context';
 import { LogOut } from 'lucide-react';
+import Link from 'next/link';
 
 export default function Home() {
   const { user, loading, signIn, signOut } = useAuth();
@@ -144,6 +145,13 @@ export default function Home() {
                   <span>Backend Session:</span>
                   <span className="text-primary font-medium">Authorized</span>
                 </div>
+
+                <Link
+                  href="/dashboard"
+                  className="flex items-center justify-center w-full px-4 py-2.5 bg-primary text-primary-foreground hover:opacity-90 rounded-xl text-xs font-medium transition-all duration-200"
+                >
+                  Go to Dashboard
+                </Link>
 
                 <button
                   onClick={signOut}

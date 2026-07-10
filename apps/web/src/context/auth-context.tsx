@@ -6,10 +6,19 @@ import { authService } from '@/services/auth/auth.service';
 import { api } from '@/lib/api';
 
 interface ScoutUser {
-  uid: string;
+  firebaseUid: string;
   email: string;
+  displayName: string;
+  photoURL: string | null;
+  provider: string;
+  emailVerified: boolean;
+  isActive: boolean;
+  role: string;
+  onboardingCompleted: boolean;
+  onboardingStep: number;
+  // Compatibility getters
   name: string;
-  picture: string;
+  picture: string | null;
 }
 
 interface AuthContextType {
@@ -18,6 +27,7 @@ interface AuthContextType {
   loading: boolean;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
+  syncWithBackend: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,9 +40,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Sync user details with backend
   const syncWithBackend = async () => {
     try {
-      const response = await api.get('/api/v1/auth/me');
+      const response = await api.post('/api/v1/auth/sync');
       if (response.data && response.data.success) {
-        setUser(response.data.data);
+        const dbUser = response.data.data;
+        setUser({
+          ...dbUser,
+          name: dbUser.displayName || dbUser.email.split('@')[0],
+          picture: dbUser.photoURL || null,
+        });
       }
     } catch (error) {
       console.error('Backend sync failed:', error);

@@ -1,11 +1,7 @@
-import { Request, Response, NextFunction } from 'express';
+import { Response, NextFunction } from 'express';
 import { firebase } from '@/config';
-import { DecodedIdToken } from 'firebase-admin/auth';
-
-// Extend Express Request interface to include user property
-export interface AuthenticatedRequest extends Request {
-  user?: DecodedIdToken;
-}
+import { AuthenticatedRequest, FirebaseClaims } from '../auth/types/auth.types';
+import { UserRepository } from '../auth/repository/user.repository';
 
 export async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
@@ -25,7 +21,37 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
   try {
     const auth = firebase.getAuth();
     const decodedToken = await auth.verifyIdToken(token);
-    req.user = decodedToken;
+
+    // Extract Firebase verified claims
+    const claims: FirebaseClaims = {
+      uid: decodedToken.uid,
+      email: decodedToken.email || '',
+      name: decodedToken.name || decodedToken.email?.split('@')[0] || 'User',
+      picture: decodedToken.picture || null,
+      emailVerified: decodedToken.email_verified || false,
+      provider: decodedToken.firebase?.sign_in_provider || 'google.com',
+    };
+
+    req.auth = claims;
+
+    // Fetch matching user from MongoDB
+    const dbUser = await UserRepository.findByFirebaseUid(claims.uid);
+    if (dbUser) {
+      req.dbUser = dbUser;
+    }
+
+    // Protect endpoints (except identity sync endpoint) from missing DB profiles
+    const isSyncRoute = req.path.endsWith('/sync') || req.originalUrl.endsWith('/sync');
+    if (!dbUser && !isSyncRoute) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'User does not exist in database. Please sync identity first.',
+        },
+      });
+    }
+
     next();
   } catch (error) {
     console.error('❌ Firebase auth verification failed:', error);
