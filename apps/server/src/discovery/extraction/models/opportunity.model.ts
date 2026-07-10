@@ -81,6 +81,7 @@ const OpportunitySchema = new Schema<IOpportunity>(
         version: { type: String, default: '1.0' },
         enriched: { type: Boolean, default: false },
         lastEnrichedAt: { type: Date, default: null },
+        lastProcessedAt: { type: Date, default: null },
         scores: {
           trust: { type: Number, default: 0 },
           popularity: { type: Number, default: 0 },

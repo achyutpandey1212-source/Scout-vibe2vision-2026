@@ -93,6 +93,7 @@ export interface OpportunityIntelligence {
   version: string;
   enriched: boolean;
   lastEnrichedAt: Date | null;
+  lastProcessedAt?: Date | null;
   scores?: {
     trust: number;
     popularity: number;

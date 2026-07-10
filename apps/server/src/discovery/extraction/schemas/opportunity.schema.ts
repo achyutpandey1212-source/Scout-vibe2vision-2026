@@ -92,6 +92,14 @@ export const OpportunitySchema = z.object({
         }, z.date())
         .nullable()
         .default(null),
+      lastProcessedAt: z
+        .preprocess((arg) => {
+          if (typeof arg === 'string' || arg instanceof Date) return new Date(arg);
+          return arg;
+        }, z.date())
+        .nullable()
+        .optional()
+        .default(null),
       scores: z
         .object({
           trust: z.number().default(0),
