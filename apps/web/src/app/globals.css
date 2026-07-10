@@ -69,8 +69,32 @@
 @layer base {
   * {
     @apply border-border;
+    box-sizing: border-box;
   }
+
+  /* ─── Single scrollbar architecture ─────────────────────────────────────
+     Only `html` is allowed to scroll vertically.
+     `body` and every wrapper div must never create their own scroll box.
+  ──────────────────────────────────────────────────────────────────────── */
+  html {
+    overflow-x: hidden;
+    overflow-y: scroll; /* always-visible track prevents layout shift */
+    height: auto;
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply bg-background text-foreground transition-colors duration-200;
+    /* Do NOT set overflow:hidden/auto/scroll — this creates scroll box #2 */
+    overflow: visible;
+    /* Do NOT set height:100vh — this forces body to be viewport-tall */
+    min-height: 100vh;
+    height: auto;
+  }
+
+  /* Kill overflow on Next.js root div */
+  #__next {
+    overflow: visible;
+    height: auto;
   }
 }

@@ -184,12 +184,36 @@ export default function NotificationsPage() {
                 // Reassuring empty alerts list
                 <Card className="text-center p-12 max-w-lg mx-auto bg-card border border-border/60 rounded-3xl mt-8">
                   <CardContent className="pt-6 space-y-6 flex flex-col items-center">
-                    <div className="p-3 bg-accent/20 border border-border rounded-full text-secondary/40">
-                      <BellOff className="w-8 h-8" />
+                    {/* Constellation illustration */}
+                    <div className="text-primary/45 shrink-0 select-none">
+                      <svg
+                        className="w-16 h-16"
+                        viewBox="0 0 64 64"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
+                        <circle cx="32" cy="12" r="2" fill="currentColor" />
+                        <circle cx="16" cy="28" r="2.5" fill="currentColor" />
+                        <circle cx="48" cy="28" r="2" fill="currentColor" />
+                        <circle cx="32" cy="48" r="3" fill="currentColor" />
+                        <line x1="32" y1="12" x2="16" y2="28" strokeDasharray="3 3" />
+                        <line x1="32" y1="12" x2="48" y2="28" strokeDasharray="3 3" />
+                        <line x1="16" y1="28" x2="32" y2="48" strokeDasharray="3 3" />
+                        <line x1="48" y1="28" x2="32" y2="48" strokeDasharray="3 3" />
+                        <circle
+                          cx="32"
+                          cy="12"
+                          r="5"
+                          stroke="currentColor"
+                          strokeWidth="1"
+                          strokeDasharray="2 2"
+                        />
+                      </svg>
                     </div>
                     <Stack gap="xxs">
                       <Typography variant="heading-s" className="font-medium text-foreground">
-                        All caught up!
+                        You&apos;re all caught up.
                       </Typography>
                       <Typography
                         variant="body"

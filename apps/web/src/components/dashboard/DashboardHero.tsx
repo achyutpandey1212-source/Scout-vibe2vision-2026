@@ -6,35 +6,37 @@ import { OrigamiDecoration } from '../ui/decorations';
 
 interface DashboardHeroProps {
   userName?: string;
-  greeting?: string;
-  subtext?: string;
 }
 
-export const DashboardHero: React.FC<DashboardHeroProps> = ({
-  userName = 'Maya',
-  greeting = 'Good morning',
-  subtext = "Ready to discover something amazing today? We've updated your matches.",
-}) => {
+export const DashboardHero: React.FC<DashboardHeroProps> = ({ userName = 'Maya' }) => {
   return (
-    <div className="relative w-full overflow-hidden p-6 md:p-10 border border-border/60 bg-card rounded-3xl flex items-center justify-between gap-6">
-      {/* Decorative background bird */}
-      <div className="absolute right-6 top-1/2 -translate-y-1/2 opacity-20 pointer-events-none select-none">
+    <div className="relative w-full py-8 md:py-12 select-none">
+      {/* Watermark-like crane in the corner (extremely low opacity) */}
+      <div className="absolute right-0 top-1/2 -translate-y-1/2 opacity-[0.05] dark:opacity-[0.03] pointer-events-none select-none">
         <OrigamiDecoration
-          name="freedom_bird"
-          size={100}
+          name="crane"
+          size={140}
           floating
-          floatingOffset={5}
-          floatingDuration={6}
+          floatingOffset={4}
+          floatingDuration={8}
         />
       </div>
 
-      <Stack gap="xs" className="max-w-xl relative z-10">
-        <Typography variant="display" className="text-3xl md:text-5xl font-light">
-          {greeting}, <span className="font-normal text-primary">{userName}</span>
-        </Typography>
-        <Typography variant="body-large" className="text-secondary/70">
-          {subtext}
-        </Typography>
+      <Stack gap="sm" className="max-w-2xl relative z-10">
+        <h1 className="text-4xl md:text-6xl font-light tracking-tight text-foreground leading-tight">
+          Good Morning,
+          <br />
+          <span className="font-serif italic text-primary">{userName}.</span>
+        </h1>
+
+        <div className="space-y-1 pt-2">
+          <Typography variant="body-large" className="text-foreground/90 font-medium">
+            Today Scout found 11 opportunities worth your attention.
+          </Typography>
+          <Typography variant="body" className="text-secondary/70 font-light">
+            Three new fellowships match your long-term goals.
+          </Typography>
+        </div>
       </Stack>
     </div>
   );

@@ -34,77 +34,100 @@ export const FeaturedOpportunityCard: React.FC<FeaturedOpportunityCardProps> = (
   onApplyClick,
 }) => {
   return (
-    <Card className="relative overflow-hidden border-2 border-primary/20 bg-primary/[0.01]">
-      {/* Decorative subtle gradient accent background */}
-      <div className="absolute -top-24 -right-24 w-48 h-48 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
-
-      <Grid cols={1} colsMd={12} gap="lg" className="p-6 md:p-10">
-        {/* Left Side: Detail column */}
-        <div className="md:col-span-8 space-y-4">
-          <div className="space-y-2">
+    <Card className="relative overflow-hidden border border-primary/20 bg-primary/[0.01]">
+      <Grid cols={1} colsMd={12} gap="lg" className="p-8 md:p-12 items-start">
+        {/* Left Column - Details */}
+        <div className="md:col-span-8 space-y-6">
+          <div className="space-y-3">
             <Stack direction="row" align="center" gap="xs">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-semibold uppercase tracking-wider text-primary select-none">
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-primary select-none">
                 <Sparkles className="w-3 h-3 animate-pulse" />
-                <span>Top Recommendation</span>
+                <span>Featured Recommendation</span>
               </span>
               <MatchScore score={matchScore} />
             </Stack>
 
-            <Typography variant="heading-l" className="font-normal leading-tight">
+            <Typography
+              variant="heading-l"
+              className="font-normal text-3xl md:text-4xl leading-tight"
+            >
               {title}
             </Typography>
 
-            <Typography variant="body" className="text-secondary/70">
+            <Typography variant="body" className="text-secondary/70 font-light">
               {organization}
             </Typography>
           </div>
 
-          <Typography
-            variant="body"
-            className="text-foreground/80 line-clamp-3 font-light leading-relaxed"
-          >
+          {/* Description */}
+          <Typography variant="body" className="text-foreground/80 font-light leading-relaxed">
             {description}
           </Typography>
 
-          <Stack direction="row" align="center" gap="xs" wrap>
+          {/* Human Recommendation explanation */}
+          <div className="bg-accent/30 rounded-2xl p-4.5 border border-border/40 space-y-2">
+            <Typography
+              variant="label"
+              className="text-[10px] text-primary tracking-wider uppercase font-semibold"
+            >
+              Why Scout Recommends This
+            </Typography>
+            <Typography
+              variant="body"
+              className="text-xs text-secondary/90 leading-relaxed font-light"
+            >
+              Your leadership projects and engineering interests make this one of your strongest
+              matches. The program aligns with your career stage and preferred remote timeline.
+            </Typography>
+          </div>
+
+          <Stack direction="row" align="center" gap="xs" wrap className="pt-2">
             {isWomenOnly && <OpportunityBadge label="Women Preferred" variant="women-only" />}
             {stipend && <OpportunityBadge label={stipend} variant="stipend" />}
             {tags.map((tag) => (
               <OpportunityBadge key={tag} label={tag} variant="default" />
             ))}
           </Stack>
-
-          <div className="flex items-center gap-2 text-xs text-secondary/65 font-light pt-2">
-            <Calendar className="w-4 h-4" />
-            <span>Apply before {deadline}</span>
-          </div>
         </div>
 
-        {/* Right Side: Quick Action CTA Column */}
-        <div className="md:col-span-4 flex flex-col justify-between items-stretch md:items-end gap-6 border-t md:border-t-0 md:border-l border-border/60 pt-6 md:pt-0 md:pl-8">
-          {/* Bookmark placement top right */}
-          <div className="hidden md:block">
-            <button
-              onClick={onBookmarkToggle}
-              className={`
-                p-3 rounded-full border transition-all duration-200 outline-none
-                ${
-                  isBookmarked
-                    ? 'bg-primary/10 border-primary/20 text-primary'
-                    : 'bg-card border-border hover:bg-accent/40 text-secondary/60 hover:text-foreground'
-                }
-              `}
-              aria-label="Bookmark opportunity"
-            >
-              <Bookmark className={`w-4 h-4 ${isBookmarked ? 'fill-current' : ''}`} />
-            </button>
+        {/* Right Column - CTAs & Highlights */}
+        <div className="md:col-span-4 flex flex-col justify-between h-full min-h-[220px] md:pl-8 md:border-l border-border/40 gap-8">
+          <div className="space-y-4 text-left md:text-right">
+            <div className="flex md:justify-end">
+              <button
+                onClick={onBookmarkToggle}
+                className={`
+                  p-3 rounded-full border transition-all duration-200 outline-none
+                  ${
+                    isBookmarked
+                      ? 'bg-primary/10 border-primary/20 text-primary'
+                      : 'bg-card border-border hover:bg-accent/40 text-secondary/60 hover:text-foreground'
+                  }
+                `}
+                aria-label="Bookmark opportunity"
+              >
+                <Bookmark className={`w-4 h-4 ${isBookmarked ? 'fill-current' : ''}`} />
+              </button>
+            </div>
+
+            <div className="space-y-1.5 pt-2">
+              <Typography
+                variant="label"
+                className="text-[10px] text-secondary/50 block select-none"
+              >
+                Application Deadline
+              </Typography>
+              <div className="flex items-center gap-1.5 md:justify-end text-xs text-secondary/90 font-light">
+                <Calendar className="w-3.5 h-3.5" />
+                <span>{deadline}</span>
+              </div>
+            </div>
           </div>
 
-          {/* Primary Action buttons */}
-          <div className="w-full space-y-3">
+          <div className="space-y-3">
             <Button
               variant="primary"
-              className="w-full"
+              className="w-full justify-center"
               onClick={onApplyClick}
               iconRight={<ArrowUpRight className="w-4 h-4" />}
             >

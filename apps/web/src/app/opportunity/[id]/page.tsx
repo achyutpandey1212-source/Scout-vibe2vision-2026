@@ -19,7 +19,16 @@ import {
 } from '@/components/ui';
 import { MatchScore, OpportunityBadge } from '@/components/opportunity';
 import { mockOpportunities } from '@/lib/mock';
-import { ArrowLeft, Calendar, ExternalLink, ShieldAlert, Sparkles } from 'lucide-react';
+import {
+  ArrowLeft,
+  Calendar,
+  ExternalLink,
+  ShieldAlert,
+  Sparkles,
+  CheckSquare,
+  Target,
+  AlertCircle,
+} from 'lucide-react';
 import { ROUTES } from '@/lib/constants/routes';
 
 export default function OpportunityDetailsPage() {
@@ -59,7 +68,7 @@ export default function OpportunityDetailsPage() {
   return (
     <ProtectedRoute>
       {loading ? (
-        <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="min-h-screen flex items-center justify-center bg-[#FAF8F5] dark:bg-[#0B0C0E]">
           <UniversalLoader
             messages={loadingMessages}
             intervalMs={300}
@@ -69,7 +78,7 @@ export default function OpportunityDetailsPage() {
       ) : (
         <DashboardLayout>
           <PageTransition>
-            <Stack gap="lg">
+            <Stack gap="lg" className="max-w-5xl mx-auto space-y-8">
               {/* Back Action button */}
               <div>
                 <Button
@@ -83,22 +92,22 @@ export default function OpportunityDetailsPage() {
               </div>
 
               {/* Split Page details layout */}
-              <Grid cols={1} colsMd={12} gap="lg" className="items-start">
+              <Grid cols={1} colsMd={12} gap="lg" className="items-start gap-8">
                 {/* Left Column: Core Description & Details (8 cols) */}
                 <div className="md:col-span-8 space-y-8">
-                  <Card>
-                    <CardContent className="p-8 md:p-10 space-y-6">
+                  <Card className="border border-border/40">
+                    <CardContent className="p-8 md:p-12 space-y-8">
                       {/* Upper details segment */}
                       <div className="space-y-3">
                         <Typography
                           variant="caption"
-                          className="text-secondary/70 tracking-wide uppercase font-medium"
+                          className="text-secondary/70 tracking-widest uppercase font-medium text-[10px]"
                         >
                           {opportunity.organization}
                         </Typography>
                         <Typography
                           variant="hero"
-                          className="text-2xl md:text-4xl font-normal leading-tight"
+                          className="text-3xl md:text-4xl font-normal leading-tight"
                         >
                           {opportunity.title}
                         </Typography>
@@ -145,7 +154,7 @@ export default function OpportunityDetailsPage() {
                       {/* Program Benefits */}
                       <div className="space-y-3">
                         <Typography variant="heading-s" className="font-medium text-foreground">
-                          What you get (Benefits)
+                          Benefits
                         </Typography>
                         <Typography
                           variant="body"
@@ -160,7 +169,7 @@ export default function OpportunityDetailsPage() {
                         <Typography variant="heading-s" className="font-medium text-foreground">
                           Application Requirements
                         </Typography>
-                        <ul className="space-y-2 list-disc pl-5 text-sm font-light text-secondary/80 leading-relaxed">
+                        <ul className="space-y-2.5 list-disc pl-5 text-sm font-light text-secondary/80 leading-relaxed">
                           {opportunity.requirements.map((req, idx) => (
                             <li key={idx}>{req}</li>
                           ))}
@@ -192,67 +201,120 @@ export default function OpportunityDetailsPage() {
                   </Card>
                 </div>
 
-                {/* Right Column: Scout Recommendation sidebar (4 cols) */}
+                {/* Right Column: Scout Intelligence sidebar (4 cols) */}
                 <div className="md:col-span-4 space-y-6">
                   <Card className="border border-primary/20 bg-primary/[0.01]">
-                    <CardHeader className="border-b border-border/40 pb-4">
+                    <CardHeader className="border-b border-border/45 pb-4">
                       <Stack gap="xxs">
                         <div className="flex items-center gap-1.5 text-primary">
                           <Sparkles className="w-4 h-4" />
-                          <Typography variant="label" className="text-[10px] text-primary">
-                            Scout Analysis
+                          <Typography
+                            variant="label"
+                            className="text-[10px] text-primary font-semibold tracking-widest uppercase"
+                          >
+                            Scout Intelligence
                           </Typography>
                         </div>
-                        <CardTitle className="text-base font-medium">Why you match</CardTitle>
+                        <CardTitle className="text-base font-medium">
+                          Curated Compatibility
+                        </CardTitle>
                       </Stack>
                     </CardHeader>
-                    <CardContent className="pt-6 space-y-4">
+                    <CardContent className="pt-6 space-y-6 text-left">
+                      {/* Section: Why it matches */}
                       <div className="space-y-2">
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-secondary/70 font-light">Skills Alignment</span>
-                          <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                            High Match
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-secondary/70 font-light">Location Match</span>
-                          <span className="font-semibold text-foreground">
-                            {opportunity.tags.includes('Remote') ? 'Remote (100%)' : 'India'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-secondary/70 font-light">Confidence Level</span>
-                          <span className="font-semibold text-primary">
-                            {opportunity.matchScore}%
-                          </span>
-                        </div>
-                      </div>
-
-                      <Divider />
-
-                      <div className="space-y-3 text-xs md:text-sm font-light text-secondary/80 leading-relaxed">
-                        <p>✓ Your core tags match directly with Google/Qualcomm technologies.</p>
-                        <p>
-                          ✓ Target audience criteria specifically match a final year university
-                          profile.
+                        <Typography
+                          variant="label"
+                          className="text-[10px] text-foreground/80 tracking-widest uppercase font-medium"
+                        >
+                          Why it matches
+                        </Typography>
+                        <p className="text-xs text-secondary/80 font-light leading-relaxed">
+                          Your profile shows high alignment with Google and Qualcomm ecosystems.
+                          Scout detected strong overlaps in technical tags and academic milestone
+                          requirements.
                         </p>
-                        {opportunity.isWomenOnly && (
-                          <p>
-                            ✓ Gender diversity initiatives apply positive weight to this
-                            opportunity.
-                          </p>
-                        )}
                       </div>
 
                       <Divider />
+
+                      {/* Section: Strengths */}
+                      <div className="space-y-2">
+                        <Typography
+                          variant="label"
+                          className="text-[10px] text-foreground/80 tracking-widest uppercase font-medium"
+                        >
+                          Your Strengths
+                        </Typography>
+                        <div className="space-y-1.5 text-xs text-secondary/80 font-light">
+                          <div className="flex items-center gap-2">
+                            <Target className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                            <span>Academic excellence fits criteria</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Target className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                            <span>Strong programming base</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <Divider />
+
+                      {/* Section: Challenges */}
+                      <div className="space-y-2">
+                        <Typography
+                          variant="label"
+                          className="text-[10px] text-foreground/80 tracking-widest uppercase font-medium"
+                        >
+                          Possible Challenges
+                        </Typography>
+                        <div className="flex items-start gap-2 text-xs text-secondary/80 font-light">
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                          <span>High volume of applications anticipated this week</span>
+                        </div>
+                      </div>
+
+                      <Divider />
+
+                      {/* Section: Suggestions */}
+                      <div className="space-y-2.5">
+                        <Typography
+                          variant="label"
+                          className="text-[10px] text-foreground/80 tracking-widest uppercase font-medium"
+                        >
+                          Suggestions before applying
+                        </Typography>
+                        <div className="space-y-2 text-xs text-secondary/80 font-light">
+                          <div className="flex items-start gap-2">
+                            <CheckSquare className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                            <span>Highlight open source commits in CV</span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <CheckSquare className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                            <span>Ask for a recommendation letter early</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <Divider />
+
+                      {/* Section: Estimated Fit */}
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-secondary/70 font-light">
+                          Estimated compatibility
+                        </span>
+                        <span className="font-semibold text-primary">
+                          {opportunity.matchScore}% Fit Score
+                        </span>
+                      </div>
 
                       <Button
                         variant="primary"
-                        className="w-full"
+                        className="w-full justify-center pt-3"
                         onClick={() => window.open(opportunity.sourceUrl, '_blank')}
                         iconRight={<ExternalLink className="w-3.5 h-3.5" />}
                       >
-                        Apply on Google Form
+                        Apply on Portal
                       </Button>
                     </CardContent>
                   </Card>

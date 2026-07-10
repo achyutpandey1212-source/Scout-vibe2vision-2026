@@ -6,6 +6,7 @@ import { ThemeToggle } from '../theme-toggle';
 import { Button } from './button';
 import { Drawer } from './modal';
 import { tokens } from '@/lib/design-tokens';
+import { usePathname } from 'next/navigation';
 
 interface NavProps {
   userName?: string;
@@ -26,6 +27,7 @@ export const TopNavigation: React.FC<NavProps> = ({
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -74,16 +76,23 @@ export const TopNavigation: React.FC<NavProps> = ({
 
           {/* Desktop Navigation Links */}
           {isAuthenticated && (
-            <nav className="hidden md:flex items-center gap-6">
-              {navigationItems.map((item) => (
-                <a
-                  key={item.label}
-                  href={item.href}
-                  className="text-xs font-medium tracking-wide uppercase text-secondary/80 hover:text-foreground transition-colors"
-                >
-                  {item.label}
-                </a>
-              ))}
+            <nav className="hidden md:flex items-center gap-2.5">
+              {navigationItems.map((item) => {
+                const isActive = pathname === item.href;
+                return (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    className={`text-[10px] font-medium tracking-widest uppercase px-3 py-1.5 rounded-full transition-all duration-200 ${
+                      isActive
+                        ? 'bg-accent/40 text-foreground font-semibold'
+                        : 'text-secondary/75 hover:text-foreground hover:bg-accent/20'
+                    }`}
+                  >
+                    {item.label}
+                  </a>
+                );
+              })}
             </nav>
           )}
         </div>

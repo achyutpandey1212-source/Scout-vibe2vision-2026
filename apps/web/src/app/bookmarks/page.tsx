@@ -92,15 +92,14 @@ export default function BookmarksPage() {
                     </div>
                     <Stack gap="xxs">
                       <Typography variant="heading-s" className="font-medium text-foreground">
-                        No bookmarks saved yet
+                        You haven&apos;t saved anything yet.
                       </Typography>
                       <Typography
                         variant="body"
                         className="text-secondary/70 leading-relaxed max-w-sm"
                       >
-                        {
-                          '"When something feels right, save it here. We\'ll keep it waiting for you."'
-                        }
+                        When something feels right, save it here. We&apos;ll keep it waiting for
+                        you.
                       </Typography>
                     </Stack>
                     <Button

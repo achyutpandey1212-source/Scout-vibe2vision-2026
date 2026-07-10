@@ -45,7 +45,7 @@ export const Section: React.FC<BaseLayoutProps & { size?: 'sm' | 'md' | 'lg' }> 
 export const PageWrapper: React.FC<BaseLayoutProps> = ({ className = '', children, ...props }) => {
   return (
     <div
-      className={`min-h-screen flex flex-col bg-background text-foreground relative overflow-x-hidden ${className}`}
+      className={`min-h-screen flex flex-col bg-background text-foreground relative ${className}`}
       {...props}
     >
       {children}

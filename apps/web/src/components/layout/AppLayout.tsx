@@ -10,7 +10,12 @@ interface AppLayoutProps {
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ children, showAccents = true }) => {
   return (
-    <div className="min-h-screen bg-background text-foreground transition-colors duration-200 relative flex flex-col justify-between overflow-x-hidden font-sans">
+    /*
+     * NO overflow, NO height:100vh, NO min-h-screen here.
+     * Those properties would create a second scroll container.
+     * The browser window (html element) is the sole scroller.
+     */
+    <div className="w-full bg-background text-foreground transition-colors duration-200 relative flex flex-col font-sans">
       {showAccents && (
         <>
           <BackgroundAccent />
