@@ -3,6 +3,8 @@
 
 > Talent shouldn't depend on who you know.
 
+> Scout exists for every woman—not just women in tech, not just college students, not just graduates. Whether she's a Class 10 pass, a homemaker restarting her career, an MBA student, an artist, a tailor, a nurse, a freelancer, or an engineer, Scout's mission is to help her discover the next opportunity that moves her life forward. We don't want to become another Internshala or Unstop. We want to become the platform that helps a woman get her first opportunity, her first income, and with that, her first confidence.
+
 ---
 
 # Product Overview
@@ -393,7 +395,7 @@ Preferred
 
 Preferred
 
-- FastAPI (Python)
+- MongoDB
 
 Alternative
 
@@ -406,45 +408,19 @@ Alternative
 
 Preferred
 
-Supabase PostgreSQL
-
-Alternative
-
 MongoDB Atlas
 
 ---
 
 ## Authentication
 
-Preferred
+Firebase Auth
 
-Clerk
 
-Alternative
-
-Supabase Auth
-
----
-
-## ORM
-
-Prisma
-
----
 
 ## AI
 
-Preferred
-
-Gemini 2.5 Flash
-
-Alternative
-
-OpenRouter
-
-Groq
-
-Ollama (Local)
+Unified LLM layer
 
 ---
 
@@ -458,15 +434,7 @@ Sentence Transformers
 
 ---
 
-## Vector Search
 
-pgvector
-
-Alternative
-
-Qdrant
-
-Pinecone (Free Tier)
 
 ---
 
@@ -532,7 +500,7 @@ Inngest
 
 ## File Storage
 
-Supabase Storage
+MongoDB
 
 ---
 
@@ -544,11 +512,7 @@ Vercel
 
 Backend
 
-Railway
-
-Render
-
-Fly.io
+cloud run
 
 ---
 

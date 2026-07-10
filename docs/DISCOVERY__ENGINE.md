@@ -1,6 +1,7 @@
 # DISCOVERY_ENGINE.md
 
 # Scout Discovery Engine
+
 ### The Heart of Scout
 
 > "The quality of Scout is directly proportional to the quality of opportunities it discovers."
@@ -11,7 +12,7 @@
 
 The Discovery Engine is Scout's continuously running intelligence pipeline responsible for discovering, collecting, understanding, verifying and storing opportunities from across the internet.
 
-Unlike traditional job portals that depend on manual listings, Scout actively searches the internet for newly published opportunities.
+Unlike traditional job portals that depend on manual listings, Scout actively searches the internet for relevant + newly published opportunities.
 
 The Discovery Engine runs independently of users.
 
@@ -121,6 +122,7 @@ This makes the system modular, testable and replaceable.
 ---
 
 # Stage 1
+
 ## Source Discovery
 
 Goal
@@ -136,6 +138,7 @@ Instead, it continuously collects opportunities from multiple ecosystems.
 ## Discovery Sources
 
 ### Category A
+
 Search APIs
 
 Preferred
@@ -163,67 +166,324 @@ Site-specific searches
 
 Latest Fellowships
 
+Categories Scout should cover
+🎓 Education
+Scholarships
+Fellowships
+Grants
+Exchange Programs
+Research Programs
+Olympiads
+Certifications
+💼 Employment
+Full-time Jobs
+Part-time Jobs
+Internships
+Apprenticeships
+Traineeships
+Returnships
+Government Jobs
+💻 Freelancing
+Remote Work
+Freelance Platforms
+Gig Work
+Project-based Opportunities
+🎨 Creative
+Design
+Illustration
+Photography
+Video Editing
+Writing
+Music
+Dance
+Theatre
+🛠 Skilled Trades
+Tailoring
+Beauty
+Makeup
+Mehendi
+Craft
+Food Business
+Baking
+Fashion
+Boutique
+Handicrafts
+🏭 Vocational
+Electrician
+Technician
+Machine Operator
+Healthcare Assistant
+Nursing
+Hospitality
+Retail
+🌱 Entrepreneurship
+Startup Grants
+Incubators
+Government Schemes
+MSME Programs
+Business Competitions
+🏛 Government
+State Schemes
+Central Schemes
+Skill India
+NSDC
+PMKVY
+Women Development Programs
+🌍 International
+Erasmus
+DAAD
+Chevening
+Fulbright
+UN Women
+UNICEF
+WHO
+UNESCO
+
 ---
 
 ### Category B
 
-Official Websites
+## Official Sources
+
+Scout prioritizes official sources over third-party aggregators whenever possible.
+
+### Corporate Career Portals
+
+- Company Career Pages
+- Startup Career Pages
+- MSME Hiring Portals
+- Remote-first Companies
 
 Examples
 
 - Google Careers
 - Microsoft Careers
 - Adobe Careers
-- NVIDIA Careers
-- Intel Careers
+- Tata Careers
+- Reliance Careers
+- Infosys Careers
+- TCS Careers
+- Accenture Careers
+- Local Businesses
+- Startups
 
-Government
+---
 
-- AICTE
-- ISRO
-- DRDO
+### Government Opportunities
+
+National
+
+- Skill India
+- NSDC
+- NCS (National Career Service)
+- PMKVY
+- Ministry of Skill Development
+- Women & Child Development Schemes
+
+State Government Portals
+
+Employment Exchanges
+
+District Employment Portals
+
+Government Recruitment Boards
+
+Public Sector Undertakings
+
+---
+
+### Educational Institutions
 
 Universities
 
-NGOs
+Colleges
 
-Research Labs
+Open Universities
 
-Foundations
+ITI Institutes
+
+Polytechnics
+
+Community Colleges
+
+Official Scholarship Portals
+
+Exchange Programs
+
+Research Programs
+
+---
+
+### NGOs & Foundations
+
+Women Empowerment NGOs
+
+Social Impact Organizations
+
+International Foundations
+
+Non-Profit Organizations
+
+Skill Development Organizations
+
+Community Development Programs
+
+---
+
+### International Organizations
+
+UN Women
+
+UNICEF
+
+UNESCO
+
+WHO
+
+World Bank
+
+ADB
+
+International Scholarship Providers
+
+Global Fellowship Programs
 
 ---
 
 ### Category C
 
-Opportunity Platforms
+## Opportunity Platforms
 
-- Devpost
-- Devfolio
-- Unstop
-- Wellfound
+Scout aggregates opportunities from trusted platforms without becoming another job board.
+
+Employment
+
 - LinkedIn Jobs
+- Indeed
+- Wellfound
+- Foundit
+- Naukri
+
+Students
+
+- Unstop
 - Internshala
+- Devfolio
+- Devpost
+
+Freelancing
+
+- Fiverr
+- Upwork
+- Freelancer
+- Contra
+- Toptal (where applicable)
+
+Creative
+
+- Behance Jobs
+- Dribbble Jobs
+
+Remote Work
+
+- RemoteOK
+- We Work Remotely
+- FlexJobs (public opportunities only)
+
+Volunteering & Social Impact
+
+- UN Volunteers
+- VolunteerMatch
+- Idealist
 
 ---
 
 ### Category D
 
-Communities
+## Communities & Opportunity Networks
 
-- GDG
+Professional Communities
+
 - IEEE
-- MLH
+- ACM
+- GDG
+- Women Techmakers
+
+Open Source
+
+- GitHub
+- GitLab
+- GSoC
+- Outreachy
+
+Creative Communities
+
+- Behance
+- Dribbble
+- ArtStation
+
+Research Communities
+
 - Kaggle
+- Hugging Face
+- Open Science Communities
+
+Entrepreneurship
+
+- Startup India
+- Incubators
+- Accelerators
+- Startup Communities
+
+Local Communities
+
+- College Communities
+- District Skill Centers
+- Community Organizations
+- Women's Self Help Groups (SHGs)
 
 ---
 
 ### Category E
 
-RSS Feeds
+## Structured Feeds
 
-Whenever available.
+Preferred whenever available.
 
-RSS is preferred over scraping.
+Priority Order
+
+1. RSS Feeds
+2. Official APIs
+3. Structured XML / JSON feeds
+4. Public datasets
+5. Website crawling (Firecrawl)
+6. Search engine discovery
+
+Scout should always prefer structured and official data over scraping whenever possible.
+
+Scraping is the fallback, not the default.
+
+---
+
+Category F — Hidden Opportunities ⭐
+
+These are opportunities that never trend because they're buried on obscure websites.
+
+Examples:
+
+Small NGOs hiring locally.
+District-level government notices.
+Local newspapers.
+University department notice boards.
+Incubator announcement pages.
+Startup blogs.
+Company "Careers" pages that aren't indexed well.
+Women entrepreneur networks.
+Telegram/Discord/Slack communities (where publicly accessible).
+Local chambers of commerce.
+Skill center announcements.
+Apprenticeship notices.
+Community WhatsApp invite pages (if publicly indexed).
 
 ---
 
@@ -246,6 +506,7 @@ Scraping
 ---
 
 # Stage 2
+
 ## URL Collection
 
 Goal
@@ -286,6 +547,7 @@ Benefits
 ---
 
 # Stage 3
+
 ## Content Extraction
 
 Goal
@@ -323,6 +585,7 @@ Description
 ---
 
 # Stage 4
+
 ## Opportunity Detection
 
 Not every webpage contains an opportunity.
@@ -356,6 +619,7 @@ Reason
 ---
 
 # Stage 5
+
 ## Structured Extraction
 
 If Opportunity == TRUE
@@ -407,6 +671,7 @@ No free text.
 ---
 
 # Stage 6
+
 ## Validation
 
 Validate extracted data.
@@ -438,6 +703,7 @@ Discard
 ---
 
 # Stage 7
+
 ## Duplicate Detection
 
 Many sources publish identical opportunities.
@@ -463,6 +729,7 @@ Never store duplicates.
 ---
 
 # Stage 8
+
 ## Opportunity Intelligence
 
 This is Scout's proprietary layer.
@@ -544,6 +811,7 @@ Recently updated
 ---
 
 # Stage 9
+
 ## Classification
 
 Assign categories.
@@ -597,6 +865,7 @@ Career Domains
 ---
 
 # Stage 10
+
 ## Storage
 
 Store Opportunity Object.
