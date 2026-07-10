@@ -1,22 +1,24 @@
-import express, { Request, Response } from 'express';
+import express, { Response } from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
-import { SCOUT_SHARED_VERSION } from '@scout/shared';
-
-// Load environment variables
-dotenv.config();
+import { env, db, redis, firebase } from '@/config';
+import { requireAuth, AuthenticatedRequest } from '@/middleware/auth';
 
 const app = express();
-const port = process.env.PORT || 5000;
+const port = env.PORT;
 
-// Enable CORS
-app.use(cors());
+// Configure CORS
+app.use(
+  cors({
+    origin: env.FRONTEND_URL,
+    credentials: true,
+  }),
+);
 
 // Parse JSON request bodies
 app.use(express.json());
 
-// Main status endpoint as requested
-app.get('/', (req: Request, res: Response) => {
+// Main status endpoint (Phase 1)
+app.get('/', (req, res) => {
   res.json({
     name: 'Scout API',
     status: 'running',
@@ -24,15 +26,80 @@ app.get('/', (req: Request, res: Response) => {
   });
 });
 
-// A simple health check API endpoint to verify monorepo compilation/module resolution
-app.get('/health', (req: Request, res: Response) => {
+// Enhanced Service Health Endpoint
+app.get('/api/v1/health', async (req, res) => {
+  const dbHealth = db.getHealth();
+  const redisHealth = await redis.getHealth();
+  const firebaseHealth = firebase.isInitialized() ? 'configured' : 'error';
+
+  const isHealthy = dbHealth === 'ok' && redisHealth === 'ok' && firebaseHealth === 'configured';
+
   res.json({
-    status: 'ok',
-    sharedVersion: SCOUT_SHARED_VERSION,
+    status: isHealthy ? 'healthy' : 'unhealthy',
+    services: {
+      api: 'ok',
+      mongodb: dbHealth,
+      redis: redisHealth,
+      firebase: firebaseHealth,
+    },
+    timestamp: new Date().toISOString(),
   });
 });
 
-// Start the server
-app.listen(port, () => {
-  console.log(`Scout Server is running on port ${port}`);
+// Auth Verification Endpoint - GET /api/v1/auth/me
+app.get('/api/v1/auth/me', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'User session not resolved',
+      },
+    });
+  }
+
+  res.json({
+    success: true,
+    data: {
+      uid: req.user.uid,
+      email: req.user.email || '',
+      name: req.user.name || '',
+      picture: req.user.picture || '',
+    },
+  });
 });
+
+// Bootstrapping the services
+async function bootstrap() {
+  try {
+    // 1. Initialize Firebase Admin
+    firebase.initialize();
+
+    // 2. Connect to MongoDB
+    await db.connect();
+
+    // 3. Connect to Redis
+    redis.connect();
+
+    // Start Server
+    app.listen(port, () => {
+      console.log(`Scout Backend Server started on port ${port}`);
+    });
+  } catch (error) {
+    console.error('❌ Failed to bootstrap the Scout Backend application:', error);
+    process.exit(1);
+  }
+}
+
+// Graceful shutdown
+async function gracefulShutdown(signal: string) {
+  console.log(`\n⚠️ Received ${signal}. Shutting down gracefully...`);
+  await db.disconnect();
+  await redis.disconnect();
+  process.exit(0);
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+bootstrap();

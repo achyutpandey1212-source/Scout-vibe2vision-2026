@@ -1,10 +1,14 @@
 'use client';
 
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { useAuth } from '@/context/auth-context';
+import { LogOut } from 'lucide-react';
 
 export default function Home() {
+  const { user, loading, signIn, signOut } = useAuth();
+
   return (
     <div className="relative min-h-screen flex flex-col justify-between p-8 md:p-16 overflow-hidden">
       {/* Decorative subtle origami background grid/shapes */}
@@ -53,6 +57,7 @@ export default function Home() {
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5, ease: 'easeOut', delay: 0.1 }}
+          className="flex items-center space-x-4"
         >
           <ThemeToggle />
         </motion.div>
@@ -92,15 +97,80 @@ export default function Home() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.3 }}
-          className="pt-6"
+          className="pt-4 flex flex-col items-center justify-center min-h-[120px]"
         >
-          {/* Highly premium premium CTA placeholder */}
-          <div className="relative group select-none">
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-primary to-primary/40 rounded-full blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200" />
-            <button className="relative px-8 py-3.5 bg-card text-foreground border border-border rounded-full hover:bg-accent text-sm font-medium tracking-tight transition-all duration-200">
-              Entering Phase 1
-            </button>
-          </div>
+          <AnimatePresence mode="wait">
+            {loading ? (
+              <motion.div
+                key="loading"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex items-center space-x-2 text-sm text-secondary"
+              >
+                <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                <span>Checking credentials...</span>
+              </motion.div>
+            ) : user ? (
+              <motion.div
+                key="user-card"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.4 }}
+                className="flex flex-col items-center space-y-4 p-6 border border-border bg-card rounded-2xl max-w-sm w-full shadow-sm"
+              >
+                <div className="flex items-center space-x-3 text-left w-full">
+                  {user.picture ? (
+                    <img
+                      src={user.picture}
+                      alt={user.name}
+                      className="w-12 h-12 rounded-full border border-border"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-lg">
+                      {user.name.charAt(0)}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground truncate">{user.name}</p>
+                    <p className="text-xs text-secondary truncate">{user.email}</p>
+                  </div>
+                </div>
+
+                <div className="w-full h-[1px] bg-border" />
+
+                <div className="flex items-center justify-between w-full text-xs text-secondary/80">
+                  <span>Backend Session:</span>
+                  <span className="text-primary font-medium">Authorized</span>
+                </div>
+
+                <button
+                  onClick={signOut}
+                  className="flex items-center justify-center space-x-2 w-full px-4 py-2.5 bg-accent hover:bg-destructive hover:text-destructive-foreground text-foreground border border-border rounded-xl text-xs font-medium transition-all duration-200"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Log Out</span>
+                </button>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="login-btn"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="relative group select-none"
+              >
+                <div className="absolute -inset-0.5 bg-gradient-to-r from-primary to-primary/40 rounded-full blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200" />
+                <button
+                  onClick={signIn}
+                  className="relative px-8 py-3.5 bg-card text-foreground border border-border rounded-full hover:bg-accent text-sm font-medium tracking-tight transition-all duration-200"
+                >
+                  Continue with Google
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       </main>
 
