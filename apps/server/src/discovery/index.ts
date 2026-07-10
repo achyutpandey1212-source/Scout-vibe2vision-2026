@@ -6,3 +6,4 @@ export { searchOpportunities } from './search/search-orchestrator';
 export * from './firecrawl/extraction.types';
 export { RawPageModel } from './firecrawl/raw-page.model';
 export { extractCandidatePages } from './firecrawl/extraction-orchestrator';
+export * from './extraction';
