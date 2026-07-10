@@ -24,6 +24,9 @@ const envSchema = z.object({
   TAVILY_API_KEY: z.string({
     required_error: 'TAVILY_API_KEY is required for opportunity searches',
   }),
+  FIRECRAWL_API_KEY: z.string({
+    required_error: 'FIRECRAWL_API_KEY is required for page scraping',
+  }),
   FRONTEND_URL: z.string().default('http://localhost:3000'),
 
   // AI Layer - Primary configurations
