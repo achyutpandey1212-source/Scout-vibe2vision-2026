@@ -4,6 +4,8 @@ import { AuthService } from '../services/auth.service';
 import { db } from '../../config/db';
 import { firebase } from '../../config';
 
+import { UserIntelligenceRepository } from '../../profile/repository/user-intelligence.repository';
+
 export class AuthController {
   static async getCurrentUser(req: AuthenticatedRequest, res: Response) {
     if (!req.dbUser) {
@@ -16,10 +18,28 @@ export class AuthController {
       });
     }
 
-    return res.json({
-      success: true,
-      data: req.dbUser,
-    });
+    try {
+      const userId = req.dbUser._id.toString();
+      const intelligence = await UserIntelligenceRepository.findOrCreateByUserId(userId);
+      return res.json({
+        success: true,
+        data: {
+          ...req.dbUser.toJSON(),
+          onboardingCompleted: intelligence.onboarding.completed,
+          onboardingStep: intelligence.onboarding.currentStep,
+        },
+      });
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error('[AUTH] Get current user error:', errMsg);
+      return res.status(500).json({
+        success: false,
+        error: {
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to retrieve authenticated user details.',
+        },
+      });
+    }
   }
 
   static async syncUser(req: AuthenticatedRequest, res: Response) {
@@ -35,9 +55,15 @@ export class AuthController {
 
     try {
       const user = await AuthService.syncUser(req.auth);
+      const userId = user._id.toString();
+      const intelligence = await UserIntelligenceRepository.findOrCreateByUserId(userId);
       return res.json({
         success: true,
-        data: user,
+        data: {
+          ...user.toJSON(),
+          onboardingCompleted: intelligence.onboarding.completed,
+          onboardingStep: intelligence.onboarding.currentStep,
+        },
       });
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : String(error);

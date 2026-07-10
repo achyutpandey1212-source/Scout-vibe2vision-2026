@@ -1,18 +1,25 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.replace('/');
+    if (!loading) {
+      if (!user) {
+        router.replace('/');
+      } else if (!user.onboardingCompleted && pathname !== '/onboarding') {
+        router.replace('/onboarding');
+      } else if (user.onboardingCompleted && pathname === '/onboarding') {
+        router.replace('/dashboard');
+      }
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, pathname]);
 
   if (loading) {
     return (
@@ -26,7 +33,12 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!user) {
+  const isAuthorized =
+    user &&
+    ((pathname === '/onboarding' && !user.onboardingCompleted) ||
+      (pathname !== '/onboarding' && user.onboardingCompleted));
+
+  if (!isAuthorized) {
     return null;
   }
 

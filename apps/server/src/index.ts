@@ -2,6 +2,8 @@ import express, { Response } from 'express';
 import cors from 'cors';
 import { env, db, redis, firebase } from '@/config';
 import { authRouter } from './auth';
+import { profileRouter } from './profile';
+import { recommendationRouter } from './intelligence/recommendation';
 
 const app = express();
 const port = env.PORT;
@@ -48,6 +50,12 @@ app.get('/api/v1/health', async (req, res) => {
 
 // Register Auth Router
 app.use('/api/v1/auth', authRouter);
+
+// Register Profile / User Intelligence Router
+app.use('/api/v1/profile', profileRouter);
+
+// Register Recommendations Router
+app.use('/api/v1/recommendations', recommendationRouter);
 
 // Bootstrapping the services
 async function bootstrap() {
