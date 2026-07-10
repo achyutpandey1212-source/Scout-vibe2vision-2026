@@ -18,7 +18,7 @@
     "lint": "npm run lint --workspaces",
     "format": "prettier --check \"**/*.{ts,tsx,js,json,md,css}\"",
     "format:fix": "prettier --write \"**/*.{ts,tsx,js,json,md,css}\"",
-    "prepare": "husky"
+    "prepare": "command -v husky >/dev/null 2>&1 && husky || true"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
