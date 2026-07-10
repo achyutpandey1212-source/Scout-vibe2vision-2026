@@ -25,6 +25,30 @@ const envSchema = z.object({
     required_error: 'TAVILY_API_KEY is required for opportunity searches',
   }),
   FRONTEND_URL: z.string().default('http://localhost:3000'),
+
+  // AI Layer - Primary configurations
+  DISCOVERY_PROVIDER: z.enum(['gemini', 'groq']).default('gemini'),
+  DISCOVERY_MODEL: z.string().default('gemini-1.5-pro'),
+  DISCOVERY_API_KEY: z.string({
+    required_error: 'DISCOVERY_API_KEY is required for Discovery Engine',
+  }),
+
+  PERSONALIZATION_PROVIDER: z.enum(['gemini', 'groq']).default('gemini'),
+  PERSONALIZATION_MODEL: z.string().default('gemini-1.5-flash'),
+  PERSONALIZATION_API_KEY: z.string({
+    required_error: 'PERSONALIZATION_API_KEY is required for Personalization Engine',
+  }),
+
+  // AI Layer - Optional Fallback configurations
+  GROQ_API_KEY: z.string().optional(),
+
+  DISCOVERY_FALLBACK_PROVIDER: z.enum(['gemini', 'groq']).optional(),
+  DISCOVERY_FALLBACK_MODEL: z.string().optional(),
+  DISCOVERY_FALLBACK_API_KEY: z.string().optional(),
+
+  PERSONALIZATION_FALLBACK_PROVIDER: z.enum(['gemini', 'groq']).optional(),
+  PERSONALIZATION_FALLBACK_MODEL: z.string().optional(),
+  PERSONALIZATION_FALLBACK_API_KEY: z.string().optional(),
 });
 
 const result = envSchema.safeParse(process.env);
