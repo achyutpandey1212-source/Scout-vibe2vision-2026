@@ -92,6 +92,22 @@ export const OpportunitySchema = z.object({
         }, z.date())
         .nullable()
         .default(null),
+      scores: z
+        .object({
+          trust: z.number().default(0),
+          popularity: z.number().default(0),
+          hidden: z.number().default(0),
+          quality: z.number().default(0),
+        })
+        .optional(),
+      scoreBreakdown: z
+        .object({
+          trustFactors: z.record(z.string(), z.number()).default({}),
+          popularityFactors: z.record(z.string(), z.number()).default({}),
+          hiddenFactors: z.record(z.string(), z.number()).default({}),
+          qualityFactors: z.record(z.string(), z.number()).default({}),
+        })
+        .optional(),
     })
     .nullable()
     .optional(),

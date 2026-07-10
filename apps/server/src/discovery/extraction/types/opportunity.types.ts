@@ -93,4 +93,16 @@ export interface OpportunityIntelligence {
   version: string;
   enriched: boolean;
   lastEnrichedAt: Date | null;
+  scores?: {
+    trust: number;
+    popularity: number;
+    hidden: number;
+    quality: number;
+  };
+  scoreBreakdown?: {
+    trustFactors: Record<string, number>;
+    popularityFactors: Record<string, number>;
+    hiddenFactors: Record<string, number>;
+    qualityFactors: Record<string, number>;
+  };
 }
