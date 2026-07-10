@@ -7,3 +7,7 @@ export * from './firecrawl/extraction.types';
 export { RawPageModel } from './firecrawl/raw-page.model';
 export { extractCandidatePages } from './firecrawl/extraction-orchestrator';
 export * from './extraction';
+export { OpportunityRepository } from './persistence/opportunity.repository';
+export { DiscoveryRunModel } from './persistence/discovery-run.model';
+export type { IDiscoveryRun } from './persistence/discovery-run.model';
+export * from './orchestrator';

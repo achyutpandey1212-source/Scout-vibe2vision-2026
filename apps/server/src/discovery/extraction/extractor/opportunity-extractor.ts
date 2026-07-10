@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { env } from '../../../config/env';
 import { generateStructuredResponse } from '../../../ai/capabilities/structured-output';
 import { OpportunitySchema } from '../schemas/opportunity.schema';
@@ -49,9 +50,17 @@ export async function extractOpportunityFromPage(
     const normalized = normalizeOpportunity(rawExtracted);
 
     // 3. Enrich with metadata fields
+    const validRawPageId =
+      rawPage._id && mongoose.Types.ObjectId.isValid(rawPage._id)
+        ? rawPage._id.toString()
+        : new mongoose.Types.ObjectId().toString();
+
     const enriched: Opportunity = {
       ...normalized,
-      rawPageId: rawPage._id ? rawPage._id.toString() : 'mock_raw_page_id',
+      sourceURL: normalized.sourceURL || rawPage.url,
+      sourceDomain: normalized.sourceDomain || new URL(rawPage.url).hostname,
+      applicationUrl: normalized.applicationUrl || rawPage.url,
+      rawPageId: validRawPageId,
       hash: rawPage.hash || 'no_hash',
       aiMetadata: {
         provider: env.DISCOVERY_PROVIDER || 'gemini',
