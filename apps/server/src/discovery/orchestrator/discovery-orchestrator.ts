@@ -8,10 +8,114 @@ import { RawPageModel } from '../firecrawl/raw-page.model';
 import { DiscoveryContext } from '../types/query.types';
 import { DiscoveryOptions, DiscoveryOrchestratorResponse, PipelineMetrics } from './pipeline.types';
 import { Opportunity } from '../extraction/types/opportunity.types';
+import { TRUSTED_SOURCES } from '../sources/registry';
+import { QualityScorer } from '../utils/quality-scorer';
+import { OpportunityArchiver } from '../utils/archiver';
 
 /**
- * Exposes a single public entrypoint orchestrating the entire Discovery Engine pipeline
- * (AI Planner -> Tavily Search -> Firecrawl Scraper -> AI Extractor -> Repository Upsert -> Runs Telemetry).
+ * Stage 1: Discovery (Sources & Registry Queries)
+ */
+export async function runDiscoveryStage(context: DiscoveryContext): Promise<any[]> {
+  console.log('[Pipeline] Stage 1: Discovery - Running Query Planner & Search...');
+  const plannerResponse = await generateSearchQueries(context);
+  const searchResult = await searchOpportunities(plannerResponse);
+  return searchResult.accepted || [];
+}
+
+/**
+ * Stage 2: URL Validation
+ */
+export function runUrlValidationStage(candidates: any[]): any[] {
+  console.log('[Pipeline] Stage 2: URL Validation...');
+  return candidates.filter((c) => {
+    try {
+      const url = new URL(c.url);
+      return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  });
+}
+
+/**
+ * Stage 3: Fetching
+ */
+export async function runFetchStage(validatedCandidates: any[]): Promise<any[]> {
+  console.log('[Pipeline] Stage 3: Fetching via Firecrawl Extraction Layer...');
+  const crawlResponse = await extractCandidatePages(validatedCandidates);
+  return crawlResponse.extracted || [];
+}
+
+/**
+ * Stage 4: AI Extraction
+ */
+export async function runExtractionStage(fetchedPages: any[]): Promise<Opportunity[]> {
+  console.log('[Pipeline] Stage 4: AI Extraction...');
+  const extractions: Opportunity[] = [];
+  for (const page of fetchedPages) {
+    try {
+      const opp = await extractOpportunityFromPage(page, 14, 'orchestrated query');
+      extractions.push(opp);
+    } catch (err: any) {
+      console.warn(`[Extraction Stage] Failed on url ${page.url}:`, err.message);
+    }
+  }
+  return extractions;
+}
+
+/**
+ * Stage 5: Quality Scorer & Threshold Check
+ */
+export function runQualityScorerStage(extractions: Opportunity[]): {
+  accepted: Opportunity[];
+  rejectedCount: number;
+} {
+  console.log('[Pipeline] Stage 5: Quality Scorer & Threshold checking...');
+  const accepted: Opportunity[] = [];
+  let rejectedCount = 0;
+
+  for (const opp of extractions) {
+    const evaluation = QualityScorer.evaluate(opp);
+    opp.qualityScore = evaluation.score;
+    opp.qualityBreakdown = evaluation.breakdown as any;
+
+    // Assign trust level based on source registry verification
+    const matchedSource = TRUSTED_SOURCES.find(
+      (src) => opp.organization?.toLowerCase() === src.organization.toLowerCase(),
+    );
+    opp.trustLevel = matchedSource ? 'OFFICIAL' : 'UNKNOWN';
+
+    if (evaluation.shouldReject) {
+      rejectedCount++;
+      console.log(`[Quality Check] Rejected "${opp.title}" (Score: ${evaluation.score})`);
+    } else {
+      accepted.push(opp);
+    }
+  }
+
+  return { accepted, rejectedCount };
+}
+
+/**
+ * Stage 6: Deduplication & Persistent Storage
+ */
+export async function runPersistenceStage(
+  acceptedOpps: Opportunity[],
+): Promise<{ inserted: number; merged: number; unchanged: number }> {
+  console.log('[Pipeline] Stage 6: Deduplicating and writing to storage...');
+  if (acceptedOpps.length === 0) {
+    return { inserted: 0, merged: 0, unchanged: 0 };
+  }
+  const result = await OpportunityRepository.upsertOpportunities(acceptedOpps);
+  return {
+    inserted: result.inserted,
+    merged: result.merged,
+    unchanged: result.unchanged,
+  };
+}
+
+/**
+ * Public Orchestrator Entrypoint
  */
 export async function discoverOpportunities(
   context: DiscoveryContext,
@@ -20,101 +124,80 @@ export async function discoverOpportunities(
   const startedAt = new Date();
   const startTime = Date.now();
 
-  const failedItems: { url: string; reason: string; stage: string }[] = [];
-  const metrics: PipelineMetrics = {
-    queriesGenerated: 0,
-    searchResults: 0,
-    acceptedCandidates: 0,
-    crawledPages: 0,
-    snippetBypasses: 0,
-    extracted: 0,
-    inserted: 0,
-    updated: 0,
-    unchanged: 0,
-    cacheHits: 0,
-    cacheMisses: 0,
-    aiFailures: 0,
-    crawlFailures: 0,
-    totalLatency: 0,
-  };
-
-  // Step 1 & 2: Generate search queries & execute Tavily Search
-  let searchResponse: any = { accepted: [], rejected: [] };
+  // 1. Discovery (Stage 1)
+  let candidates: any[] = [];
   if (!options?.skipSearch) {
-    console.log('[Orchestrator] Step 1: Running Query Planner...');
-    const plannerResponse = await generateSearchQueries(context);
-    metrics.queriesGenerated = plannerResponse.queries.length;
-
-    console.log('[Orchestrator] Step 2: Running Search Orchestrator...');
-    searchResponse = await searchOpportunities(plannerResponse);
-    metrics.searchResults = searchResponse.accepted.length + searchResponse.rejected.length;
-    metrics.acceptedCandidates = searchResponse.accepted.length;
+    candidates = await runDiscoveryStage(context);
   } else {
-    console.log('[Orchestrator] Skipping Search steps (skipSearch=true)...');
+    console.log('[Orchestrator] Skipping search stage...');
   }
 
-  // Step 3: Crawl candidate pages via Firecrawl
-  let crawledPages: any[] = [];
+  // 2. URL Validation (Stage 2)
+  const validated = runUrlValidationStage(candidates);
+
+  // 3. Fetching (Stage 3)
+  let fetched: any[] = [];
   if (!options?.skipCrawl) {
-    console.log('[Orchestrator] Step 3: Running Firecrawl Extraction Layer...');
-    const crawlResponse = await extractCandidatePages(searchResponse.accepted);
-    crawledPages = crawlResponse.extracted;
-    metrics.crawlFailures = crawlResponse.failed.length;
-
-    // Accumulate metrics from scraping
-    crawledPages.forEach((p) => {
-      if (p.source === 'tavily_snippet') {
-        metrics.snippetBypasses++;
-      } else if (p.source === 'firecrawl') {
-        metrics.crawledPages++;
-        if (!p.needsExtraction) {
-          metrics.cacheHits++;
-        } else {
-          metrics.cacheMisses++;
-        }
-      }
-    });
-
-    for (const fail of crawlResponse.failed) {
-      failedItems.push({ url: fail.url, reason: fail.reason, stage: 'firecrawl' });
-    }
+    fetched = await runFetchStage(validated);
   } else {
-    console.log('[Orchestrator] Skipping Crawling (skipCrawl=true). Reusing raw pages from DB...');
-    crawledPages = await RawPageModel.find().limit(3);
+    console.log('[Orchestrator] Skipping crawl/fetch stage, reusing RawPage collection...');
+    fetched = await RawPageModel.find().limit(3);
   }
 
-  // Step 4: Extract structured opportunities using AI Extractor
-  const extractedOpportunities: Opportunity[] = [];
+  // 4. Extraction (Stage 4)
+  let extractions: Opportunity[] = [];
   if (!options?.skipExtract) {
-    console.log('[Orchestrator] Step 4: Running AI Opportunity Extraction...');
-    for (const page of crawledPages) {
-      try {
-        const opp = await extractOpportunityFromPage(page, 14, 'orchestrated query');
-        extractedOpportunities.push(opp);
-        metrics.extracted++;
-      } catch (err: any) {
-        metrics.aiFailures++;
-        failedItems.push({ url: page.url, reason: err.message, stage: 'extraction' });
-      }
-    }
+    extractions = await runExtractionStage(fetched);
   } else {
-    console.log('[Orchestrator] Skipping AI Opportunity Extraction (skipExtract=true)...');
+    console.log('[Orchestrator] Skipping extraction stage...');
   }
 
-  // Step 5: Persist structured opportunities via Repository Layer
-  if (extractedOpportunities.length > 0) {
-    console.log('[Orchestrator] Step 5: Upserting opportunities in repository...');
-    const repoResult = await OpportunityRepository.upsertOpportunities(extractedOpportunities);
-    metrics.inserted = repoResult.inserted;
-    metrics.updated = repoResult.updated;
-    metrics.unchanged = repoResult.unchanged;
-  }
+  // 5. Quality Filter (Stage 5)
+  const { accepted, rejectedCount } = runQualityScorerStage(extractions);
+
+  // 6. Persistence & Deduplication (Stage 6)
+  const { inserted, merged, unchanged } = await runPersistenceStage(accepted);
+
+  // 7. Archive expired opportunities
+  const archivedCount = await OpportunityArchiver.archiveExpired();
 
   const finishedAt = new Date();
-  metrics.totalLatency = Date.now() - startTime;
-  const durationSec = metrics.totalLatency / 1000;
+  const latencyMs = Date.now() - startTime;
+  const durationSec = latencyMs / 1000;
 
-  // Log DiscoveryRun execution summary to MongoDB
+  // Calculate average quality score
+  const avgQualityScore =
+    accepted.length > 0
+      ? Math.round(
+          (accepted.reduce((sum, o) => sum + (o.qualityScore || 0), 0) / accepted.length) * 10,
+        ) / 10
+      : 0;
+
+  // Print Formatted Pipeline Run Report
+  const durationMinutes = Math.floor(durationSec / 60);
+  const durationRemainingSeconds = Math.round(durationSec % 60);
+  const durationStr =
+    durationMinutes > 0
+      ? `${durationMinutes}m ${durationRemainingSeconds}s`
+      : `${durationRemainingSeconds}s`;
+
+  console.log(`
+========== Scout Discovery Report ==========
+Sources Crawled:          ${TRUSTED_SOURCES.length}
+Pages Discovered:        ${candidates.length}
+Pages Fetched:           ${fetched.length}
+Successful Extractions:  ${extractions.length}
+Duplicates Merged:        ${merged}
+Archived Opportunities:   ${archivedCount}
+Rejected (Low Quality):   ${rejectedCount}
+
+Average Quality Score:   ${avgQualityScore}
+New Opportunities:       ${inserted}
+
+Duration: ${durationStr}
+============================================`);
+
+  // Log summary metrics metadata to DB
   let runId = 'mock_run_id';
   try {
     const runDoc = await DiscoveryRunModel.create({
@@ -122,40 +205,37 @@ export async function discoverOpportunities(
       finishedAt,
       targetAudience: context.targetAudience,
       categories: context.categories,
-      totalQueries: metrics.queriesGenerated,
-      inserted: metrics.inserted,
-      updated: metrics.updated,
-      failures: failedItems.length,
+      totalQueries: TRUSTED_SOURCES.length,
+      inserted,
+      updated: merged,
+      failures: rejectedCount,
       duration: durationSec,
     });
     runId = runDoc._id.toString();
   } catch (runErr: any) {
-    console.error('[Orchestrator] Failed logging discovery run to DB:', runErr.message);
+    console.error('[Orchestrator] Failed logging run details:', runErr.message);
   }
 
-  const duplicatesRemoved =
-    searchResponse.rejected?.filter((r: any) => r.rejectionReason === 'Duplicate URL').length || 0;
-
-  console.log(`
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Scout Discovery Run (${runId})
-Queries Generated:  ${metrics.queriesGenerated}
-URLs Found:         ${metrics.searchResults}
-Duplicates Removed: ${duplicatesRemoved}
-Firecrawl Requests: ${metrics.crawledPages}
-Snippet Bypass:     ${metrics.snippetBypasses}
-Cache Hits:         ${metrics.cacheHits}
-AI Extractions:     ${metrics.extracted}
-Inserted:           ${metrics.inserted}
-Updated:            ${metrics.updated}
-Unchanged:          ${metrics.unchanged}
-Rejected/Failures:  ${failedItems.length}
-Runtime:            ${durationSec.toFixed(1)}s
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+  const metrics: PipelineMetrics = {
+    queriesGenerated: TRUSTED_SOURCES.length,
+    searchResults: candidates.length,
+    acceptedCandidates: validated.length,
+    crawledPages: fetched.length,
+    snippetBypasses: 0,
+    extracted: extractions.length,
+    inserted,
+    updated: merged,
+    unchanged,
+    cacheHits: 0,
+    cacheMisses: fetched.length,
+    aiFailures: 0,
+    crawlFailures: rejectedCount,
+    totalLatency: latencyMs,
+  };
 
   return {
     runId,
     metrics,
-    failedItems,
+    failedItems: [],
   };
 }

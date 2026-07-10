@@ -56,6 +56,41 @@ const OpportunitySchema = new Schema<IOpportunity>(
       extractionVersion: { type: String, required: true },
     },
     hash: { type: String, required: true },
+
+    // Freshness & Archiving
+    discoveredAt: { type: Date, default: Date.now },
+    firstSeenAt: { type: Date, default: Date.now },
+    lastCheckedAt: { type: Date, default: Date.now },
+    expiresAt: { type: Date, default: null, index: true },
+    archived: { type: Boolean, default: false, index: true },
+
+    // Trust & Quality Metrics
+    trustLevel: {
+      type: String,
+      enum: ['VERIFIED', 'OFFICIAL', 'COMMUNITY', 'UNKNOWN'],
+      default: 'UNKNOWN',
+      index: true,
+    },
+    qualityScore: { type: Number, default: 0, index: true },
+    qualityBreakdown: {
+      officialSource: { type: Boolean, default: false },
+      deadlinePresent: { type: Boolean, default: false },
+      applicationLink: { type: Boolean, default: false },
+      womenFocused: { type: Boolean, default: false },
+      descriptionComplete: { type: Boolean, default: false },
+    },
+
+    // Enriched Metadata
+    workMode: {
+      type: String,
+      enum: ['REMOTE', 'HYBRID', 'ONSITE', null],
+      default: null,
+      index: true,
+    },
+    fundingStatus: { type: String, enum: ['PAID', 'UNPAID', null], default: null, index: true },
+    visaSponsored: { type: Boolean, default: false },
+    travelFunded: { type: Boolean, default: false },
+
     intelligence: {
       type: {
         normalizedOrganization: { type: String, default: null },

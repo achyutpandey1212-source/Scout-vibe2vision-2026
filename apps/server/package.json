@@ -7,7 +7,9 @@
     "build": "tsc && tsc-alias",
     "start": "node dist/index.js",
     "dev": "ts-node-dev -r tsconfig-paths/register --respawn --transpile-only src/index.ts",
-    "lint": "eslint src/"
+    "lint": "eslint src/",
+    "crawl": "npm run build && node dist/ai/playground/test-discovery-orchestrator.js",
+    "crawl:extract": "npm run build && node dist/ai/playground/test-firecrawl-extraction.js"
   },
   "dependencies": {
     "@scout/shared": "*",

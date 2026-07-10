@@ -13,6 +13,8 @@
   "scripts": {
     "dev": "concurrently \"npm run dev -w @scout/web\" \"npm run dev -w @scout/server\"",
     "build": "npm run build -w @scout/shared && npm run build -w @scout/server && npm run build -w @scout/web",
+    "crawl": "npm run crawl -w @scout/server",
+    "crawl:extract": "npm run crawl:extract -w @scout/server",
     "lint": "npm run lint --workspaces",
     "format": "prettier --check \"**/*.{ts,tsx,js,json,md,css}\"",
     "format:fix": "prettier --write \"**/*.{ts,tsx,js,json,md,css}\"",

@@ -67,6 +67,31 @@ export interface Opportunity {
   rawPageId: string;
   aiMetadata: AIMetadata;
   hash: string;
+
+  // Freshness & Archiving
+  discoveredAt?: string;
+  firstSeenAt?: string;
+  lastCheckedAt?: string;
+  expiresAt?: string | null;
+  archived?: boolean;
+
+  // Trust & Quality Metrics
+  trustLevel?: 'VERIFIED' | 'OFFICIAL' | 'COMMUNITY' | 'UNKNOWN';
+  qualityScore?: number;
+  qualityBreakdown?: {
+    officialSource: boolean;
+    deadlinePresent: boolean;
+    applicationLink: boolean;
+    womenFocused: boolean;
+    descriptionComplete: boolean;
+  };
+
+  // Enriched Metadata
+  workMode?: 'REMOTE' | 'HYBRID' | 'ONSITE' | null;
+  fundingStatus?: 'PAID' | 'UNPAID' | null;
+  visaSponsored?: boolean;
+  travelFunded?: boolean;
+
   intelligence?: OpportunityIntelligence | null;
   createdAt?: string;
   updatedAt?: string;
