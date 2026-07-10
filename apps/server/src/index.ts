@@ -1,5 +1,5 @@
 import express, { Response } from 'express';
-import cors from 'cors';
+import cors, { CorsOptions } from 'cors';
 import { env, db, redis, firebase } from '@/config';
 import { authRouter } from './auth';
 import { profileRouter } from './profile';
@@ -10,13 +10,25 @@ import { bookmarkRouter } from './auth/routes/bookmark.routes';
 const app = express();
 const port = env.PORT;
 
-// Configure CORS
-app.use(
-  cors({
-    origin: env.FRONTEND_URL,
-    credentials: true,
-  }),
+const allowedOrigins = ['http://localhost:3000', env.CLIENT_URL, env.FRONTEND_URL].filter(
+  (origin): origin is string => Boolean(origin),
 );
+
+const corsOptions: CorsOptions = {
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
+  credentials: true,
+};
+
+// Configure CORS + preflight handling
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // Parse JSON request bodies
 app.use(express.json());

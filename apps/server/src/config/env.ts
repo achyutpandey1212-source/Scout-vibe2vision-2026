@@ -27,7 +27,8 @@ const envSchema = z.object({
   FIRECRAWL_API_KEY: z.string({
     required_error: 'FIRECRAWL_API_KEY is required for page scraping',
   }),
-  FRONTEND_URL: z.string().default('http://localhost:3000'),
+  FRONTEND_URL: z.string().optional(),
+  CLIENT_URL: z.string().optional(),
 
   // AI Layer - Primary configurations
   DISCOVERY_PROVIDER: z.enum(['gemini', 'groq']).default('gemini'),
