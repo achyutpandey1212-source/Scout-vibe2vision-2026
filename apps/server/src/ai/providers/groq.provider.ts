@@ -11,7 +11,7 @@ export class GroqProvider extends BaseProvider {
     model: string,
   ): Promise<AIGatewayResponse> {
     const startTime = Date.now();
-    const url = 'https://api.groq.com/openapi/v1/chat/completions';
+    const url = 'https://api.groq.com/openai/v1/chat/completions';
 
     const messages: any[] = [];
 
