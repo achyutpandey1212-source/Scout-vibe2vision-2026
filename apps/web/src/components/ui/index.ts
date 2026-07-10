@@ -9,4 +9,5 @@ export * from './decorations';
 export * from './nav';
 export * from './motion';
 export * from './UniversalLoader';
-export * from './SplashExperience';
+export * from './ScoutOpeningSequence';
+export * from './PageTransition';

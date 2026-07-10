@@ -7,6 +7,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useAuth } from '@/context/auth-context';
 import { api } from '@/lib/api';
 import { ChevronLeft, ChevronRight, Sparkles, Check } from 'lucide-react';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 // Steps setup
 const TOTAL_STEPS = 16;
@@ -215,8 +216,11 @@ export default function OnboardingPage() {
         {/* Progress Bar Header */}
         <header className="sticky top-0 bg-background/80 backdrop-blur z-20 w-full p-4 border-b border-border">
           <div className="max-w-xl mx-auto flex items-center justify-between">
-            <span className="text-xs font-light text-secondary">Onboarding Progress</span>
-            <span className="text-xs font-medium text-primary">{progressPercent}% Complete</span>
+            <div className="flex flex-col">
+              <span className="text-xs font-light text-secondary">Onboarding Progress</span>
+              <span className="text-xs font-medium text-primary">{progressPercent}% Complete</span>
+            </div>
+            <ThemeToggle />
           </div>
           <div className="max-w-xl mx-auto mt-2 h-1 bg-muted rounded-full overflow-hidden">
             <div

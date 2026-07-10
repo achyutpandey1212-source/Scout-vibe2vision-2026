@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { DashboardLayout } from '@/components/layout';
-import { Typography, Grid, Stack, UniversalLoader } from '@/components/ui';
+import { Typography, Grid, Stack, UniversalLoader, PageTransition } from '@/components/ui';
 import { FeaturedOpportunityCard, HiddenGemCard, OpportunityCard } from '@/components/opportunity';
 import { DashboardHero, ScoutIntelligencePanel, RecommendationStrip } from '@/components/dashboard';
 import { mockOpportunities } from '@/lib/mock';
@@ -44,82 +44,84 @@ export default function DashboardPage() {
         </div>
       ) : (
         <DashboardLayout>
-          <Stack gap="xl">
-            {/* Dashboard Greeting Header */}
-            <DashboardHero userName="Maya" />
+          <PageTransition>
+            <Stack gap="xl">
+              {/* Dashboard Greeting Header */}
+              <DashboardHero userName="Maya" />
 
-            {/* Scout Analytics panel */}
-            <ScoutIntelligencePanel />
+              {/* Scout Analytics panel */}
+              <ScoutIntelligencePanel />
 
-            {/* Featured Recommendation */}
-            <Stack gap="sm">
-              <Typography
-                variant="heading-m"
-                className="border-b border-border/40 pb-3 font-normal"
-              >
-                Featured Recommendation
-              </Typography>
-              <FeaturedOpportunityCard
-                title={featuredOpp.title}
-                organization={featuredOpp.organization}
-                description={featuredOpp.description}
-                deadline={featuredOpp.deadline}
-                matchScore={featuredOpp.matchScore}
-                tags={featuredOpp.tags}
-                isBookmarked={true}
-                isWomenOnly={featuredOpp.isWomenOnly}
-                stipend={featuredOpp.stipend}
-                onBookmarkToggle={() => {}}
-                onApplyClick={() => handleCardClick(featuredOpp.id)}
-              />
-            </Stack>
-
-            {/* Hidden Gems Slider */}
-            <RecommendationStrip
-              title="Hidden Gems"
-              description="Low competition matching opportunities discovered recently."
-            >
-              {hiddenGems.map((gem) => (
-                <HiddenGemCard
-                  key={gem.id}
-                  title={gem.title}
-                  organization={gem.organization}
-                  matchScore={gem.matchScore}
-                  isBookmarked={gem.id === 'opp-qualcomm-wetech'}
+              {/* Featured Recommendation */}
+              <Stack gap="sm">
+                <Typography
+                  variant="heading-m"
+                  className="border-b border-border/40 pb-3 font-normal"
+                >
+                  Featured Recommendation
+                </Typography>
+                <FeaturedOpportunityCard
+                  title={featuredOpp.title}
+                  organization={featuredOpp.organization}
+                  description={featuredOpp.description}
+                  deadline={featuredOpp.deadline}
+                  matchScore={featuredOpp.matchScore}
+                  tags={featuredOpp.tags}
+                  isBookmarked={true}
+                  isWomenOnly={featuredOpp.isWomenOnly}
+                  stipend={featuredOpp.stipend}
                   onBookmarkToggle={() => {}}
-                  onApplyClick={() => handleCardClick(gem.id)}
+                  onApplyClick={() => handleCardClick(featuredOpp.id)}
                 />
-              ))}
-            </RecommendationStrip>
+              </Stack>
 
-            {/* Recommended Feed */}
-            <Stack gap="sm">
-              <Typography
-                variant="heading-m"
-                className="border-b border-border/40 pb-3 font-normal"
+              {/* Hidden Gems Slider */}
+              <RecommendationStrip
+                title="Hidden Gems"
+                description="Low competition matching opportunities discovered recently."
               >
-                Curated Opportunities Feed
-              </Typography>
-              <Grid cols={1} colsSm={2} colsLg={3} gap="md">
-                {normalOpps.map((opp) => (
-                  <OpportunityCard
-                    key={opp.id}
-                    title={opp.title}
-                    organization={opp.organization}
-                    deadline={opp.deadline}
-                    tags={opp.tags}
-                    matchScore={opp.matchScore}
-                    isBookmarked={false}
-                    isWomenOnly={opp.isWomenOnly}
-                    stipend={opp.stipend}
+                {hiddenGems.map((gem) => (
+                  <HiddenGemCard
+                    key={gem.id}
+                    title={gem.title}
+                    organization={gem.organization}
+                    matchScore={gem.matchScore}
+                    isBookmarked={gem.id === 'opp-qualcomm-wetech'}
                     onBookmarkToggle={() => {}}
-                    onApplyClick={() => handleCardClick(opp.id)}
-                    onCardClick={() => handleCardClick(opp.id)}
+                    onApplyClick={() => handleCardClick(gem.id)}
                   />
                 ))}
-              </Grid>
+              </RecommendationStrip>
+
+              {/* Recommended Feed */}
+              <Stack gap="sm">
+                <Typography
+                  variant="heading-m"
+                  className="border-b border-border/40 pb-3 font-normal"
+                >
+                  Curated Opportunities Feed
+                </Typography>
+                <Grid cols={1} colsSm={2} colsLg={3} gap="md">
+                  {normalOpps.map((opp) => (
+                    <OpportunityCard
+                      key={opp.id}
+                      title={opp.title}
+                      organization={opp.organization}
+                      deadline={opp.deadline}
+                      tags={opp.tags}
+                      matchScore={opp.matchScore}
+                      isBookmarked={false}
+                      isWomenOnly={opp.isWomenOnly}
+                      stipend={opp.stipend}
+                      onBookmarkToggle={() => {}}
+                      onApplyClick={() => handleCardClick(opp.id)}
+                      onCardClick={() => handleCardClick(opp.id)}
+                    />
+                  ))}
+                </Grid>
+              </Stack>
             </Stack>
-          </Stack>
+          </PageTransition>
         </DashboardLayout>
       )}
     </ProtectedRoute>

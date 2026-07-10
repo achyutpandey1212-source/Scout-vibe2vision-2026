@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Menu, X, Bell, User, Search } from 'lucide-react';
 import { ThemeToggle } from '../theme-toggle';
 import { Button } from './button';
@@ -25,6 +25,21 @@ export const TopNavigation: React.FC<NavProps> = ({
   isAuthenticated = false,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 20) {
+        setScrolled(true);
+      } else {
+        setScrolled(false);
+      }
+    };
+
+    // Register scroll listener
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const navigationItems = [
     { label: 'Dashboard', href: '/dashboard' },
@@ -34,7 +49,9 @@ export const TopNavigation: React.FC<NavProps> = ({
 
   return (
     <header
-      className="sticky top-0 w-full border-b border-border/80 bg-background/80 backdrop-blur-md transition-colors duration-200"
+      className={`sticky top-0 w-full transition-all duration-200 border-b ${
+        scrolled ? 'bg-background border-border/80 shadow-sm' : 'bg-transparent border-transparent'
+      }`}
       style={{ zIndex: tokens.zIndex.header }}
     >
       <div className="max-w-[1440px] mx-auto px-4 md:px-8 h-16 flex items-center justify-between gap-4">

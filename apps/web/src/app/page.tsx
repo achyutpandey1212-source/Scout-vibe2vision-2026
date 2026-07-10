@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import {
@@ -12,11 +12,11 @@ import {
   Grid,
   Button,
   OrigamiDecoration,
-  SplashExperience,
-  fadeVariants,
+  ScoutOpeningSequence,
   slideUpVariants,
 } from '@/components/ui';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { ROUTES } from '@/lib/constants/routes';
 import { ArrowRight, Sparkles, Target, Compass, Award } from 'lucide-react';
 
@@ -24,6 +24,7 @@ export default function Home() {
   const { user, signIn, loading } = useAuth();
   const router = useRouter();
   const [showSplash, setShowSplash] = useState(true);
+  const [scrolled, setScrolled] = useState(false);
 
   // Check session storage to only play splash once per browser session
   useEffect(() => {
@@ -32,6 +33,20 @@ export default function Home() {
       setShowSplash(false);
     }
   }, []);
+
+  // Monitor scroll for header background transitions
+  useEffect(() => {
+    if (showSplash) return;
+    const handleScroll = () => {
+      if (window.scrollY > 20) {
+        setScrolled(true);
+      } else {
+        setScrolled(false);
+      }
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [showSplash]);
 
   const handleSplashComplete = () => {
     sessionStorage.setItem('scout-splash-played', 'true');
@@ -49,15 +64,21 @@ export default function Home() {
   };
 
   if (showSplash) {
-    return <SplashExperience onComplete={handleSplashComplete} />;
+    return <ScoutOpeningSequence onComplete={handleSplashComplete} />;
   }
 
   return (
     <AppLayout showAccents={true}>
-      {/* Navigation Header */}
-      <header className="sticky top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b border-border/40 select-none">
+      {/* Navigation Header - sticky, transparent initially, switches to paper on scroll */}
+      <header
+        className={`sticky top-0 w-full z-50 transition-all duration-200 border-b select-none ${
+          scrolled
+            ? 'bg-background border-border/80 shadow-sm'
+            : 'bg-transparent border-transparent'
+        }`}
+      >
         <Container size="xl" className="h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <svg
               className="w-6.5 h-6.5 text-primary"
               viewBox="0 0 24 24"
@@ -70,23 +91,37 @@ export default function Home() {
             <span className="text-lg font-medium tracking-tight font-sans">Scout</span>
           </div>
 
-          <Button variant="secondary" size="sm" onClick={handleCTA} loading={loading}>
-            {user ? 'Go to Dashboard' : 'Get Started'}
-          </Button>
+          <div className="flex items-center gap-4">
+            <ThemeToggle />
+            <Button variant="secondary" size="sm" onClick={handleCTA} loading={loading}>
+              {user ? 'Go to Dashboard' : 'Get Started'}
+            </Button>
+          </div>
         </Container>
       </header>
 
-      {/* Hero Section */}
+      {/* Hero Section - massive editorial whitespace */}
       <Section
-        size="md"
-        className="relative flex flex-col justify-center items-center overflow-hidden"
+        size="lg"
+        className="relative flex flex-col justify-center items-center overflow-hidden py-32 md:py-48 min-h-[88vh]"
       >
+        {/* Single decorative origami element in Hero (Crane) with large opacity reduction */}
+        <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-[0.04] dark:opacity-[0.03] select-none -z-10">
+          <OrigamiDecoration
+            name="crane"
+            size={360}
+            floating
+            floatingOffset={10}
+            floatingDuration={8}
+          />
+        </div>
+
         <Container size="lg" className="text-center space-y-8 relative z-10">
           <motion.div
             variants={slideUpVariants}
             initial="hidden"
             animate="visible"
-            className="space-y-4"
+            className="space-y-6"
           >
             <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card text-xs text-secondary/90 tracking-wide uppercase font-medium">
               <Sparkles className="w-3.5 h-3.5 text-primary animate-pulse" />
@@ -100,9 +135,9 @@ export default function Home() {
           </motion.div>
 
           <motion.p
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15, duration: 0.6 }}
+            initial={{ opacity: 0, transform: 'translate3d(0, 10px, 0)' }}
+            animate={{ opacity: 1, transform: 'translate3d(0, 0, 0)' }}
+            transition={{ delay: 0.15, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
             className="text-base md:text-xl text-secondary max-w-xl mx-auto font-light leading-relaxed"
           >
             Scout continuously searches the web, analyzes criteria, matches skills, and provides
@@ -110,10 +145,10 @@ export default function Home() {
           </motion.p>
 
           <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3, duration: 0.6 }}
-            className="pt-4"
+            initial={{ opacity: 0, transform: 'translate3d(0, 10px, 0)' }}
+            animate={{ opacity: 1, transform: 'translate3d(0, 0, 0)' }}
+            transition={{ delay: 0.3, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4"
           >
             <Button
               variant="primary"
@@ -124,13 +159,38 @@ export default function Home() {
             >
               {user ? 'Open Dashboard' : 'Continue with Google'}
             </Button>
+            <Button
+              variant="ghost"
+              size="lg"
+              onClick={() => {
+                const target = document.getElementById('mission-section');
+                target?.scrollIntoView({ behavior: 'smooth' });
+              }}
+            >
+              Explore Scout
+            </Button>
           </motion.div>
         </Container>
       </Section>
 
-      {/* Mission Section */}
-      <Section size="sm" className="bg-card/40 border-y border-border/40 py-16 md:py-24">
-        <Container size="md" className="text-center space-y-6">
+      {/* Mission Section - 120px rhythm */}
+      <Section
+        id="mission-section"
+        size="sm"
+        className="bg-card/40 border-y border-border/40 py-28 md:py-36 relative overflow-hidden"
+      >
+        {/* Subtle Lotus decoration with large opacity reduction */}
+        <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-[0.03] dark:opacity-[0.02] select-none -z-10">
+          <OrigamiDecoration
+            name="lotus"
+            size={260}
+            floating
+            floatingOffset={8}
+            floatingDuration={10}
+          />
+        </div>
+
+        <Container size="md" className="text-center space-y-6 relative z-10">
           <Typography variant="label" className="text-primary tracking-widest text-[10px]">
             Our Mission
           </Typography>
@@ -145,9 +205,9 @@ export default function Home() {
         </Container>
       </Section>
 
-      {/* How Scout Works Section */}
-      <Section size="md">
-        <Container size="lg" className="space-y-12">
+      {/* How Scout Works Section - 120px vertical rhythm */}
+      <Section size="md" className="py-28 md:py-36">
+        <Container size="lg" className="space-y-16">
           <div className="text-center space-y-2">
             <Typography variant="label" className="text-primary tracking-widest text-[10px]">
               The Engine
@@ -200,8 +260,8 @@ export default function Home() {
         </Container>
       </Section>
 
-      {/* Why Scout Exists Section */}
-      <Section size="md" className="bg-card/30 border-t border-border/40 py-20">
+      {/* Why Scout Exists Section - 120px vertical rhythm */}
+      <Section size="md" className="bg-card/30 border-t border-border/40 py-28 md:py-36">
         <Container size="lg">
           <Grid cols={1} colsMd={12} gap="lg" className="items-center">
             <div className="md:col-span-7 space-y-6">
@@ -217,10 +277,11 @@ export default function Home() {
                 notification spam. We respect your attention and focus.
               </Typography>
             </div>
-            <div className="md:col-span-5 flex justify-center">
+            <div className="md:col-span-5 flex justify-center opacity-15 dark:opacity-10">
+              {/* Subtle Butterfly decoration as requested */}
               <OrigamiDecoration
-                name="dreams_bird"
-                size={180}
+                name="butterfly"
+                size={160}
                 floating
                 floatingOffset={10}
                 floatingDuration={7}
@@ -230,9 +291,9 @@ export default function Home() {
         </Container>
       </Section>
 
-      {/* Testimonials Section */}
-      <Section size="sm" className="pb-24 border-t border-border/40 pt-16">
-        <Container size="lg" className="space-y-12">
+      {/* Testimonials Section - 120px vertical rhythm */}
+      <Section size="sm" className="py-28 md:py-36 border-t border-border/40">
+        <Container size="lg" className="space-y-16">
           <div className="text-center space-y-2">
             <Typography variant="label" className="text-primary tracking-widest text-[10px]">
               Community Voices

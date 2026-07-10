@@ -73,7 +73,11 @@ export const OrigamiDecoration: React.FC<OrigamiProps> = ({
     return (
       <motion.div
         animate={{
-          y: [0, -floatingOffset, 0],
+          transform: [
+            'translate3d(0, 0px, 0)',
+            `translate3d(0, -${floatingOffset}px, 0)`,
+            'translate3d(0, 0px, 0)',
+          ],
         }}
         transition={{
           repeat: Infinity,
