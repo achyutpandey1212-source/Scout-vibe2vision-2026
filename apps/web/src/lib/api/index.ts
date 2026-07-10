@@ -45,6 +45,7 @@ export const opportunitiesApi = {
     page?: number;
     limit?: number;
     category?: string;
+    opportunityType?: string;
     q?: string;
     sortBy?: string;
   }) => api.get('/api/v1/opportunities', { params }),

@@ -7,10 +7,12 @@ const router = Router();
 
 router.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { page = 1, limit = 12, q, category, sortBy } = req.query;
+    const { page = 1, limit = 12, q, category, opportunityType, sortBy } = req.query;
     const query: any = { 'intelligence.expired': { $ne: true } };
 
-    if (category && category !== 'ALL') {
+    if (opportunityType && opportunityType !== 'ALL') {
+      query.opportunityType = opportunityType;
+    } else if (category && category !== 'ALL') {
       query.category = category;
     }
     if (q) {

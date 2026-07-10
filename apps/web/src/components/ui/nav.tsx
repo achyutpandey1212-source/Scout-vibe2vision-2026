@@ -45,6 +45,7 @@ export const TopNavigation: React.FC<NavProps> = ({
 
   const navigationItems = [
     { label: 'Dashboard', href: '/dashboard' },
+    { label: 'Explore', href: '/explore' },
     { label: 'Saved', href: '/bookmarks' },
     { label: 'Notifications', href: '/notifications' },
   ];

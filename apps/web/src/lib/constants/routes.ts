@@ -5,6 +5,7 @@ export const ROUTES = {
   DASHBOARD: '/dashboard',
   ONBOARDING: '/onboarding',
   BOOKMARKS: '/bookmarks',
+  EXPLORE: '/explore',
   NOTIFICATIONS: '/notifications',
   PROFILE: '/profile',
   OPPORTUNITY: (id: string) => `/opportunity/${id}`,
