@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User as FirebaseUser } from 'firebase/auth';
 import { authService } from '@/services/auth/auth.service';
 import { api } from '@/lib/api';
+import { DEV_USER, isDevelopmentMode } from '@/lib/mock/dev-session';
 
 interface ScoutUser {
   firebaseUid: string;
@@ -51,11 +52,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (error) {
       console.error('Backend sync failed:', error);
-      setUser(null);
+      if (isDevelopmentMode) {
+        console.warn('Development mode: falling back to mock user session.');
+        setUser(DEV_USER);
+      } else {
+        setUser(null);
+      }
     }
   };
 
   useEffect(() => {
+    // If in development mode, automatically log in with DEV_USER to bypass Firebase client setup requirements
+    if (isDevelopmentMode) {
+      setUser(DEV_USER);
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = authService.onAuthChange(async (fbUser) => {
       setFirebaseUser(fbUser);
       if (fbUser) {
