@@ -1,6 +1,5 @@
 import { DiscoveryRunModel } from '../persistence/discovery-run.model';
 import { OpportunityRepository } from '../persistence/opportunity.repository';
-import { extractCandidatePages } from '../firecrawl/extraction-orchestrator';
 import { extractOpportunityFromPage } from '../extraction/extractor/opportunity-extractor';
 import { RawPageModel } from '../firecrawl/raw-page.model';
 import { DiscoveryContext } from '../types/query.types';
@@ -9,45 +8,16 @@ import { Opportunity } from '../extraction/types/opportunity.types';
 import { TRUSTED_SOURCES } from '../sources/registry';
 import { QualityScorer } from '../utils/quality-scorer';
 import { OpportunityArchiver } from '../utils/archiver';
-import { Stage1Discovery, CandidateURL } from '../stages/stage1';
-
-/**
- * Stage 2: Fetching / Crawling (Legacy downstream wrapper)
- */
-async function runStage2Fetch(
-  candidates: CandidateURL[],
-  options?: DiscoveryOptions,
-): Promise<any[]> {
-  console.log('[Pipeline] Stage 2: Fetching via Firecrawl Extraction Layer...');
-
-  if (options?.skipCrawl) {
-    console.log('[Orchestrator] Skipping crawl/fetch stage, reusing RawPage collection...');
-    return await RawPageModel.find().limit(3);
-  }
-
-  // Map Stage 1 output CandidateURL[] to CandidateSearchResult format for legacy Stage 2 compatibility
-  const legacyCandidates = candidates.map((c, idx) => ({
-    url: c.url,
-    title: c.source,
-    snippet: c.snippet,
-    domain: new URL(c.url).hostname,
-    queryUsed: c.query,
-    score: c.score,
-    retrievedAt: c.discoveredAt,
-    scoreBreakdown: { trust: 0, keyword: 0, freshness: 0, urlQuality: 0 },
-    source: 'tavily' as const,
-    searchRank: idx + 1,
-  }));
-
-  const crawlResponse = await extractCandidatePages(legacyCandidates);
-  return crawlResponse.extracted || [];
-}
+import { Stage1Discovery } from '../stages/stage1';
+import { Stage2Crawling, CrawledPage } from '../stages/stage2';
+import crypto from 'crypto';
 
 /**
  * Stage 3: AI Extraction (Legacy downstream wrapper)
+ * Restores RawPage saves to MongoDB to maintain E2E database consistency before extraction runs.
  */
 async function runStage3Extraction(
-  fetchedPages: any[],
+  crawledPages: CrawledPage[],
   options?: DiscoveryOptions,
 ): Promise<Opportunity[]> {
   console.log('[Pipeline] Stage 3: AI Extraction...');
@@ -56,10 +26,43 @@ async function runStage3Extraction(
     return [];
   }
 
+  // Backwards compatibility: Write RawPages to MongoDB in the coordinator wrapper
+  for (const page of crawledPages) {
+    if (page.crawlStatus === 'SUCCESS') {
+      try {
+        const hash = crypto.createHash('sha256').update(page.markdown).digest('hex');
+        await RawPageModel.findOneAndUpdate(
+          { url: page.url },
+          {
+            url: page.url,
+            title: page.title,
+            markdown: page.markdown,
+            metadata: page.metadata,
+            crawledAt: new Date(),
+            hash,
+          },
+          { upsert: true, new: true },
+        );
+      } catch (dbErr: any) {
+        console.error(
+          `[DB Error] Failed to persist legacy RawPage for ${page.url}:`,
+          dbErr.message,
+        );
+      }
+    }
+  }
+
   const extractions: Opportunity[] = [];
-  for (const page of fetchedPages) {
+  for (const page of crawledPages) {
+    if (page.crawlStatus !== 'SUCCESS') continue;
+
     try {
-      const opp = await extractOpportunityFromPage(page, 14, 'orchestrated query');
+      const hash = crypto.createHash('sha256').update(page.markdown).digest('hex');
+      const legacyPageObj = {
+        ...page,
+        hash,
+      };
+      const opp = await extractOpportunityFromPage(legacyPageObj, 14, 'orchestrated query');
       extractions.push(opp);
     } catch (err: any) {
       console.warn(`[Extraction Stage] Failed on url ${page.url}:`, err.message);
@@ -132,11 +135,12 @@ export async function discoverOpportunities(
   const stage1 = new Stage1Discovery();
   const candidates = await stage1.execute(context, options);
 
-  // 2. Execute Stage 2 (Legacy Fetch)
-  const fetched = await runStage2Fetch(candidates, options);
+  // 2. Execute Stage 2 (Modular Crawling)
+  const stage2 = new Stage2Crawling();
+  const crawledPages = await stage2.execute(candidates, { maxExtractions: 15 });
 
-  // 3. Execute Stage 3 (Legacy Extraction)
-  const extractions = await runStage3Extraction(fetched, options);
+  // 3. Execute Stage 3 (Legacy Extraction & RawPage writes)
+  const extractions = await runStage3Extraction(crawledPages, options);
 
   // 4. Execute Stage 4 (Legacy Quality Filtering)
   const { accepted, rejectedCount } = runStage4QualityCheck(extractions);
@@ -166,11 +170,14 @@ export async function discoverOpportunities(
       ? `${durationMinutes}m ${durationRemainingSeconds}s`
       : `${durationRemainingSeconds}s`;
 
+  const crawledSuccessful = crawledPages.filter((p) => p.crawlStatus === 'SUCCESS');
+  const crawledFailed = crawledPages.filter((p) => p.crawlStatus === 'FAILED');
+
   console.log(`
 ========== Scout Discovery Report ==========
 Sources Crawled:          ${TRUSTED_SOURCES.length}
 Pages Discovered:        ${candidates.length}
-Pages Fetched:           ${fetched.length}
+Pages Fetched:           ${crawledSuccessful.length}
 Successful Extractions:  ${extractions.length}
 Duplicates Merged:        ${merged}
 Archived Opportunities:   ${archivedCount}
@@ -205,16 +212,16 @@ Duration: ${durationStr}
     queriesGenerated: TRUSTED_SOURCES.length,
     searchResults: candidates.length,
     acceptedCandidates: candidates.length,
-    crawledPages: fetched.length,
-    snippetBypasses: 0,
+    crawledPages: crawledPages.length,
+    snippetBypasses: crawledPages.filter((p) => p.fetchMethod === 'snippet').length,
     extracted: extractions.length,
     inserted,
     updated: merged,
     unchanged,
-    cacheHits: 0,
-    cacheMisses: fetched.length,
+    cacheHits: crawledPages.filter((p) => p.fetchMethod === 'cache').length,
+    cacheMisses: crawledPages.filter((p) => p.fetchMethod === 'firecrawl').length,
     aiFailures: 0,
-    crawlFailures: rejectedCount,
+    crawlFailures: crawledFailed.length,
     totalLatency: latencyMs,
   };
 

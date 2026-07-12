@@ -52,22 +52,8 @@ export class FirecrawlClient {
           const status = response.status;
           const text = await response.text().catch(() => 'No body content');
 
-          // Check if token is unauthorized, fallback to mock crawl for local development & testing
           if (status === 401) {
-            console.warn(
-              `[Firecrawl Client] Warning: Firecrawl token is unauthorized (HTTP 401). Falling back to simulated mock scraping.`,
-            );
-            return {
-              success: true,
-              data: {
-                markdown: `# Scraped Opportunity Page\nThis is a simulated scraping output for ${url} (Tavily/Firecrawl Fallback).\n\n## Program Requirements\n- Target Audience: Women\n- Country: India\n- Opportunity detail: Active registration program. Please apply before the deadline.`,
-                metadata: {
-                  title: `Scraped Page - ${url}`,
-                  description: 'Simulated scrape metadata description for development testing.',
-                  domain: new URL(url).hostname,
-                },
-              },
-            };
+            throw new Error(`Firecrawl API responded with HTTP error 401: Unauthorized API Key`);
           }
 
           if (status >= 500 || status === 429) {
