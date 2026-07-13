@@ -4,6 +4,7 @@ import { CrawlPlanner } from '../utils/crawl-planner';
 import { FirecrawlClient } from '../firecrawl/firecrawl.client';
 import { redis } from '../../config/redis';
 import { normalizeUrl } from '../search/search-orchestrator';
+import { DashboardStateInstance } from '../utils/dashboard-state';
 
 export interface CrawledPage {
   url: string;
@@ -219,6 +220,12 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
           else if (crawlErr.message.includes('timeout') || crawlErr.message.includes('timed out'))
             type = 'TIMEOUT';
 
+          if (firecrawlCalls === 1) {
+            DashboardStateInstance.updateState({
+              firecrawlError: `Firecrawl failed on first request: [${type}] ${crawlErr.message}`,
+            });
+          }
+
           trackFailure(type);
 
           results.push({
@@ -275,6 +282,10 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
       firecrawlCreditsSaved: cacheHits + snippetFallbacks,
       failuresByType,
     };
+
+    DashboardStateInstance.updateState({
+      pagesCrawled: results.filter((r) => r.crawlStatus === 'SUCCESS').length,
+    });
 
     this.printReport(analytics);
     return results;

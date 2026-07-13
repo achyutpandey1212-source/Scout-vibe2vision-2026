@@ -74,6 +74,10 @@ app.use('/api/v1/recommendations', recommendationRouter);
 // Register Opportunities Router
 app.use('/api/v1/opportunities', opportunityRouter);
 
+// Register Discovery Dashboard Router
+import { discoveryDashboardRouter } from './discovery/routes/discovery-dashboard.routes';
+app.use('/api/v1/discovery/dashboard', discoveryDashboardRouter);
+
 // Register Bookmarks Router
 app.use('/api/v1/bookmarks', bookmarkRouter);
 

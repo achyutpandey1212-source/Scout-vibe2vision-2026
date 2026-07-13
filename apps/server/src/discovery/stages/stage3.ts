@@ -3,6 +3,7 @@ import { CrawledPage } from './stage2';
 import { OpportunityDetector } from '../utils/opportunity-detector';
 import { DiscoveryProviderManager } from '../../ai/gateway/discovery-provider-manager';
 import { generateStructuredResponse } from '../../ai/capabilities/structured-output';
+import { DashboardStateInstance } from '../utils/dashboard-state';
 import { OpportunitySchema } from '../extraction/schemas/opportunity.schema';
 import {
   EXTRACTION_SYSTEM_INSTRUCTION,
@@ -69,6 +70,11 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
         continue;
       }
 
+      DashboardStateInstance.updateState({
+        currentStage: 'STAGE_3_EXTRACTION',
+        currentUrl: page.url,
+      });
+
       pagesPassedDetector++;
       console.log(`\n[Stage 3] [DETECTOR PASS] Extracting opportunity...`);
       console.log(`URL:         ${page.url}`);
@@ -132,6 +138,11 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
         console.error(`[Stage 3] [Extraction Failed] URL: ${page.url} - Error: ${err.message}`);
       }
     }
+
+    DashboardStateInstance.updateState({
+      detectorSkipped: pagesSkippedDetector,
+      aiProcessed: pagesPassedDetector,
+    });
 
     console.log(`
 ========== Stage 3 Extraction Summary ==========

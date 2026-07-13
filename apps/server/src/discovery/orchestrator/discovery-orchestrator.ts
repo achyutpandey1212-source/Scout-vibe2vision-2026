@@ -10,6 +10,8 @@ import { Stage1Discovery } from '../stages/stage1';
 import { Stage2Crawling, CrawledPage } from '../stages/stage2';
 import { Stage3Extraction } from '../stages/stage3';
 import { Stage4QualityAcceptance, QualityEvaluatedOpportunity } from '../stages/stage4';
+import { Stage5Persistence } from '../stages/stage5';
+import { DashboardStateInstance } from '../utils/dashboard-state';
 import crypto from 'crypto';
 
 /**
@@ -43,24 +45,6 @@ async function persistRawPagesCompatibility(crawledPages: CrawledPage[]): Promis
 }
 
 /**
- * Stage 5: Deduplication & Persistence (Legacy downstream wrapper)
- */
-async function runStage5Persistence(
-  acceptedOpps: Opportunity[],
-): Promise<{ inserted: number; merged: number; unchanged: number }> {
-  console.log('[Pipeline] Stage 5: Deduplicating and writing to storage...');
-  if (acceptedOpps.length === 0) {
-    return { inserted: 0, merged: 0, unchanged: 0 };
-  }
-  const result = await OpportunityRepository.upsertOpportunities(acceptedOpps);
-  return {
-    inserted: result.inserted,
-    merged: result.merged,
-    unchanged: result.unchanged,
-  };
-}
-
-/**
  * Discovery Orchestrator coordinating Pipeline Stages
  */
 export async function discoverOpportunities(
@@ -70,13 +54,31 @@ export async function discoverOpportunities(
   const startedAt = new Date();
   const startTime = Date.now();
 
+  // Initialize/Update Live Dashboard State
+  DashboardStateInstance.updateState({
+    isRunning: true,
+    currentStage: 'STAGE_1_DISCOVERY',
+    startedAt,
+    urlsFound: 0,
+    pagesCrawled: 0,
+    detectorSkipped: 0,
+    aiProcessed: 0,
+    inserted: 0,
+    updated: 0,
+    archived: 0,
+    failures: 0,
+  });
+
   // 1. Execute Stage 1 (Modular Discovery)
   const stage1 = new Stage1Discovery();
   const candidates = await stage1.execute(context, options);
+  DashboardStateInstance.updateState({ urlsFound: candidates.length });
 
   // 2. Execute Stage 2 (Modular Crawling)
   const stage2 = new Stage2Crawling();
-  const crawledPages = await stage2.execute(candidates, { maxExtractions: 15 });
+  const crawledPages = await stage2.execute(candidates, {
+    maxExtractions: (options as any)?.maxExtractions || 15,
+  });
 
   // DB Backwards compatibility raw page saves
   await persistRawPagesCompatibility(crawledPages);
@@ -89,28 +91,25 @@ export async function discoverOpportunities(
   const stage4 = new Stage4QualityAcceptance();
   const evaluatedOpps = await stage4.execute(extractions, options);
 
-  const accepted = evaluatedOpps.filter((o) => o.decision === 'ACCEPT' || o.decision === 'REVIEW');
   const rejectedCount = evaluatedOpps.filter((o) => o.decision === 'REJECT').length;
   const reviewCount = evaluatedOpps.filter((o) => o.decision === 'REVIEW').length;
 
-  // 5. Execute Stage 5 (Legacy Persistent Storage)
-  const { inserted, merged, unchanged } = await runStage5Persistence(accepted);
+  // 5. Execute Stage 5 (Modular Persistence, Deduplication & Archiving)
+  const stage5 = new Stage5Persistence();
+  const runResult = await stage5.execute(evaluatedOpps, {
+    startedAt,
+    urlsFound: candidates.length,
+    crawledPages: crawledPages.length,
+    detectorSkipped: DashboardStateInstance.getState().detectorSkipped,
+    aiProcessed: DashboardStateInstance.getState().aiProcessed,
+    geminiCalls: 0, // Injected metrics
+    groqCalls: 0,
+    cacheHits: crawledPages.filter((p) => p.fetchMethod === 'cache').length,
+    MERGE_THRESHOLD: 95,
+    REVIEW_THRESHOLD: 80,
+  });
 
-  // 6. Execute Expiration Archiver
-  const archivedCount = await OpportunityArchiver.archiveExpired();
-
-  const finishedAt = new Date();
-  const latencyMs = Date.now() - startTime;
-  const durationSec = latencyMs / 1000;
-
-  // Calculate metrics
-  const avgQualityScore =
-    accepted.length > 0
-      ? Math.round(
-          (accepted.reduce((sum, o) => sum + (o.qualityScore || 0), 0) / accepted.length) * 10,
-        ) / 10
-      : 0;
-
+  const durationSec = runResult.durationMs / 1000;
   const durationMinutes = Math.floor(durationSec / 60);
   const durationRemainingSeconds = Math.round(durationSec % 60);
   const durationStr =
@@ -118,21 +117,18 @@ export async function discoverOpportunities(
       ? `${durationMinutes}m ${durationRemainingSeconds}s`
       : `${durationRemainingSeconds}s`;
 
-  const crawledSuccessful = crawledPages.filter((p) => p.crawlStatus === 'SUCCESS');
-  const crawledFailed = crawledPages.filter((p) => p.crawlStatus === 'FAILED');
-
   console.log(`
 ========== Scout Discovery Report ==========
 Sources Crawled:          ${TRUSTED_SOURCES.length}
 Pages Discovered:        ${candidates.length}
-Pages Fetched:           ${crawledSuccessful.length}
+Pages Fetched:           ${runResult.crawledPages}
 Successful Extractions:  ${extractions.length}
-Duplicates Merged:        ${merged}
-Archived Opportunities:   ${archivedCount}
+Duplicates Merged:        ${runResult.duplicatesMerged}
+Archived Opportunities:   ${runResult.archived}
 Rejected (Low Quality):   ${rejectedCount}
 
-Average Quality Score:   ${avgQualityScore}
-New Opportunities:       ${inserted}
+Average Quality Score:   ${runResult.averageQuality}
+New Opportunities:       ${runResult.inserted}
 
 Duration: ${durationStr}
 ============================================`);
@@ -142,12 +138,12 @@ Duration: ${durationStr}
   try {
     const runDoc = await DiscoveryRunModel.create({
       startedAt,
-      finishedAt,
+      finishedAt: runResult.finishedAt,
       targetAudience: context.targetAudience,
       categories: context.categories,
       totalQueries: TRUSTED_SOURCES.length,
-      inserted,
-      updated: merged,
+      inserted: runResult.inserted,
+      updated: runResult.duplicatesMerged,
       failures: rejectedCount,
       duration: durationSec,
     });
@@ -163,14 +159,14 @@ Duration: ${durationStr}
     crawledPages: crawledPages.length,
     snippetBypasses: crawledPages.filter((p) => p.fetchMethod === 'snippet').length,
     extracted: extractions.length,
-    inserted,
-    updated: merged,
-    unchanged,
+    inserted: runResult.inserted,
+    updated: runResult.duplicatesMerged,
+    unchanged: runResult.updated, // mapping unchanged count
     cacheHits: crawledPages.filter((p) => p.fetchMethod === 'cache').length,
     cacheMisses: crawledPages.filter((p) => p.fetchMethod === 'firecrawl').length,
     aiFailures: 0,
-    crawlFailures: crawledFailed.length,
-    totalLatency: latencyMs,
+    crawlFailures: crawledPages.filter((p) => p.crawlStatus === 'FAILED').length,
+    totalLatency: runResult.durationMs,
   };
 
   return {
