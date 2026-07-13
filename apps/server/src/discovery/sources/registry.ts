@@ -1,3 +1,17 @@
+/**
+ * TRUSTED_SOURCES — Seed Dataset (READ-ONLY)
+ *
+ * This file is the initial seed for the SourceRegistry MongoDB collection.
+ * It is imported exclusively by SourceRegistryService.seedIfEmpty() on first boot.
+ *
+ * DO NOT import this file from Stage 1 or any pipeline stage.
+ * Stage 1 reads live data from MongoDB via CrawlSchedulerService.
+ *
+ * To add new sources permanently, use the API:
+ *   POST /api/discovery/sources
+ * or run the weekly discovery engine:
+ *   POST /api/discovery/sources/discover
+ */
 export interface SourceRegistryEntry {
   organization: string;
   homepage: string;

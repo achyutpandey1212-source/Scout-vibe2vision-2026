@@ -1,6 +1,8 @@
 import { Router, Response } from 'express';
 import { DashboardStateInstance } from '../utils/dashboard-state';
 import { discoverOpportunities } from '../orchestrator/discovery-orchestrator';
+import { sourceRegistryService } from '../sources/source-registry.service';
+import { AffiliateExtractor } from '../sources/affiliate-extractor';
 
 const router = Router();
 
@@ -17,9 +19,9 @@ router.use((req, res, next) => {
 });
 
 /**
- * GET status: Expose metrics and live execution details
+ * GET status: Expose metrics, live execution details, and SourceRegistry stats
  */
-router.get('/status', (req, res: Response) => {
+router.get('/status', async (req, res: Response) => {
   const state = DashboardStateInstance.getState();
 
   // Expose alias to not dump real credentials on API prints
@@ -27,11 +29,33 @@ router.get('/status', (req, res: Response) => {
     ? `key_${state.currentKeyAlias.substring(0, 4)}...`
     : 'None';
 
+  // Fetch registry stats non-blockingly — fail gracefully if DB is not ready
+  let registryStats = {
+    registrySize: 0,
+    activeSources: 0,
+    affiliateQueueDepth: 0,
+  };
+  try {
+    const [total, active, queueDepth] = await Promise.all([
+      sourceRegistryService.getActiveCount().then((n) => n),
+      sourceRegistryService.getActiveCount(),
+      AffiliateExtractor.getQueueDepth(),
+    ]);
+    registryStats = {
+      registrySize: total,
+      activeSources: active,
+      affiliateQueueDepth: queueDepth,
+    };
+  } catch {
+    // Non-fatal: dashboard still works even if registry stats fail
+  }
+
   return res.json({
     success: true,
     data: {
       ...state,
       currentKeyAlias: maskedAlias,
+      registry: registryStats,
     },
   });
 });

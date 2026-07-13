@@ -6,6 +6,7 @@ import { profileRouter } from './profile';
 import { recommendationRouter } from './intelligence/recommendation';
 import { opportunityRouter } from './discovery/routes/opportunity.routes';
 import { bookmarkRouter } from './auth/routes/bookmark.routes';
+import { sourceRegistryService } from './discovery/sources/source-registry.service';
 
 const app = express();
 const port = env.PORT;
@@ -78,6 +79,10 @@ app.use('/api/v1/opportunities', opportunityRouter);
 import { discoveryDashboardRouter } from './discovery/routes/discovery-dashboard.routes';
 app.use('/api/v1/discovery/dashboard', discoveryDashboardRouter);
 
+// Register Source Registry Router
+import { sourceRegistryRouter } from './discovery/routes/source-registry.routes';
+app.use('/api/v1/discovery/sources', sourceRegistryRouter);
+
 // Register Administrative Operations Router
 import { adminRouter } from './discovery/routes/admin.routes';
 app.use('/api/v1/admin', adminRouter);
@@ -96,6 +101,12 @@ async function bootstrap() {
 
     // 3. Connect to Redis
     redis.connect();
+
+    // 4. Seed SourceRegistry from TRUSTED_SOURCES if empty (one-time, idempotent)
+    const seeded = await sourceRegistryService.seedIfEmpty();
+    if (seeded > 0) {
+      console.log(`[Bootstrap] Seeded ${seeded} pre-vetted sources into SourceRegistry.`);
+    }
 
     // Start Server
     app.listen(port, () => {

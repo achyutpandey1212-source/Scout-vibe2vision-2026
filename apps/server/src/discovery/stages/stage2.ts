@@ -5,6 +5,7 @@ import { FirecrawlClient } from '../firecrawl/firecrawl.client';
 import { redis } from '../../config/redis';
 import { normalizeUrl } from '../search/search-orchestrator';
 import { DashboardStateInstance } from '../utils/dashboard-state';
+import { AffiliateExtractor } from '../sources/affiliate-extractor';
 
 export interface CrawledPage {
   url: string;
@@ -208,6 +209,20 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
                 cacheSetErr.message,
               );
             }
+
+            // ── Organic Growth Hook ───────────────────────────────────────────
+            // Extract partner/affiliate domains and queue for weekly discovery.
+            // Fire-and-forget: errors here never affect Stage 2 output.
+            try {
+              const sourceDomain = new URL(candidate.url).hostname;
+              const affiliates = AffiliateExtractor.extract(rawMarkdown, sourceDomain);
+              if (affiliates.length > 0) {
+                AffiliateExtractor.queue(affiliates, sourceDomain).catch(() => {});
+              }
+            } catch {
+              // Silently ignore extraction errors
+            }
+            // ─────────────────────────────────────────────────────────────────
 
             return {
               url: candidate.url,

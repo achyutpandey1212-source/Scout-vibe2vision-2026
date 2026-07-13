@@ -1,7 +1,9 @@
 import { IPipelineStage } from './pipeline-stage.interface';
 import { DiscoveryContext } from '../types/query.types';
-import { generateSearchQueries } from '../query-planner/query-planner';
-import { searchOpportunities } from '../search/search-orchestrator';
+import { crawlSchedulerService } from '../sources/crawl-scheduler.service';
+import { TavilyClient } from '../search/tavily.client';
+import { normalizeUrl } from '../search/search-orchestrator';
+import { CrawlTarget } from '../sources/source-registry.types';
 
 export interface CandidateURL {
   url: string;
@@ -14,36 +16,159 @@ export interface CandidateURL {
 
 export class Stage1Discovery implements IPipelineStage<DiscoveryContext, CandidateURL[]> {
   /**
-   * Executes Stage 1: Massive Opportunity Discovery
-   * Finds candidate URLs matching context parameters and returns validated URLs.
+   * Executes Stage 1: Registry-Driven Opportunity Discovery
+   *
+   * Reads from the SourceRegistry (via CrawlSchedulerService) to get today's crawl targets.
+   * For each source, resolves candidate URLs using the source's configured strategy:
+   *
+   *   direct  → use homepage URL directly (no Tavily)
+   *   search  → Tavily site:domain queries → collect result URLs
+   *   sitemap → use /sitemap.xml as candidate
+   *   rss     → use /feed as candidate
+   *
+   * Always returns CandidateURL[] — same contract as before for Stage 2+.
    */
   async execute(
     context: DiscoveryContext,
-    options?: { skipSearch?: boolean },
+    _options?: { skipSearch?: boolean },
   ): Promise<CandidateURL[]> {
-    console.log('[Stage 1] Initializing opportunity discovery...');
+    console.log('[Stage 1] Initializing registry-driven opportunity discovery...');
 
-    // 1. Generate search queries dynamically using the query planner
-    console.log('[Stage 1] Generating SEO optimized query list...');
-    const plannerResponse = await generateSearchQueries(context);
+    // 1. Get today's crawl targets from SourceRegistry
+    const targets = await crawlSchedulerService.getTargetsForToday();
 
-    // 2. Query search sources to gather candidates
-    console.log(`[Stage 1] Executing searches for ${plannerResponse.queries.length} queries...`);
-    const searchResponse = await searchOpportunities(plannerResponse);
+    if (targets.length === 0) {
+      console.warn(
+        '[Stage 1] No sources due for crawl today. ' +
+          'The SourceRegistry may need seeding or all sources are scheduled for future dates.',
+      );
+      return [];
+    }
 
-    // 3. Extract and map accepted candidate URLs
-    const candidates: CandidateURL[] = searchResponse.accepted.map((item) => ({
-      url: item.url,
-      source: item.source || 'Tavily Search',
-      query: item.queryUsed,
-      snippet: item.snippet,
-      score: item.score,
-      discoveredAt: item.retrievedAt || new Date().toISOString(),
-    }));
+    console.log(`[Stage 1] ${targets.length} sources scheduled for crawl today.`);
+
+    const allCandidates: CandidateURL[] = [];
+    const tavilyClient = new TavilyClient();
+    const processedUrls = new Set<string>();
+
+    // 2. Per-source strategy resolution
+    for (const target of targets) {
+      const now = new Date().toISOString();
+
+      switch (target.strategy) {
+        case 'direct': {
+          // No Tavily — add homepage directly as candidate
+          const normalized = normalizeUrl(target.homepage);
+          if (!processedUrls.has(normalized)) {
+            processedUrls.add(normalized);
+            allCandidates.push({
+              url: target.homepage,
+              source: target.organization,
+              query: `direct:${target.domain}`,
+              snippet: '',
+              score: target.trustScore / 10, // normalize 0–100 → 0–10 range
+              discoveredAt: now,
+            });
+          }
+          break;
+        }
+
+        case 'search': {
+          // Generate site-scoped queries and run Tavily
+          const queries = buildSiteQueries(target.domain, context);
+          console.log(
+            `[Stage 1] [${target.organization}] Running ${queries.length} site-scoped Tavily queries...`,
+          );
+
+          for (const query of queries) {
+            try {
+              const response = await tavilyClient.search(query, 5);
+              for (const result of response.results) {
+                const normalized = normalizeUrl(result.url);
+                if (processedUrls.has(normalized)) continue;
+                processedUrls.add(normalized);
+
+                allCandidates.push({
+                  url: result.url,
+                  source: target.organization,
+                  query,
+                  snippet: result.content || '',
+                  score: target.trustScore / 10,
+                  discoveredAt: now,
+                });
+              }
+            } catch (err: any) {
+              console.error(`[Stage 1] Tavily search failed for "${query}": ${err.message}`);
+            }
+          }
+          break;
+        }
+
+        case 'sitemap': {
+          // Use the sitemap URL as a candidate — Stage 2/Firecrawl handles parsing
+          const sitemapUrl = `${target.homepage.replace(/\/$/, '')}/sitemap.xml`;
+          const normalized = normalizeUrl(sitemapUrl);
+          if (!processedUrls.has(normalized)) {
+            processedUrls.add(normalized);
+            allCandidates.push({
+              url: sitemapUrl,
+              source: target.organization,
+              query: `sitemap:${target.domain}`,
+              snippet: '',
+              score: target.trustScore / 10,
+              discoveredAt: now,
+            });
+          }
+          break;
+        }
+
+        case 'rss': {
+          // Use the RSS feed URL as a candidate
+          const feedUrl = `${target.homepage.replace(/\/$/, '')}/feed`;
+          const normalized = normalizeUrl(feedUrl);
+          if (!processedUrls.has(normalized)) {
+            processedUrls.add(normalized);
+            allCandidates.push({
+              url: feedUrl,
+              source: target.organization,
+              query: `rss:${target.domain}`,
+              snippet: '',
+              score: target.trustScore / 10,
+              discoveredAt: now,
+            });
+          }
+          break;
+        }
+      }
+    }
 
     console.log(
-      `[Stage 1] Completed. Discovered and validated ${candidates.length} candidate URLs.`,
+      `[Stage 1] Completed. Sources scheduled: ${targets.length}. ` +
+        `Candidate URLs generated: ${allCandidates.length}.`,
     );
-    return candidates;
+
+    return allCandidates;
   }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Builds 1–3 site-scoped Tavily queries for a source domain.
+ * These are designed to surface opportunity-specific pages within the domain.
+ */
+function buildSiteQueries(domain: string, context: DiscoveryContext): string[] {
+  const country = context.country || 'India';
+  const queries: string[] = [];
+
+  // Primary: opportunity-focused site search
+  queries.push(`site:${domain} scholarship fellowship internship apply 2026`);
+
+  // Secondary: program/recruitment search
+  queries.push(`site:${domain} program recruitment opportunity women ${country}`);
+
+  // Tertiary: deadline-focused search (surfaces active listings)
+  queries.push(`site:${domain} deadline apply now 2026`);
+
+  return queries;
 }
