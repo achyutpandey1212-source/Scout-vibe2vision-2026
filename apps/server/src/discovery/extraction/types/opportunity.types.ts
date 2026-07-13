@@ -23,6 +23,110 @@ export type SourceType =
   | 'COMMUNITY'
   | 'OTHER';
 
+/**
+ * More precise organization classification than SourceType.
+ * Used by the Recommendation Engine to surface organization context.
+ */
+export type OrganizationType =
+  'GOVERNMENT' | 'MNC' | 'STARTUP' | 'NGO' | 'UNIVERSITY' | 'FOUNDATION' | 'COMMUNITY' | 'OTHER';
+
+/**
+ * Coarse experience bracket — enables filtering without parsing free-text experienceLevel.
+ */
+export type ExperienceRequired = 'NONE' | 'SOME' | 'EXPERIENCED';
+
+/**
+ * Funding classification more granular than the legacy fundingStatus field.
+ */
+export type FundingType = 'FULLY_FUNDED' | 'PARTIALLY_FUNDED' | 'PAID' | 'UNPAID';
+
+/**
+ * Multi-dimensional audience persona tags.
+ * An opportunity may have multiple personas simultaneously.
+ */
+export type AudiencePersona =
+  | 'college-student'
+  | 'graduate'
+  | 'postgraduate'
+  | 'phd'
+  | 'school-student'
+  | 'dropout'
+  | 'career-break'
+  | 'career-returner'
+  | 'working-professional'
+  | 'fresher'
+  | 'entrepreneur'
+  | 'self-employed'
+  | 'homemaker'
+  | 'rural'
+  | 'disabled'
+  | 'minority'
+  | 'veteran';
+
+/**
+ * Signals that contribute to an opportunity being classified as "Gold".
+ * Multiple signals may apply simultaneously.
+ */
+export type GoldReason =
+  | 'fully-funded'
+  | 'government'
+  | 'low-competition'
+  | 'international'
+  | 'travel-sponsored'
+  | 'stipend'
+  | 'mentorship'
+  | 'networking'
+  | 'certificate'
+  | 'placement'
+  | 'equity'
+  | 'prestigious';
+
+/**
+ * Estimated competitive pressure for the opportunity.
+ * LLM-estimated signal; valuable for ranking even at ~60% accuracy.
+ */
+export type CompetitionLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN';
+
+/**
+ * High-level discovery category used for analytics and recommendation segmentation.
+ * Represents the bucket from which Discovery found the opportunity.
+ */
+export type SearchCategory =
+  | 'Government Scheme'
+  | 'Scholarship'
+  | 'Fellowship'
+  | 'Grant'
+  | 'Internship'
+  | 'Job'
+  | 'Competition'
+  | 'Training'
+  | 'Entrepreneurship'
+  | 'Volunteer'
+  | 'Event'
+  | 'Other';
+
+/**
+ * Major product vertical for grouping and navigation.
+ * Helps slice the catalog for UI navigation sections.
+ */
+export type OpportunityVertical =
+  | 'CAREERS'
+  | 'SCHOLARSHIPS'
+  | 'FELLOWSHIPS'
+  | 'GOVERNMENT_SCHEMES'
+  | 'COMPETITIONS'
+  | 'COURSES'
+  | 'TRAINING'
+  | 'ENTREPRENEURSHIP'
+  | 'FINANCIAL_AID'
+  | 'EVENTS'
+  | 'OTHER';
+
+/**
+ * User-perceived friction or criteria weight required to apply or stand out.
+ */
+export type ApplicationDifficulty = 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH' | 'UNKNOWN';
+
 export interface AIMetadata {
   provider: string;
   model: string;
@@ -68,14 +172,46 @@ export interface Opportunity {
   aiMetadata: AIMetadata;
   hash: string;
 
-  // Freshness & Archiving
+  // ── Audience Intelligence ──────────────────────────────────────────────────
+  /** Multi-dimensional persona tags (LLM-extracted from page text). */
+  audiencePersonas?: AudiencePersona[];
+  /** Education tiers eligible — e.g. ["10th pass", "graduate", "postgraduate"]. */
+  educationEligibility?: string[];
+  /** Industry domains this opportunity belongs to — e.g. ["technology", "healthcare", "beauty"]. */
+  professionalDomains?: string[];
+  /** Coarse experience bracket for fast filtering. */
+  experienceRequired?: ExperienceRequired | null;
+  /** More granular funding classification. Coexists with legacy fundingStatus. */
+  fundingType?: FundingType | null;
+  /** High-level discovery category for analytics. */
+  searchCategory?: SearchCategory | null;
+  /** Estimated number of applicants / competitive pressure (LLM-estimated). */
+  estimatedCompetition?: CompetitionLevel | null;
+  /** Precise organization type classification. */
+  organizationType?: OrganizationType | null;
+
+  // ── Product Verticals & Friction (New Fields) ─────────────────────────────
+  /** The navigation vertical of this opportunity. */
+  opportunityVertical?: OpportunityVertical | null;
+  /** Perceived friction to apply/win. */
+  applicationDifficulty?: ApplicationDifficulty | null;
+
+  // ── Gold Opportunity System ────────────────────────────────────────────────
+  /** Which specific gold signals triggered the flag. Powers future Premium collections. */
+  goldReasons?: GoldReason[];
+
+  // ── Trust Scoring ──────────────────────────────────────────────────────────
+  /** Deterministic trust score (0–100) computed after extraction. */
+  trustScore?: number;
+
+  // ── Freshness & Archiving ──────────────────────────────────────────────────
   discoveredAt?: string;
   firstSeenAt?: string;
   lastCheckedAt?: string;
   expiresAt?: string | null;
   archived?: boolean;
 
-  // Trust & Quality Metrics
+  // ── Trust & Quality Metrics ────────────────────────────────────────────────
   trustLevel?: 'VERIFIED' | 'OFFICIAL' | 'COMMUNITY' | 'UNKNOWN';
   qualityScore?: number;
   qualityBreakdown?: {
@@ -87,8 +223,9 @@ export interface Opportunity {
     stipendPresent: boolean;
   };
 
-  // Enriched Metadata
+  // ── Enriched Metadata ──────────────────────────────────────────────────────
   workMode?: 'REMOTE' | 'HYBRID' | 'ONSITE' | null;
+  /** Legacy coarse funding status — kept for backward compatibility. */
   fundingStatus?: 'PAID' | 'UNPAID' | null;
   visaSponsored?: boolean;
   travelFunded?: boolean;

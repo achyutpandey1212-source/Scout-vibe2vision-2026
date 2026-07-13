@@ -12,7 +12,7 @@ import {
 } from '../extraction/prompts/extract-opportunity.prompt';
 import { normalizeOpportunity } from '../extraction/utils/normalizers';
 import { validateOpportunity } from '../extraction/utils/validators';
-import { Opportunity } from '../extraction/types/opportunity.types';
+import { Opportunity, GoldReason } from '../extraction/types/opportunity.types';
 import { safeParseJson } from '../../ai/utils/parser';
 import mongoose from 'mongoose';
 
@@ -31,6 +31,78 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
 
   constructor() {
     this.providerManager = DiscoveryProviderManager.getInstance();
+  }
+
+  /**
+   * Post-extraction intelligence classifier (runs entirely deterministically on extracted output)
+   */
+  private classifyOpportunityIntelligence(
+    opp: Opportunity,
+    pageUrl: string,
+  ): {
+    trustScore: number;
+    goldReasons: GoldReason[];
+  } {
+    const goldReasons: GoldReason[] = [];
+    let trustScore = 40; // Base trust score
+
+    const host = new URL(pageUrl).hostname.toLowerCase();
+
+    // 1. Trust Scoring Heuristic Checks
+    if (host.endsWith('.gov.in') || host.endsWith('.nic.in')) {
+      trustScore += 30;
+    } else if (host.endsWith('.edu') || host.endsWith('.ac.in')) {
+      trustScore += 25;
+    }
+
+    if (opp.sourceType === 'GOVERNMENT') {
+      trustScore += 20;
+    } else if (opp.sourceType === 'UNIVERSITY') {
+      trustScore += 15;
+    }
+
+    if (opp.applicationUrl && opp.applicationUrl.startsWith('http')) {
+      trustScore += 10;
+    }
+    if (opp.deadline && opp.deadline.trim() !== '') {
+      trustScore += 10;
+    }
+    if (opp.description && opp.description.length > 200) {
+      trustScore += 5;
+    }
+    if (opp.confidence && opp.confidence >= 0.85) {
+      trustScore += 10;
+    }
+
+    trustScore = Math.min(100, Math.max(0, trustScore));
+
+    // 2. Gold Opportunity Reason tagging (Gold status derived at runtime from this field)
+    if ((opp.sourceType === 'GOVERNMENT' || host.endsWith('.gov.in')) && opp.confidence >= 0.85) {
+      goldReasons.push('government');
+    }
+    if (opp.fundingType === 'FULLY_FUNDED') {
+      goldReasons.push('fully-funded');
+    }
+    if (opp.stipend !== undefined && opp.stipend !== null && opp.stipend > 0) {
+      goldReasons.push('stipend');
+    }
+    if (opp.remote) {
+      goldReasons.push('mentorship');
+    }
+    if (opp.travelFunded) {
+      goldReasons.push('travel-sponsored');
+    }
+    if (opp.country && opp.country !== 'India' && opp.country.trim() !== '') {
+      goldReasons.push('international');
+    }
+    if (opp.estimatedCompetition === 'LOW') {
+      goldReasons.push('low-competition');
+    }
+
+    return {
+      trustScore,
+      goldReasons,
+    };
   }
 
   /**
@@ -147,8 +219,28 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
         // Generate mock raw page ID for pure decoupling
         const rawPageId = new mongoose.Types.ObjectId().toString();
 
+        // 3.1 Classify trust and gold reasons deterministically (isGoldOpportunity removed)
+        const intel = this.classifyOpportunityIntelligence(normalized, page.url);
+
+        // Keep fundingStatus backward compatibility alignment
+        let fundingStatus = normalized.fundingStatus;
+        if (!fundingStatus) {
+          if (
+            normalized.fundingType === 'PAID' ||
+            normalized.fundingType === 'FULLY_FUNDED' ||
+            (normalized.stipend && normalized.stipend > 0)
+          ) {
+            fundingStatus = 'PAID';
+          } else if (normalized.fundingType === 'UNPAID') {
+            fundingStatus = 'UNPAID';
+          }
+        }
+
         const enriched: Opportunity = {
           ...normalized,
+          fundingStatus,
+          goldReasons: intel.goldReasons,
+          trustScore: intel.trustScore,
           sourceURL: normalized.sourceURL || page.url,
           sourceDomain: normalized.sourceDomain || new URL(page.url).hostname,
           applicationUrl: normalized.applicationUrl || page.url,
@@ -174,16 +266,17 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
 
         // Detailed log
         console.log(`
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[Extraction Success]
-URL:           ${page.url}
-Detector:      ${detection.confidence}/100
-Provider:      ${rawExtracted.metadata.provider.toUpperCase()} (${rawExtracted.metadata.model})
-Latency:       ${(latencyMs / 1000).toFixed(1)}s
-Tokens:        Input: ${rawExtracted.usage?.promptTokens ?? 'N/A'}, Output: ${rawExtracted.usage?.completionTokens ?? 'N/A'}
-Parser Status: ${parserStatus}
-Title:         ${enriched.title}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        [Extraction Success]
+        URL:           ${page.url}
+        Detector:      ${detection.confidence}/100
+        Provider:      ${rawExtracted.metadata.provider.toUpperCase()} (${rawExtracted.metadata.model})
+        Latency:       ${(latencyMs / 1000).toFixed(1)}s
+        Parser Status: ${parserStatus}
+        Title:         ${enriched.title}
+        Gold Reasons:  ${enriched.goldReasons?.join(', ')}
+        Trust Score:   ${enriched.trustScore}/100
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       } catch (err: any) {
         failedExtractions++;
 
@@ -198,17 +291,16 @@ Title:         ${enriched.title}
         const completionTokens = rawExtracted?.usage?.completionTokens ?? 'N/A';
 
         console.error(`
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[Extraction Failure]
-URL:           ${page.url}
-Detector:      ${detection.confidence}/100
-Provider:      ${providerLabel} (${modelLabel})
-Latency:       ${(latencyMs / 1000).toFixed(1)}s
-Tokens:        Input: ${promptTokens}, Output: ${completionTokens}
-Parser Status: ${parserStatus}
-Concise Error: ${conciseReason}
-Details:       ${err.message}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        [Extraction Failure]
+        URL:           ${page.url}
+        Detector:      ${detection.confidence}/100
+        Provider:      ${providerLabel} (${modelLabel})
+        Latency:       ${(latencyMs / 1000).toFixed(1)}s
+        Parser Status: ${parserStatus}
+        Concise Error: ${conciseReason}
+        Details:       ${err.message}
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       }
     }
 
@@ -218,13 +310,13 @@ Details:       ${err.message}
     });
 
     console.log(`
-========== Stage 3 Extraction Summary ==========
-Pages Received:          ${crawledPages.length}
-Passed Detector Filter:  ${pagesPassedDetector}
-Skipped by Detector:     ${pagesSkippedDetector}
-Successful Extractions:  ${successfulExtractions}
-Failed Extractions:      ${failedExtractions}
-================================================`);
+    ========== Stage 3 Extraction Summary ==========
+    Pages Received:          ${crawledPages.length}
+    Passed Detector Filter:  ${pagesPassedDetector}
+    Skipped by Detector:     ${pagesSkippedDetector}
+    Successful Extractions:  ${successfulExtractions}
+    Failed Extractions:      ${failedExtractions}
+    ================================================`);
 
     return extractions;
   }

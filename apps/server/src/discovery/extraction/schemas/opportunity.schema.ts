@@ -27,6 +27,95 @@ export const SourceTypeSchema = z.enum([
   'OTHER',
 ]);
 
+export const OrganizationTypeSchema = z.enum([
+  'GOVERNMENT',
+  'MNC',
+  'STARTUP',
+  'NGO',
+  'UNIVERSITY',
+  'FOUNDATION',
+  'COMMUNITY',
+  'OTHER',
+]);
+
+export const ExperienceRequiredSchema = z.enum(['NONE', 'SOME', 'EXPERIENCED']);
+
+export const FundingTypeSchema = z.enum(['FULLY_FUNDED', 'PARTIALLY_FUNDED', 'PAID', 'UNPAID']);
+
+export const AudiencePersonaSchema = z.enum([
+  'college-student',
+  'graduate',
+  'postgraduate',
+  'phd',
+  'school-student',
+  'dropout',
+  'career-break',
+  'career-returner',
+  'working-professional',
+  'fresher',
+  'entrepreneur',
+  'self-employed',
+  'homemaker',
+  'rural',
+  'disabled',
+  'minority',
+  'veteran',
+]);
+
+export const GoldReasonSchema = z.enum([
+  'fully-funded',
+  'government',
+  'low-competition',
+  'international',
+  'travel-sponsored',
+  'stipend',
+  'mentorship',
+  'networking',
+  'certificate',
+  'placement',
+  'equity',
+  'prestigious',
+]);
+
+export const CompetitionLevelSchema = z.enum(['LOW', 'MEDIUM', 'HIGH', 'UNKNOWN']);
+
+export const SearchCategorySchema = z.enum([
+  'Government Scheme',
+  'Scholarship',
+  'Fellowship',
+  'Grant',
+  'Internship',
+  'Job',
+  'Competition',
+  'Training',
+  'Entrepreneurship',
+  'Volunteer',
+  'Event',
+  'Other',
+]);
+
+export const OpportunityVerticalSchema = z.enum([
+  'CAREERS',
+  'SCHOLARSHIPS',
+  'FELLOWSHIPS',
+  'GOVERNMENT_SCHEMES',
+  'COMPETITIONS',
+  'COURSES',
+  'TRAINING',
+  'ENTREPRENEURSHIP',
+  'FINANCIAL_AID',
+  'EVENTS',
+  'OTHER',
+]);
+
+export const ApplicationDifficultySchema = z.enum([
+  'LOW',
+  'MEDIUM',
+  'HIGH',
+  'VERY_HIGH',
+  'UNKNOWN',
+]);
+
 export const OpportunitySchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().min(1, 'Description is required'),
@@ -61,6 +150,27 @@ export const OpportunitySchema = z.object({
   sourceDomain: z.string().nullable().default(null),
   sourceType: SourceTypeSchema,
   confidence: z.number().min(0).max(1).default(0.5),
+
+  // ── Audience Intelligence ──────────────────────────────────────────────────
+  audiencePersonas: z.array(AudiencePersonaSchema).default([]),
+  educationEligibility: z.array(z.string()).default([]),
+  professionalDomains: z.array(z.string()).default([]),
+  experienceRequired: ExperienceRequiredSchema.nullable().default(null),
+  fundingType: FundingTypeSchema.nullable().default(null),
+  searchCategory: SearchCategorySchema.nullable().default(null),
+  estimatedCompetition: CompetitionLevelSchema.nullable().default(null),
+  organizationType: OrganizationTypeSchema.nullable().default(null),
+
+  // ── Product Verticals & Friction ───────────────────────────────────────────
+  opportunityVertical: OpportunityVerticalSchema.nullable().default(null),
+  applicationDifficulty: ApplicationDifficultySchema.nullable().default(null),
+
+  // ── Gold Opportunity System ────────────────────────────────────────────────
+  goldReasons: z.array(GoldReasonSchema).default([]),
+
+  // ── Trust Scoring ──────────────────────────────────────────────────────────
+  trustScore: z.number().default(0),
+
   intelligence: z
     .object({
       normalizedOrganization: z.string().nullable().default(null),

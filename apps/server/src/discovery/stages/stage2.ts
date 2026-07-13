@@ -42,22 +42,25 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
 
   /**
    * Executes Stage 2: Intelligent Crawling & Content Acquisition
+   * Implements an adaptive concurrency queue to process all discovered candidate URLs.
    */
   async execute(
     candidates: CandidateURL[],
     options?: { maxExtractions?: number },
   ): Promise<CrawledPage[]> {
-    console.log(`[Stage 2] Starting content acquisition for ${candidates.length} candidates...`);
+    console.log(
+      `[Stage 2] Starting adaptive queue content acquisition for ${candidates.length} candidates...`,
+    );
     const redisClient = redis.getClient();
     const results: CrawledPage[] = [];
 
-    // Metrics tracking
+    // Telemetry and Metrics
     let totalCrawlTime = 0;
     let firecrawlCalls = 0;
     let cacheHits = 0;
     let snippetFallbacks = 0;
-    let skipped = 0;
-    let failed = 0;
+    let skippedCount = 0;
+    let failedCount = 0;
     let tokensSaved = 0;
     const failuresByType: Record<string, number> = {};
 
@@ -65,220 +68,226 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
       failuresByType[type] = (failuresByType[type] || 0) + 1;
     };
 
-    // Limits
-    const limit = options?.maxExtractions || 15;
-    const targets = candidates.slice(0, limit);
+    // Load configuration for adaptive concurrency
+    const concurrencyRaw = process.env.DISCOVERY_FIRECRAWL_CONCURRENCY;
+    const concurrency = concurrencyRaw ? parseInt(concurrencyRaw, 10) : 2;
+    console.log(`[Stage 2] Running adaptive crawling with queue concurrency: ${concurrency}`);
 
-    for (const candidate of targets) {
-      const startTime = Date.now();
-      const plan = CrawlPlanner.evaluate(candidate);
-      const normalized = normalizeUrl(candidate.url);
-      const cacheKey = `firecrawl:${normalized}`;
+    const queue = [...candidates];
+    const totalCount = queue.length;
+    let completedCount = 0;
+    let batchNumber = 0;
 
-      // A. Decision: SKIP
-      if (plan.decision === 'SKIP') {
-        skipped++;
-        results.push({
-          url: candidate.url,
-          title: candidate.source,
-          markdown: '',
-          metadata: {},
-          fetchMethod: 'skipped',
-          crawlStatus: 'SKIPPED',
-          crawlTime: 0,
-          tokenEstimate: 0,
-          source: candidate.source,
-          crawlReason: plan.reason,
-        });
-        console.log(`[Stage 2] [Skip] URL: ${candidate.url} (Reason: ${plan.reason})`);
-        continue;
-      }
+    // Outer Loop: Batch processing until queue is empty
+    while (queue.length > 0) {
+      batchNumber++;
+      const currentBatch = queue.splice(0, concurrency);
 
-      // B. Try Cache Strategy First (Unless skipSearch is active)
-      let cachedContent: string | null = null;
-      try {
-        cachedContent = await redisClient.get(cacheKey);
-      } catch (cacheErr: any) {
-        console.error(
-          `[Stage 2] [Cache Error] Failed reading Redis for ${candidate.url}:`,
-          cacheErr.message,
-        );
-      }
+      // Update telemetry state
+      DashboardStateInstance.updateState({
+        currentStage: 'STAGE_2_CRAWLING',
+        crawlQueueRemaining: queue.length,
+        crawlBatchNumber: batchNumber,
+        crawlCurrentlyCrawling: currentBatch.map((c) => c.url),
+        crawlCompleted: completedCount,
+        crawlFailed: failedCount,
+      });
 
-      if (cachedContent) {
-        try {
-          const parsed = JSON.parse(cachedContent);
-          const duration = Date.now() - startTime;
-          cacheHits++;
-          tokensSaved += Math.round(parsed.markdown.length / 4);
+      console.log(
+        `\n[Stage 2] [Queue Processing] Starting Batch #${batchNumber} (Processing ${currentBatch.length} URLs, Remaining in Queue: ${queue.length})`,
+      );
 
-          results.push({
+      const batchPromises = currentBatch.map(async (candidate) => {
+        const startTime = Date.now();
+        const plan = CrawlPlanner.evaluate(candidate);
+        const normalized = normalizeUrl(candidate.url);
+        const cacheKey = `firecrawl:${normalized}`;
+
+        // A. Strategy: SKIP
+        if (plan.decision === 'SKIP') {
+          skippedCount++;
+          return {
             url: candidate.url,
             title: candidate.source,
-            markdown: parsed.markdown,
-            metadata: parsed.metadata || {},
-            fetchMethod: 'cache',
-            crawlStatus: 'SUCCESS',
-            crawlTime: duration,
-            tokenEstimate: Math.round(parsed.markdown.length / 4),
+            markdown: '',
+            metadata: {},
+            fetchMethod: 'skipped' as const,
+            crawlStatus: 'SKIPPED' as const,
+            crawlTime: 0,
+            tokenEstimate: 0,
             source: candidate.source,
-            crawlReason: 'Fresh content exists in Redis cache.',
-          });
-
-          console.log(
-            `[Stage 2] [Cache Hit] URL: ${candidate.url} (${parsed.markdown.length} bytes)`,
-          );
-          continue;
-        } catch {
-          // Fall through on JSON parse error
+            crawlReason: plan.reason,
+          };
         }
-      }
 
-      // C. Strategy: USE_FIRECRAWL
-      if (plan.decision === 'USE_FIRECRAWL') {
+        // B. Strategy: Redis cache hit check
+        let cachedContent: string | null = null;
         try {
-          firecrawlCalls++;
-          const scrapeResponse = await this.firecrawlClient.scrape(candidate.url);
-          const duration = Date.now() - startTime;
-          totalCrawlTime += duration;
+          cachedContent = await redisClient.get(cacheKey);
+        } catch (cacheErr: any) {
+          console.error(
+            `[Stage 2] [Cache Error] Failed reading Redis for ${candidate.url}:`,
+            cacheErr.message,
+          );
+        }
 
-          const rawMarkdown = scrapeResponse.data?.markdown || '';
+        if (cachedContent) {
+          try {
+            const parsed = JSON.parse(cachedContent);
+            const duration = Date.now() - startTime;
+            cacheHits++;
+            tokensSaved += Math.round(parsed.markdown.length / 4);
 
-          // Content Validation check
-          const validation = CrawlPlanner.validateContent(rawMarkdown);
-          if (!validation.valid) {
-            failed++;
-            const type = validation.reason || 'CONTENT_TOO_SMALL';
+            return {
+              url: candidate.url,
+              title: candidate.source,
+              markdown: parsed.markdown,
+              metadata: parsed.metadata || {},
+              fetchMethod: 'cache' as const,
+              crawlStatus: 'SUCCESS' as const,
+              crawlTime: duration,
+              tokenEstimate: Math.round(parsed.markdown.length / 4),
+              source: candidate.source,
+              crawlReason: 'Fresh content exists in Redis cache.',
+            };
+          } catch {
+            // Fall through to scraping on parse error
+          }
+        }
+
+        // C. Strategy: Scrape with rate-limited Firecrawl
+        if (plan.decision === 'USE_FIRECRAWL') {
+          try {
+            firecrawlCalls++;
+            const scrapeResponse = await this.firecrawlClient.scrape(candidate.url);
+            const duration = Date.now() - startTime;
+            totalCrawlTime += duration;
+
+            const rawMarkdown = scrapeResponse.data?.markdown || '';
+
+            // Validate content
+            const validation = CrawlPlanner.validateContent(rawMarkdown);
+            if (!validation.valid) {
+              failedCount++;
+              const type = validation.reason || 'CONTENT_TOO_SMALL';
+              trackFailure(type);
+
+              return {
+                url: candidate.url,
+                title: candidate.source,
+                markdown: '',
+                metadata: {},
+                fetchMethod: 'firecrawl' as const,
+                crawlStatus: 'FAILED' as const,
+                crawlTime: duration,
+                tokenEstimate: 0,
+                source: candidate.source,
+                crawlReason: plan.reason,
+                failureReason: type,
+              };
+            }
+
+            // Cache successfully scraped page
+            const metadata = {
+              description: scrapeResponse.data?.metadata?.description || '',
+              domain: new URL(candidate.url).hostname,
+            };
+            try {
+              await redisClient.setex(
+                cacheKey,
+                86400, // 24 Hours TTL
+                JSON.stringify({
+                  markdown: rawMarkdown,
+                  metadata,
+                  timestamp: new Date().toISOString(),
+                }),
+              );
+            } catch (cacheSetErr: any) {
+              console.error(
+                `[Stage 2] [Cache Error] Failed writing cache for ${candidate.url}:`,
+                cacheSetErr.message,
+              );
+            }
+
+            return {
+              url: candidate.url,
+              title: candidate.source,
+              markdown: rawMarkdown,
+              metadata,
+              fetchMethod: 'firecrawl' as const,
+              crawlStatus: 'SUCCESS' as const,
+              crawlTime: duration,
+              tokenEstimate: Math.round(rawMarkdown.length / 4),
+              source: candidate.source,
+              crawlReason: plan.reason,
+            };
+          } catch (crawlErr: any) {
+            const duration = Date.now() - startTime;
+            totalCrawlTime += duration;
+            failedCount++;
+
+            let type = 'NETWORK';
+            const isBlocked = crawlErr.message && crawlErr.message.includes('BLOCKED');
+            if (isBlocked) type = 'BLOCKED';
+            else if (crawlErr.message.includes('401')) type = 'INVALID_API_KEY';
+            else if (crawlErr.message.includes('429')) type = 'RATE_LIMIT';
+            else if (crawlErr.message.includes('timeout') || crawlErr.message.includes('timed out'))
+              type = 'TIMEOUT';
+
             trackFailure(type);
 
-            results.push({
+            return {
               url: candidate.url,
               title: candidate.source,
               markdown: '',
               metadata: {},
-              fetchMethod: 'firecrawl',
-              crawlStatus: 'FAILED',
+              fetchMethod: 'firecrawl' as const,
+              crawlStatus: type === 'BLOCKED' ? ('BLOCKED' as const) : ('FAILED' as const),
               crawlTime: duration,
               tokenEstimate: 0,
               source: candidate.source,
               crawlReason: plan.reason,
               failureReason: type,
-            });
-
-            console.log(`[Stage 2] [Failed Validation] URL: ${candidate.url} (Reason: ${type})`);
-            continue;
+            };
           }
-
-          // Cache parsed content
-          const metadata = {
-            description: scrapeResponse.data?.metadata?.description || '',
-            domain: new URL(candidate.url).hostname,
-          };
-          try {
-            await redisClient.setex(
-              cacheKey,
-              86400, // 24 hours TTL
-              JSON.stringify({
-                markdown: rawMarkdown,
-                metadata,
-                timestamp: new Date().toISOString(),
-              }),
-            );
-          } catch (cacheSetErr: any) {
-            console.error(
-              `[Stage 2] [Cache Error] Failed writing cache for ${candidate.url}:`,
-              cacheSetErr.message,
-            );
-          }
-
-          results.push({
-            url: candidate.url,
-            title: candidate.source,
-            markdown: rawMarkdown,
-            metadata,
-            fetchMethod: 'firecrawl',
-            crawlStatus: 'SUCCESS',
-            crawlTime: duration,
-            tokenEstimate: Math.round(rawMarkdown.length / 4),
-            source: candidate.source,
-            crawlReason: plan.reason,
-          });
-
-          console.log(
-            `[Stage 2] [Crawl Success] URL: ${candidate.url} (Duration: ${(duration / 1000).toFixed(1)}s)`,
-          );
-          continue;
-        } catch (crawlErr: any) {
-          const duration = Date.now() - startTime;
-          totalCrawlTime += duration;
-          failed++;
-
-          // Identify fail type
-          let type = 'NETWORK';
-          const isBlocked = crawlErr.message && crawlErr.message.includes('BLOCKED');
-          if (isBlocked) type = 'BLOCKED';
-          else if (crawlErr.message.includes('401')) type = 'INVALID_API_KEY';
-          else if (crawlErr.message.includes('429')) type = 'RATE_LIMIT';
-          else if (crawlErr.message.includes('timeout') || crawlErr.message.includes('timed out'))
-            type = 'TIMEOUT';
-
-          if (firecrawlCalls === 1 && type !== 'BLOCKED') {
-            DashboardStateInstance.updateState({
-              firecrawlError: `Firecrawl failed on first request: [${type}] ${crawlErr.message}`,
-            });
-          }
-
-          trackFailure(type);
-
-          results.push({
-            url: candidate.url,
-            title: candidate.source,
-            markdown: '',
-            metadata: {},
-            fetchMethod: 'firecrawl',
-            crawlStatus: type === 'BLOCKED' ? 'BLOCKED' : 'FAILED',
-            crawlTime: duration,
-            tokenEstimate: 0,
-            source: candidate.source,
-            crawlReason: plan.reason,
-            failureReason: type,
-          });
-
-          console.log(
-            `[Stage 2] [Crawl Failed] URL: ${candidate.url} (Reason: ${crawlErr.message})`,
-          );
-          continue;
         }
-      }
 
-      // D. Strategy: USE_SNIPPET_FALLBACK
-      snippetFallbacks++;
-      const duration = Date.now() - startTime;
-      results.push({
-        url: candidate.url,
-        title: candidate.source,
-        markdown: candidate.snippet || '',
-        metadata: { domain: new URL(candidate.url).hostname },
-        fetchMethod: 'snippet',
-        crawlStatus: 'SUCCESS',
-        crawlTime: duration,
-        tokenEstimate: Math.round((candidate.snippet || '').length / 4),
-        source: candidate.source,
-        crawlReason: plan.reason,
+        // D. Strategy: Snippet Fallback
+        snippetFallbacks++;
+        const duration = Date.now() - startTime;
+        return {
+          url: candidate.url,
+          title: candidate.source,
+          markdown: candidate.snippet || '',
+          metadata: { domain: new URL(candidate.url).hostname },
+          fetchMethod: 'snippet' as const,
+          crawlStatus: 'SUCCESS' as const,
+          crawlTime: duration,
+          tokenEstimate: Math.round((candidate.snippet || '').length / 4),
+          source: candidate.source,
+          crawlReason: plan.reason,
+        };
       });
 
-      console.log(`[Stage 2] [Snippet Fallback] URL: ${candidate.url}`);
+      // Await concurrently running requests for current batch before moving next
+      const batchResults = await Promise.all(batchPromises);
+      results.push(...batchResults);
+
+      completedCount += batchResults.length;
+      console.log(
+        `[Stage 2] [Batch Complete] Processed ${completedCount}/${totalCount} total candidates.`,
+      );
     }
 
-    // Generate Analytics Report
+    // Generate Final Analytics
     const avgCrawl = firecrawlCalls > 0 ? Math.round(totalCrawlTime / firecrawlCalls) : 0;
     const analytics: CrawlAnalytics = {
       candidatesReceived: candidates.length,
       firecrawlCalls,
       cacheHits,
       snippetFallback: snippetFallbacks,
-      skipped,
-      failed,
+      skipped: skippedCount,
+      failed: failedCount,
       avgCrawlTime: avgCrawl / 1000,
       tokensSaved,
       firecrawlCreditsSaved: cacheHits + snippetFallbacks,
@@ -287,6 +296,8 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
 
     DashboardStateInstance.updateState({
       pagesCrawled: results.filter((r) => r.crawlStatus === 'SUCCESS').length,
+      crawlQueueRemaining: 0,
+      crawlCurrentlyCrawling: [],
     });
 
     this.printReport(analytics);
@@ -295,17 +306,17 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
 
   private printReport(stats: CrawlAnalytics): void {
     console.log(`
-========== Stage 2 Crawl Analytics ==========
-Candidates Processed:    ${stats.candidatesReceived}
-Firecrawl API Calls:     ${stats.firecrawlCalls}
-Cache Hits (Redis):      ${stats.cacheHits}
-Snippet Fallbacks:       ${stats.snippetFallback}
-Skipped Pages:           ${stats.skipped}
-Failed Crawls:           ${stats.failed}
-Avg Crawl Latency:       ${stats.avgCrawlTime.toFixed(2)}s
-Estimated Tokens Saved:  ${stats.tokensSaved}
-Firecrawl Credits Saved: ${stats.firecrawlCreditsSaved}
-Failures Breakdown:      ${JSON.stringify(stats.failuresByType)}
-=============================================`);
+========== Stage 2 Adaptive Crawl Report ==========
+Total Candidates Received:   ${stats.candidatesReceived}
+Firecrawl API Scrapings:     ${stats.firecrawlCalls}
+Redis Cache Hits:            ${stats.cacheHits}
+Snippet Fallback Events:     ${stats.snippetFallback}
+Skipped URLs:                ${stats.skipped}
+Failed URLs:                 ${stats.failed}
+Avg Crawl Latency:           ${stats.avgCrawlTime.toFixed(2)}s
+Estimated Tokens Saved:      ${stats.tokensSaved}
+Firecrawl Credits Saved:     ${stats.firecrawlCreditsSaved}
+Failures Breakdown:          ${JSON.stringify(stats.failuresByType)}
+===================================================`);
   }
 }

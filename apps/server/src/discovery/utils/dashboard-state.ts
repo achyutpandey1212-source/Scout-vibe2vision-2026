@@ -20,6 +20,13 @@ export interface DashboardState {
   failures: number;
   firecrawlError: string | null;
   startedAt: Date | null;
+
+  // New Adaptive Crawl Queue Dashboard State fields
+  crawlQueueRemaining?: number;
+  crawlBatchNumber?: number;
+  crawlCurrentlyCrawling?: string[];
+  crawlCompleted?: number;
+  crawlFailed?: number;
 }
 
 class DashboardStateManager {
@@ -40,6 +47,11 @@ class DashboardStateManager {
     failures: 0,
     firecrawlError: null,
     startedAt: null,
+    crawlQueueRemaining: 0,
+    crawlBatchNumber: 0,
+    crawlCurrentlyCrawling: [],
+    crawlCompleted: 0,
+    crawlFailed: 0,
   };
 
   private constructor() {}
@@ -79,6 +91,11 @@ class DashboardStateManager {
       failures: 0,
       firecrawlError: null,
       startedAt: null,
+      crawlQueueRemaining: 0,
+      crawlBatchNumber: 0,
+      crawlCurrentlyCrawling: [],
+      crawlCompleted: 0,
+      crawlFailed: 0,
     };
   }
 }

@@ -57,6 +57,26 @@ const OpportunitySchema = new Schema<IOpportunity>(
     },
     hash: { type: String, required: true },
 
+    // ── Audience Intelligence ───────────────────────────────────────────────
+    audiencePersonas: { type: [String], default: [], index: true },
+    educationEligibility: [{ type: String }],
+    professionalDomains: [{ type: String }],
+    experienceRequired: { type: String, default: null, index: true },
+    fundingType: { type: String, default: null, index: true },
+    searchCategory: { type: String, default: null, index: true },
+    estimatedCompetition: { type: String, default: null, index: true },
+    organizationType: { type: String, default: null, index: true },
+
+    // ── Product Verticals & Friction (New persistent fields) ────────────────
+    opportunityVertical: { type: String, default: null, index: true },
+    applicationDifficulty: { type: String, default: null, index: true },
+
+    // ── Gold Opportunity System ──────────────────────────────────────────────
+    goldReasons: { type: [String], default: [] },
+
+    // ── Trust Scoring ────────────────────────────────────────────────────────
+    trustScore: { type: Number, default: 0, index: true },
+
     // Freshness & Archiving
     discoveredAt: { type: Date, default: Date.now },
     firstSeenAt: { type: Date, default: Date.now },
@@ -76,8 +96,9 @@ const OpportunitySchema = new Schema<IOpportunity>(
       officialSource: { type: Boolean, default: false },
       deadlinePresent: { type: Boolean, default: false },
       applicationLink: { type: Boolean, default: false },
-      womenFocused: { type: Boolean, default: false },
-      descriptionComplete: { type: Boolean, default: false },
+      richDescription: { type: Boolean, default: false },
+      benefitsPresent: { type: Boolean, default: false },
+      stipendPresent: { type: Boolean, default: false },
     },
 
     // Enriched Metadata
