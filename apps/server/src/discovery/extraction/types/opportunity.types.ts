@@ -82,8 +82,9 @@ export interface Opportunity {
     officialSource: boolean;
     deadlinePresent: boolean;
     applicationLink: boolean;
-    womenFocused: boolean;
-    descriptionComplete: boolean;
+    richDescription: boolean;
+    benefitsPresent: boolean;
+    stipendPresent: boolean;
   };
 
   // Enriched Metadata

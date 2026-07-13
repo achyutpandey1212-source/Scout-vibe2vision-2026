@@ -26,4 +26,9 @@ export const DISCOVERY_CONFIG = {
     FRESHNESS_BOOST: 2,
     URL_QUALITY_BOOST: 1,
   },
+
+  QUALITY: {
+    ACCEPT_THRESHOLD: 75,
+    REVIEW_THRESHOLD: 60,
+  },
 };

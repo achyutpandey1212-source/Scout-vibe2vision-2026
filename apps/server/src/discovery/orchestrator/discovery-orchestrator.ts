@@ -5,11 +5,11 @@ import { DiscoveryContext } from '../types/query.types';
 import { DiscoveryOptions, DiscoveryOrchestratorResponse, PipelineMetrics } from './pipeline.types';
 import { Opportunity } from '../extraction/types/opportunity.types';
 import { TRUSTED_SOURCES } from '../sources/registry';
-import { QualityScorer } from '../utils/quality-scorer';
 import { OpportunityArchiver } from '../utils/archiver';
 import { Stage1Discovery } from '../stages/stage1';
 import { Stage2Crawling, CrawledPage } from '../stages/stage2';
 import { Stage3Extraction } from '../stages/stage3';
+import { Stage4QualityAcceptance, QualityEvaluatedOpportunity } from '../stages/stage4';
 import crypto from 'crypto';
 
 /**
@@ -40,38 +40,6 @@ async function persistRawPagesCompatibility(crawledPages: CrawledPage[]): Promis
       }
     }
   }
-}
-
-/**
- * Stage 4: Quality Scorer & Threshold Check (Legacy downstream wrapper)
- */
-function runStage4QualityCheck(extractions: Opportunity[]): {
-  accepted: Opportunity[];
-  rejectedCount: number;
-} {
-  console.log('[Pipeline] Stage 4: Quality Scorer & Threshold checking...');
-  const accepted: Opportunity[] = [];
-  let rejectedCount = 0;
-
-  for (const opp of extractions) {
-    const evaluation = QualityScorer.evaluate(opp);
-    opp.qualityScore = evaluation.score;
-    opp.qualityBreakdown = evaluation.breakdown as any;
-
-    const matchedSource = TRUSTED_SOURCES.find(
-      (src) => opp.organization?.toLowerCase() === src.organization.toLowerCase(),
-    );
-    opp.trustLevel = matchedSource ? 'OFFICIAL' : 'UNKNOWN';
-
-    if (evaluation.shouldReject) {
-      rejectedCount++;
-      console.log(`[Quality Check] Rejected "${opp.title}" (Score: ${evaluation.score})`);
-    } else {
-      accepted.push(opp);
-    }
-  }
-
-  return { accepted, rejectedCount };
 }
 
 /**
@@ -117,8 +85,13 @@ export async function discoverOpportunities(
   const stage3 = new Stage3Extraction();
   const extractions = await stage3.execute(crawledPages, options);
 
-  // 4. Execute Stage 4 (Legacy Quality Filtering)
-  const { accepted, rejectedCount } = runStage4QualityCheck(extractions);
+  // 4. Execute Stage 4 (Modular Quality & Acceptance)
+  const stage4 = new Stage4QualityAcceptance();
+  const evaluatedOpps = await stage4.execute(extractions, options);
+
+  const accepted = evaluatedOpps.filter((o) => o.decision === 'ACCEPT' || o.decision === 'REVIEW');
+  const rejectedCount = evaluatedOpps.filter((o) => o.decision === 'REJECT').length;
+  const reviewCount = evaluatedOpps.filter((o) => o.decision === 'REVIEW').length;
 
   // 5. Execute Stage 5 (Legacy Persistent Storage)
   const { inserted, merged, unchanged } = await runStage5Persistence(accepted);
