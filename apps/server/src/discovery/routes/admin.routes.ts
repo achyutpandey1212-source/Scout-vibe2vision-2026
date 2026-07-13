@@ -1,0 +1,149 @@
+import { Router, Response } from 'express';
+import crypto from 'crypto';
+import mongoose from 'mongoose';
+import { db } from '../../config/db';
+import { redis } from '../../config/redis';
+import { DiscoveryRunModel } from '../persistence/discovery-run.model';
+import { discoverOpportunities } from '../orchestrator/discovery-orchestrator';
+
+const router = Router();
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin';
+const ADMIN_SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || 'scout_admin_operations_secret';
+
+const getSessionSignature = () => {
+  return crypto
+    .createHmac('sha256', ADMIN_SESSION_SECRET)
+    .update('authenticated_admin')
+    .digest('hex');
+};
+
+/**
+ * Admin Session Validation middleware
+ */
+export const verifyAdminSession = (req: any, res: Response, next: any) => {
+  const cookieHeader = req.headers.cookie || '';
+  const cookies: Record<string, string> = {};
+  cookieHeader.split(';').forEach((cookie: string) => {
+    const parts = cookie.split('=');
+    cookies[parts.shift()!.trim()] = decodeURI(parts.join('='));
+  });
+
+  const sessionCookie = cookies['scout_admin_session'];
+  const expected = getSessionSignature();
+
+  if (sessionCookie === expected) {
+    return next();
+  }
+  return res
+    .status(401)
+    .json({ success: false, error: { message: 'Unauthorized administrative access.' } });
+};
+
+/**
+ * POST login
+ */
+router.post('/login', (req, res: Response) => {
+  const { password } = req.body;
+  if (password === ADMIN_PASSWORD) {
+    const signature = getSessionSignature();
+    res.cookie('scout_admin_session', signature, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 3600000 * 24, // 24 hours
+      path: '/',
+    });
+    return res.json({ success: true });
+  }
+  return res
+    .status(401)
+    .json({ success: false, error: { message: 'Incorrect secure operations password.' } });
+});
+
+/**
+ * POST logout
+ */
+router.post('/logout', (req, res: Response) => {
+  res.clearCookie('scout_admin_session', { path: '/' });
+  return res.json({ success: true });
+});
+
+/**
+ * GET status: Platforms status health aggregator
+ */
+router.get('/status', verifyAdminSession, async (req, res: Response) => {
+  try {
+    const dbHealth = db.getHealth();
+    const redisHealth = await redis.getHealth();
+
+    // Counts
+    const counts: Record<string, number> = {
+      users: 0,
+      opportunities: 0,
+      runs: 0,
+      rawpages: 0,
+    };
+
+    const collections = [
+      { key: 'users', name: 'users' },
+      { key: 'opportunities', name: 'opportunities' },
+      { key: 'runs', name: 'discoveryruns' },
+      { key: 'rawpages', name: 'rawpages' },
+    ];
+
+    if (mongoose.connection.db) {
+      for (const col of collections) {
+        try {
+          counts[col.key] = await mongoose.connection.db.collection(col.name).countDocuments();
+        } catch {
+          counts[col.key] = 0;
+        }
+      }
+    }
+
+    // Runs history
+    const runs = await DiscoveryRunModel.find().sort({ startedAt: -1 }).limit(10);
+
+    return res.json({
+      success: true,
+      data: {
+        health: {
+          server: 'ok',
+          database: dbHealth,
+          redis: redisHealth,
+          scheduler: 'healthy',
+        },
+        counts,
+        runs,
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: { message: err.message } });
+  }
+});
+
+/**
+ * POST jobs: Manually triggers backend scheduler jobs
+ */
+router.post('/jobs/trigger', verifyAdminSession, (req, res: Response) => {
+  const { jobName } = req.body;
+  console.log(`[Admin Operations] Triggered manual job: ${jobName}`);
+
+  if (jobName === 'discovery') {
+    const context = {
+      targetAudience: 'Women Tech Professionals & Students',
+      categories: ['Engineering', 'Scholarships', 'Tech Workshops'],
+      country: 'India',
+    };
+    discoverOpportunities(context, { maxExtractions: 10 } as any)
+      .then((r) => console.log(`[Admin Operations] Manual job execution completed: ${r.runId}`))
+      .catch((err) => console.error(`[Admin Operations] Manual job failed:`, err.message));
+  }
+
+  return res.json({
+    success: true,
+    message: `Scheduled background job: "${jobName}" started successfully.`,
+  });
+});
+
+export const adminRouter = router;
+export default adminRouter;

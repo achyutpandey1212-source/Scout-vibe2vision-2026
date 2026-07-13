@@ -78,6 +78,10 @@ app.use('/api/v1/opportunities', opportunityRouter);
 import { discoveryDashboardRouter } from './discovery/routes/discovery-dashboard.routes';
 app.use('/api/v1/discovery/dashboard', discoveryDashboardRouter);
 
+// Register Administrative Operations Router
+import { adminRouter } from './discovery/routes/admin.routes';
+app.use('/api/v1/admin', adminRouter);
+
 // Register Bookmarks Router
 app.use('/api/v1/bookmarks', bookmarkRouter);
 
