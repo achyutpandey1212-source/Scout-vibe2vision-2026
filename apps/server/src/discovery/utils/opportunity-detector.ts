@@ -143,7 +143,7 @@ export class OpportunityDetector {
 
     NEGATIVE_KEYWORDS.forEach((term) => {
       if (markdownLower.includes(term)) {
-        score -= 10;
+        score -= 3;
         penalties.push(`Boilerplate body keyword matched: "${term}"`);
       }
     });
@@ -153,7 +153,7 @@ export class OpportunityDetector {
 
     // Resolve configured threshold from environment
     const envThreshold = process.env.DISCOVERY_DETECTOR_THRESHOLD;
-    const threshold = envThreshold ? parseInt(envThreshold, 10) : 40;
+    const threshold = envThreshold ? parseInt(envThreshold, 10) : 25;
 
     const shouldExtract = confidence >= threshold;
 

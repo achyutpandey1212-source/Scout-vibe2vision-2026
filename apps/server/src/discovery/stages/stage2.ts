@@ -12,7 +12,7 @@ export interface CrawledPage {
   markdown: string;
   metadata: any;
   fetchMethod: 'firecrawl' | 'cache' | 'snippet' | 'skipped';
-  crawlStatus: 'SUCCESS' | 'FAILED' | 'SKIPPED';
+  crawlStatus: 'SUCCESS' | 'FAILED' | 'SKIPPED' | 'BLOCKED';
   crawlTime: number; // In milliseconds
   tokenEstimate: number;
   source: string;
@@ -215,12 +215,14 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
 
           // Identify fail type
           let type = 'NETWORK';
-          if (crawlErr.message.includes('401')) type = 'INVALID_API_KEY';
+          const isBlocked = crawlErr.message && crawlErr.message.includes('BLOCKED');
+          if (isBlocked) type = 'BLOCKED';
+          else if (crawlErr.message.includes('401')) type = 'INVALID_API_KEY';
           else if (crawlErr.message.includes('429')) type = 'RATE_LIMIT';
           else if (crawlErr.message.includes('timeout') || crawlErr.message.includes('timed out'))
             type = 'TIMEOUT';
 
-          if (firecrawlCalls === 1) {
+          if (firecrawlCalls === 1 && type !== 'BLOCKED') {
             DashboardStateInstance.updateState({
               firecrawlError: `Firecrawl failed on first request: [${type}] ${crawlErr.message}`,
             });
@@ -234,7 +236,7 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
             markdown: '',
             metadata: {},
             fetchMethod: 'firecrawl',
-            crawlStatus: 'FAILED',
+            crawlStatus: type === 'BLOCKED' ? 'BLOCKED' : 'FAILED',
             crawlTime: duration,
             tokenEstimate: 0,
             source: candidate.source,

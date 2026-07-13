@@ -69,6 +69,10 @@ router.post('/start', (req, res: Response) => {
         '[Dashboard Server] Asynchronous discovery E2E run finished successfully.',
         result.runId,
       );
+      DashboardStateInstance.updateState({
+        isRunning: false,
+        currentStage: 'IDLE',
+      });
     })
     .catch((err) => {
       console.error('[Dashboard Server] Asynchronous discovery E2E run failed:', err.message);

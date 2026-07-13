@@ -52,6 +52,21 @@ export class FirecrawlClient {
         if (!response.ok) {
           const status = response.status;
           const text = await response.text().catch(() => 'No body content');
+          const textLower = text.toLowerCase();
+
+          const isUnsupported =
+            status === 403 ||
+            textLower.includes('unsupported site') ||
+            textLower.includes('do not support this site') ||
+            textLower.includes('we do not support') ||
+            textLower.includes('blocked') ||
+            textLower.includes('forbidden');
+
+          if (isUnsupported) {
+            throw new Error(
+              `BLOCKED: Firecrawl blocked or unsupported site (HTTP ${status}): ${text}`,
+            );
+          }
 
           if (status === 401 || status === 429) {
             pool.markFailure();
@@ -84,6 +99,11 @@ export class FirecrawlClient {
         return parseResult.data;
       } catch (error: any) {
         clearTimeout(timeoutId);
+
+        if (error.message && error.message.startsWith('BLOCKED:')) {
+          throw error;
+        }
+
         const isAbort = error.name === 'AbortError';
         const errorMsg = isAbort ? `Request timed out after ${timeoutMs}ms` : error.message;
 

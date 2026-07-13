@@ -1,5 +1,5 @@
 import { ProviderPoolFactory } from '../../lib/providers/provider-pool-factory';
-import { TavilySearchResponseSchema } from './search.schema';
+import { TavilySearchResponseSchema, TavilyResultItemSchema } from './search.schema';
 import { z } from 'zod';
 
 export type TavilySearchResult = z.infer<typeof TavilySearchResponseSchema>;
@@ -72,13 +72,32 @@ export class TavilyClient {
         }
 
         const data = await response.json();
-        const parseResult = TavilySearchResponseSchema.safeParse(data);
-        if (!parseResult.success) {
-          throw new Error(`Invalid schema returned by Tavily: ${parseResult.error.message}`);
+
+        const validResults: any[] = [];
+        let discardedCount = 0;
+
+        if (data && Array.isArray(data.results)) {
+          for (const item of data.results) {
+            const parseResult = TavilyResultItemSchema.safeParse(item);
+            if (parseResult.success) {
+              validResults.push(parseResult.data);
+            } else {
+              discardedCount++;
+              console.warn(
+                `[Tavily Client] Discarded malformed result item (URL: ${item?.url || 'N/A'}). Reason: ${parseResult.error.message}`,
+              );
+            }
+          }
+        }
+
+        if (discardedCount > 0) {
+          console.log(
+            `[Tavily Client] Discarded ${discardedCount} malformed results. Kept ${validResults.length} valid results.`,
+          );
         }
 
         pool.markSuccess();
-        return parseResult.data;
+        return { results: validResults };
       } catch (error: any) {
         clearTimeout(timeoutId);
 

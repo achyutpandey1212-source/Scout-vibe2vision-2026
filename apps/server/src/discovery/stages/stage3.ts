@@ -13,6 +13,7 @@ import {
 import { normalizeOpportunity } from '../extraction/utils/normalizers';
 import { validateOpportunity } from '../extraction/utils/validators';
 import { Opportunity } from '../extraction/types/opportunity.types';
+import { safeParseJson } from '../../ai/utils/parser';
 import mongoose from 'mongoose';
 
 export interface Stage3Analytics {
@@ -89,23 +90,62 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
         'orchestrated query',
       );
 
+      let rawExtracted: any = null;
+      let parserStatus = 'PENDING';
+      let latencyMs = 0;
+
       try {
         // 2. Route AI call through our rotation-aware Provider Manager
-        const rawExtracted = await this.providerManager.generate({
+        rawExtracted = await this.providerManager.generate({
           prompt,
           context: 'discovery',
           temperature: 0.1,
           systemInstruction: EXTRACTION_SYSTEM_INSTRUCTION,
         });
 
-        const parsedData = JSON.parse(rawExtracted.text);
+        latencyMs = Date.now() - startTime;
+
+        if (!rawExtracted.text || rawExtracted.text.trim() === '') {
+          parserStatus = 'MODEL_EMPTY_RESPONSE';
+          throw new Error('MODEL_EMPTY_RESPONSE');
+        }
+
+        let parsedData: any;
+        try {
+          parsedData = safeParseJson(rawExtracted.text);
+          parserStatus = 'SUCCESS';
+        } catch (parseErr: any) {
+          console.error(`[Stage 3] [JSON_PARSE_FAILED] Failed to parse JSON from AI response.`);
+          console.error(`Raw Response:\n${rawExtracted.text}`);
+
+          // Try standard extraction fallback as a last resort
+          let fallbackCleaned = rawExtracted.text.trim();
+          const firstBrace = fallbackCleaned.indexOf('{');
+          const lastBrace = fallbackCleaned.lastIndexOf('}');
+          if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            fallbackCleaned = fallbackCleaned.substring(firstBrace, lastBrace + 1);
+            try {
+              parsedData = JSON.parse(fallbackCleaned);
+              parserStatus = 'SUCCESS';
+              console.log(`[Stage 3] Recovered JSON parsing via fallback substring extraction.`);
+            } catch (innerErr) {
+              console.error(`Cleaned Response tried:\n${fallbackCleaned}`);
+              console.error(`Parser error:`, parseErr);
+              parserStatus = 'JSON_PARSE_FAILED';
+              throw new Error('JSON_PARSE_FAILED');
+            }
+          } else {
+            console.error(`Parser error:`, parseErr);
+            parserStatus = 'JSON_PARSE_FAILED';
+            throw new Error('JSON_PARSE_FAILED');
+          }
+        }
 
         // 3. Post-Process Normalization & Enrichment
         const normalized = normalizeOpportunity(parsedData);
 
         // Generate mock raw page ID for pure decoupling
         const rawPageId = new mongoose.Types.ObjectId().toString();
-        const latencyMs = Date.now() - startTime;
 
         const enriched: Opportunity = {
           ...normalized,
@@ -125,17 +165,50 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
         // 4. Validate output schema consistency
         const validation = validateOpportunity(enriched);
         if (!validation.success) {
-          throw new Error(`Extracted opportunity failed structural checks: ${validation.error}`);
+          parserStatus = 'INVALID_SCHEMA';
+          throw new Error(`INVALID_SCHEMA: ${validation.error}`);
         }
 
         successfulExtractions++;
         extractions.push(enriched);
-        console.log(
-          `[Stage 3] Success: Extracted "${enriched.title}" (Provider: ${rawExtracted.metadata.provider.toUpperCase()})`,
-        );
+
+        // Detailed log
+        console.log(`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Extraction Success]
+URL:           ${page.url}
+Detector:      ${detection.confidence}/100
+Provider:      ${rawExtracted.metadata.provider.toUpperCase()} (${rawExtracted.metadata.model})
+Latency:       ${(latencyMs / 1000).toFixed(1)}s
+Tokens:        Input: ${rawExtracted.usage?.promptTokens ?? 'N/A'}, Output: ${rawExtracted.usage?.completionTokens ?? 'N/A'}
+Parser Status: ${parserStatus}
+Title:         ${enriched.title}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       } catch (err: any) {
         failedExtractions++;
-        console.error(`[Stage 3] [Extraction Failed] URL: ${page.url} - Error: ${err.message}`);
+
+        let conciseReason = 'VALIDATION_FAILED';
+        if (err.message.includes('MODEL_EMPTY_RESPONSE')) conciseReason = 'MODEL_EMPTY_RESPONSE';
+        else if (err.message.includes('JSON_PARSE_FAILED')) conciseReason = 'JSON_PARSE_FAILED';
+        else if (err.message.includes('INVALID_SCHEMA')) conciseReason = 'INVALID_SCHEMA';
+
+        const providerLabel = rawExtracted?.metadata?.provider?.toUpperCase() ?? 'N/A';
+        const modelLabel = rawExtracted?.metadata?.model ?? 'N/A';
+        const promptTokens = rawExtracted?.usage?.promptTokens ?? 'N/A';
+        const completionTokens = rawExtracted?.usage?.completionTokens ?? 'N/A';
+
+        console.error(`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Extraction Failure]
+URL:           ${page.url}
+Detector:      ${detection.confidence}/100
+Provider:      ${providerLabel} (${modelLabel})
+Latency:       ${(latencyMs / 1000).toFixed(1)}s
+Tokens:        Input: ${promptTokens}, Output: ${completionTokens}
+Parser Status: ${parserStatus}
+Concise Error: ${conciseReason}
+Details:       ${err.message}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       }
     }
 
