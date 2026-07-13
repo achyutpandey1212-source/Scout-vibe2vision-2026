@@ -1,6 +1,5 @@
 import { DiscoveryRunModel } from '../persistence/discovery-run.model';
 import { OpportunityRepository } from '../persistence/opportunity.repository';
-import { extractOpportunityFromPage } from '../extraction/extractor/opportunity-extractor';
 import { RawPageModel } from '../firecrawl/raw-page.model';
 import { DiscoveryContext } from '../types/query.types';
 import { DiscoveryOptions, DiscoveryOrchestratorResponse, PipelineMetrics } from './pipeline.types';
@@ -10,23 +9,13 @@ import { QualityScorer } from '../utils/quality-scorer';
 import { OpportunityArchiver } from '../utils/archiver';
 import { Stage1Discovery } from '../stages/stage1';
 import { Stage2Crawling, CrawledPage } from '../stages/stage2';
+import { Stage3Extraction } from '../stages/stage3';
 import crypto from 'crypto';
 
 /**
- * Stage 3: AI Extraction (Legacy downstream wrapper)
- * Restores RawPage saves to MongoDB to maintain E2E database consistency before extraction runs.
+ * Persists raw crawled pages to MongoDB to maintain E2E database audits
  */
-async function runStage3Extraction(
-  crawledPages: CrawledPage[],
-  options?: DiscoveryOptions,
-): Promise<Opportunity[]> {
-  console.log('[Pipeline] Stage 3: AI Extraction...');
-  if (options?.skipExtract) {
-    console.log('[Orchestrator] Skipping extraction stage...');
-    return [];
-  }
-
-  // Backwards compatibility: Write RawPages to MongoDB in the coordinator wrapper
+async function persistRawPagesCompatibility(crawledPages: CrawledPage[]): Promise<void> {
   for (const page of crawledPages) {
     if (page.crawlStatus === 'SUCCESS') {
       try {
@@ -51,24 +40,6 @@ async function runStage3Extraction(
       }
     }
   }
-
-  const extractions: Opportunity[] = [];
-  for (const page of crawledPages) {
-    if (page.crawlStatus !== 'SUCCESS') continue;
-
-    try {
-      const hash = crypto.createHash('sha256').update(page.markdown).digest('hex');
-      const legacyPageObj = {
-        ...page,
-        hash,
-      };
-      const opp = await extractOpportunityFromPage(legacyPageObj, 14, 'orchestrated query');
-      extractions.push(opp);
-    } catch (err: any) {
-      console.warn(`[Extraction Stage] Failed on url ${page.url}:`, err.message);
-    }
-  }
-  return extractions;
 }
 
 /**
@@ -139,8 +110,12 @@ export async function discoverOpportunities(
   const stage2 = new Stage2Crawling();
   const crawledPages = await stage2.execute(candidates, { maxExtractions: 15 });
 
-  // 3. Execute Stage 3 (Legacy Extraction & RawPage writes)
-  const extractions = await runStage3Extraction(crawledPages, options);
+  // DB Backwards compatibility raw page saves
+  await persistRawPagesCompatibility(crawledPages);
+
+  // 3. Execute Stage 3 (Modular AI Extraction)
+  const stage3 = new Stage3Extraction();
+  const extractions = await stage3.execute(crawledPages, options);
 
   // 4. Execute Stage 4 (Legacy Quality Filtering)
   const { accepted, rejectedCount } = runStage4QualityCheck(extractions);
