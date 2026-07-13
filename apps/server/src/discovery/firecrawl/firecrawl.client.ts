@@ -1,4 +1,4 @@
-import { env } from '../../config/env';
+import { ProviderPoolFactory } from '../../lib/providers/provider-pool-factory';
 import { DISCOVERY_CONFIG } from '../config/discovery.config';
 import { FirecrawlScrapeResponseSchema } from './extraction.schema';
 import { z } from 'zod';
@@ -6,12 +6,11 @@ import { z } from 'zod';
 export type FirecrawlScrapeResponse = z.infer<typeof FirecrawlScrapeResponseSchema>;
 
 export class FirecrawlClient {
-  private readonly apiKey: string;
   private readonly baseUrl = 'https://api.firecrawl.dev/v1/scrape';
 
   constructor() {
-    this.apiKey = env.FIRECRAWL_API_KEY;
-    if (!this.apiKey) {
+    const key = ProviderPoolFactory.discovery('firecrawl').getCurrentKey();
+    if (!key) {
       throw new Error('Missing FIRECRAWL_API_KEY in environment configuration');
     }
   }
@@ -20,6 +19,7 @@ export class FirecrawlClient {
    * Scrapes webpage content using Firecrawl.
    */
   async scrape(url: string): Promise<FirecrawlScrapeResponse> {
+    const pool = ProviderPoolFactory.discovery('firecrawl');
     const body = {
       url,
       formats: ['markdown'],
@@ -34,13 +34,14 @@ export class FirecrawlClient {
       attempt++;
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      const activeKey = pool.getCurrentKey();
 
       try {
         const response = await fetch(this.baseUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.apiKey}`,
+            Authorization: `Bearer ${activeKey}`,
           },
           body: JSON.stringify(body),
           signal: controller.signal,
@@ -51,6 +52,11 @@ export class FirecrawlClient {
         if (!response.ok) {
           const status = response.status;
           const text = await response.text().catch(() => 'No body content');
+
+          if (status === 401 || status === 429) {
+            pool.markFailure();
+            pool.rotate();
+          }
 
           if (status === 401) {
             throw new Error(`Firecrawl API responded with HTTP error 401: Unauthorized API Key`);
@@ -74,6 +80,7 @@ export class FirecrawlClient {
           throw new Error(`Invalid schema returned by Firecrawl: ${parseResult.error.message}`);
         }
 
+        pool.markSuccess();
         return parseResult.data;
       } catch (error: any) {
         clearTimeout(timeoutId);
@@ -81,18 +88,21 @@ export class FirecrawlClient {
         const errorMsg = isAbort ? `Request timed out after ${timeoutMs}ms` : error.message;
 
         if (attempt < maxAttempts) {
+          pool.markFailure();
+          pool.rotate();
           console.warn(
             `[Firecrawl Client] Failed attempt ${attempt}/${maxAttempts}: ${errorMsg}. Retrying...`,
           );
           await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
           continue;
         }
+
         throw new Error(
-          `Failed to crawl page via Firecrawl after ${maxAttempts} attempts. Error: ${errorMsg}`,
+          `Failed to scrape page via Firecrawl after ${maxAttempts} attempts. Error: ${errorMsg}`,
         );
       }
     }
 
-    throw new Error('Firecrawl Client failed to scrape due to unexpected execution flow');
+    throw new Error('Failed to scrape page via Firecrawl after maximum attempts');
   }
 }

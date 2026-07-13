@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export type AIWorkflowContext = 'discovery' | 'personalization';
+export type AIWorkflowContext = 'discovery' | 'recommendation';
 
 export type AIProviderName = 'gemini' | 'groq';
 

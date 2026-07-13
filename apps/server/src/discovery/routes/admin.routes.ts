@@ -5,6 +5,7 @@ import { db } from '../../config/db';
 import { redis } from '../../config/redis';
 import { DiscoveryRunModel } from '../persistence/discovery-run.model';
 import { discoverOpportunities } from '../orchestrator/discovery-orchestrator';
+import { ProviderKeyPool } from '../../lib/providers/provider-key-pool';
 
 const router = Router();
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin';
@@ -103,6 +104,10 @@ router.get('/status', verifyAdminSession, async (req, res: Response) => {
     // Runs history
     const runs = await DiscoveryRunModel.find().sort({ startedAt: -1 }).limit(10);
 
+    // Provider pool telemetry — flat array, frontend groups by system
+    // getAllPools() returns all pools that have been instantiated at runtime
+    const pools = ProviderKeyPool.getAllPools().map((pool) => pool.getTelemetry());
+
     return res.json({
       success: true,
       data: {
@@ -114,6 +119,7 @@ router.get('/status', verifyAdminSession, async (req, res: Response) => {
         },
         counts,
         runs,
+        pools,
       },
     });
   } catch (err: any) {

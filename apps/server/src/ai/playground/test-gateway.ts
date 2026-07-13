@@ -18,7 +18,7 @@ async function runTests() {
 
   // Test 2: Structured Output capability (Personalization context)
   try {
-    console.log('\n🧪 Test 2: Calling generateStructuredResponse() (context: personalization)...');
+    console.log('\n🧪 Test 2: Calling generateStructuredResponse() (context: recommendation)...');
     const schema = z.object({
       skills: z.array(z.string()),
       confidence: z.number(),
@@ -27,7 +27,7 @@ async function runTests() {
       prompt:
         'Identify the top 3 soft skills needed for leadership in technology. Return them along with a confidence score between 0 and 1.',
       schema,
-      context: 'personalization',
+      context: 'recommendation',
     });
     console.log('✅ Test 2 Output:', result);
     console.log(

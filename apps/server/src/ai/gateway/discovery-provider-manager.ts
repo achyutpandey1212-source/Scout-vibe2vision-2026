@@ -3,7 +3,8 @@ import { AIGatewayResponse, AIRequestOptions } from '../types/ai.types';
 import { GeminiProvider } from '../providers/gemini.provider';
 import { GroqProvider } from '../providers/groq.provider';
 import { retryWithBackoff } from '../utils/retry';
-import { AIApiError, ScoutAIError } from '../utils/errors';
+import { ScoutAIError } from '../utils/errors';
+import { ProviderPoolFactory } from '../../lib/providers/provider-pool-factory';
 
 export interface ProviderState {
   provider: 'gemini' | 'groq';
@@ -33,58 +34,44 @@ export class DiscoveryProviderManager {
   }
 
   /**
-   * Initializes Gemini and Groq provider pools with multiple API keys if configured.
-   * Gracefully falls back to existing env variables.
+   * Initializes Discovery Engine provider pools.
+   * Keys come exclusively from DISCOVERY_GEMINI_API_KEYS and DISCOVERY_GROQ_API_KEYS.
    */
   private initializePools() {
-    // 1. Resolve Gemini keys pool
-    const geminiKeysEnv = process.env.DISCOVERY_GEMINI_KEYS;
-    const geminiKeys = geminiKeysEnv
-      ? geminiKeysEnv
-          .split(',')
-          .map((k) => k.trim())
-          .filter(Boolean)
-      : [env.DISCOVERY_API_KEY].filter(Boolean);
-
-    if (geminiKeys.length > 0) {
+    // 1. Resolve Discovery Gemini pool
+    const geminiPool = ProviderPoolFactory.discovery('gemini');
+    if (geminiPool.getKeys().length > 0) {
       this.providerPool.push({
         provider: 'gemini',
         model: env.DISCOVERY_MODEL || 'gemini-2.5-flash',
-        keys: geminiKeys,
+        keys: geminiPool.getKeys(),
         activeKeyIdx: 0,
       });
     }
 
-    // 2. Resolve Groq keys pool
-    const groqKeysEnv = process.env.DISCOVERY_GROQ_KEYS;
-    const groqKeys = (
-      groqKeysEnv
-        ? groqKeysEnv
-            .split(',')
-            .map((k) => k.trim())
-            .filter(Boolean)
-        : [env.GROQ_API_KEY || env.DISCOVERY_FALLBACK_API_KEY].filter(Boolean)
-    ) as string[];
-
-    if (groqKeys.length > 0) {
+    // 2. Resolve Discovery Groq pool
+    const groqPool = ProviderPoolFactory.discovery('groq');
+    if (groqPool.getKeys().length > 0) {
       this.providerPool.push({
         provider: 'groq',
         model: env.DISCOVERY_FALLBACK_MODEL || 'llama-3.3-70b-versatile',
-        keys: groqKeys,
+        keys: groqPool.getKeys(),
         activeKeyIdx: 0,
       });
     }
 
     if (this.providerPool.length === 0) {
       console.warn(
-        '[Provider Manager] Warning: No discovery AI provider API keys configured in pool.',
+        '[Discovery Provider Manager] Warning: No Discovery AI provider API keys configured. ' +
+          'Set DISCOVERY_GEMINI_API_KEYS and/or DISCOVERY_GROQ_API_KEYS in your environment.',
       );
     }
   }
 
   /**
-   * Extracts using active provider. Automatically handles temporary retries, rotates keys
-   * on permanent failures, or falls back to next provider when current provider keys exhaust.
+   * Generates AI response using the active Discovery provider.
+   * Automatically retries on transient errors, rotates keys on permanent failures,
+   * and falls back to the next provider when all keys are exhausted.
    */
   async generate(options: AIRequestOptions): Promise<AIGatewayResponse> {
     if (this.providerPool.length === 0) {
@@ -92,20 +79,24 @@ export class DiscoveryProviderManager {
     }
 
     let attempts = 0;
-    const maxProviderRotations = this.providerPool.reduce((sum, p) => sum + p.keys.length, 0);
+    const maxProviderRotations = this.providerPool.reduce(
+      (sum, p) => sum + ProviderPoolFactory.discovery(p.provider).getKeys().length,
+      0,
+    );
 
     while (attempts < maxProviderRotations) {
       const activeState = this.providerPool[this.activeProviderIdx];
-      const activeKey = activeState.keys[activeState.activeKeyIdx];
+      const pool = ProviderPoolFactory.discovery(activeState.provider);
+      const activeKey = pool.getCurrentKey();
       const activeProvider =
         activeState.provider === 'gemini' ? this.geminiProvider : this.groqProvider;
 
       console.log(
-        `[Provider Manager] Using ${activeState.provider.toUpperCase()} (Model: ${activeState.model}, Key index: ${activeState.activeKeyIdx})`,
+        `[Discovery Provider Manager] Using ${activeState.provider.toUpperCase()} ` +
+          `(Model: ${activeState.model}, Key index: ${pool.getTelemetry().activeIndex})`,
       );
 
       try {
-        // Run with temporary error retry logic (exponential backoff)
         const response = await retryWithBackoff(
           async () => {
             return await activeProvider.generate(options, activeKey, activeState.model);
@@ -114,7 +105,7 @@ export class DiscoveryProviderManager {
             retries: 2,
             minTimeoutMs: 1500,
             shouldRetry: (error) => {
-              // Temporary errors: 429 rate limit, timeouts, 500, 503
+              // Only retry on transient errors
               const msg = error.message.toLowerCase();
               const isRateLimit = msg.includes('429') || msg.includes('rate limit');
               const isTimeout = error.name === 'AITimeoutError' || msg.includes('timeout');
@@ -124,12 +115,13 @@ export class DiscoveryProviderManager {
           },
           (error, attempt, delayMs) => {
             console.warn(
-              `[Provider Manager] Temporary failure on attempt ${attempt}. Retrying in ${delayMs.toFixed(0)}ms... Error: ${error.message}`,
+              `[Discovery Provider Manager] Temporary failure on attempt ${attempt}. ` +
+                `Retrying in ${delayMs.toFixed(0)}ms... Error: ${error.message}`,
             );
           },
         );
 
-        // Success: Log and return response
+        pool.markSuccess();
         this.logMetrics(response);
         return response;
       } catch (err: any) {
@@ -147,19 +139,19 @@ export class DiscoveryProviderManager {
 
         if (isFatal) {
           console.error(
-            `[Provider Manager] Fatal extraction error: ${err.message}. Aborting execution.`,
+            `[Discovery Provider Manager] Fatal extraction error: ${err.message}. Aborting.`,
           );
           throw err;
         }
 
+        pool.markFailure();
         if (isQuotaExhausted || isAuthError) {
           console.warn(
-            `[Provider Manager] Permanent failure on ${activeState.provider}: ${err.message}`,
+            `[Discovery Provider Manager] Permanent failure on ${activeState.provider}: ${err.message}`,
           );
           this.rotateKeyOrProvider(activeState);
         } else {
-          // If retries exhausted and not classified, default rotate to prevent pipeline lock
-          console.warn(`[Provider Manager] Provider failed: ${err.message}. Rotating...`);
+          console.warn(`[Discovery Provider Manager] Provider failed: ${err.message}. Rotating...`);
           this.rotateKeyOrProvider(activeState);
         }
       }
@@ -169,16 +161,23 @@ export class DiscoveryProviderManager {
   }
 
   private rotateKeyOrProvider(state: ProviderState) {
-    if (state.activeKeyIdx < state.keys.length - 1) {
-      state.activeKeyIdx++;
-      console.warn(
-        `[Provider Manager] Rotated to next API key inside pool for provider: ${state.provider}`,
-      );
-    } else {
-      // Current provider's keys are exhausted. Rotate to next provider
+    const pool = ProviderPoolFactory.discovery(state.provider);
+    const oldIndex = pool.getTelemetry().activeIndex;
+    pool.rotate();
+    const newIndex = pool.getTelemetry().activeIndex;
+
+    state.activeKeyIdx = newIndex;
+
+    if (newIndex === 0 && oldIndex >= 0 && pool.getTelemetry().totalKeys > 1) {
+      // All keys for this provider exhausted — rotate to next provider
       this.activeProviderIdx = (this.activeProviderIdx + 1) % this.providerPool.length;
       console.warn(
-        `[Provider Manager] Exhausted keys for ${state.provider}. Switched to next provider: ${this.providerPool[this.activeProviderIdx].provider}`,
+        `[Discovery Provider Manager] Exhausted keys for ${state.provider}. ` +
+          `Switched to next provider: ${this.providerPool[this.activeProviderIdx].provider}`,
+      );
+    } else {
+      console.warn(
+        `[Discovery Provider Manager] Rotated to next key for ${state.provider} (index: ${newIndex})`,
       );
     }
   }
@@ -191,7 +190,7 @@ export class DiscoveryProviderManager {
 
     console.log(`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[Provider Manager Extraction Success]
+[Discovery Extraction Success]
 Provider: ${providerLabel}
 Model: ${response.metadata.model}
 Latency: ${latencySec}s

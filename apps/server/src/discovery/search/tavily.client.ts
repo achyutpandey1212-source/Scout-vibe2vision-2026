@@ -1,16 +1,15 @@
-import { env } from '../../config/env';
+import { ProviderPoolFactory } from '../../lib/providers/provider-pool-factory';
 import { TavilySearchResponseSchema } from './search.schema';
 import { z } from 'zod';
 
 export type TavilySearchResult = z.infer<typeof TavilySearchResponseSchema>;
 
 export class TavilyClient {
-  private readonly apiKey: string;
   private readonly baseUrl = 'https://api.tavily.com/search';
 
   constructor() {
-    this.apiKey = env.TAVILY_API_KEY;
-    if (!this.apiKey) {
+    const key = ProviderPoolFactory.discovery('tavily').getCurrentKey();
+    if (!key) {
       throw new Error('Missing TAVILY_API_KEY in environment configuration');
     }
   }
@@ -19,8 +18,9 @@ export class TavilyClient {
    * Performs search query using Tavily API.
    */
   async search(query: string, maxResults = 3, timeoutMs = 10000): Promise<TavilySearchResult> {
+    const pool = ProviderPoolFactory.discovery('tavily');
     const body = {
-      api_key: this.apiKey,
+      api_key: pool.getCurrentKey(),
       query,
       max_results: maxResults,
       search_depth: 'basic',
@@ -58,6 +58,11 @@ export class TavilyClient {
             console.warn(
               `[Tavily Client] Transient error (HTTP ${status}) on attempt ${attempt}. Retrying... Details: ${text}`,
             );
+            if (status === 429) {
+              pool.markFailure();
+              pool.rotate();
+              body.api_key = pool.getCurrentKey();
+            }
             if (attempt < maxAttempts) {
               await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
               continue;
@@ -72,6 +77,7 @@ export class TavilyClient {
           throw new Error(`Invalid schema returned by Tavily: ${parseResult.error.message}`);
         }
 
+        pool.markSuccess();
         return parseResult.data;
       } catch (error: any) {
         clearTimeout(timeoutId);
@@ -80,6 +86,9 @@ export class TavilyClient {
         const errorMsg = isAbort ? `Request timed out after ${timeoutMs}ms` : error.message;
 
         if (attempt < maxAttempts) {
+          pool.markFailure();
+          pool.rotate();
+          body.api_key = pool.getCurrentKey();
           console.warn(
             `[Tavily Client] Failed attempt ${attempt}/${maxAttempts}: ${errorMsg}. Retrying...`,
           );
