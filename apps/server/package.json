@@ -12,6 +12,7 @@
     "crawl:extract": "npm run build && node dist/ai/playground/test-firecrawl-extraction.js"
   },
   "dependencies": {
+    "@langchain/core": "^1.2.2",
     "@scout/shared": "*",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

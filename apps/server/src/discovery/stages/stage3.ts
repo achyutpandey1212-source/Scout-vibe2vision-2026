@@ -12,6 +12,7 @@ import {
   buildUserPrompt,
   EXTRACTION_VERSION,
 } from '../extraction/prompts/extract-opportunity.prompt';
+import { optimizeContext } from '../context';
 import mongoose from 'mongoose';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -197,14 +198,22 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
       // Task 3: Detector log explains why it passed:
       console.log(`Pass Reasons: ${detection.reasons.join('; ')}`);
 
-      // 2. Perform intelligent chunking on large markdown body
-      const cleanMarkdown = chunkMarkdown(page.markdown);
+      // 2. Context Optimization: clean, chunk, score, and compress the page
+      //    before sending to Gemini. Falls back gracefully on any failure.
+      const { optimizedContent, compressionMetrics } = await optimizeContext(page);
+
+      console.log(
+        `[Stage 3] [CONTEXT] Compression: ${compressionMetrics.compressionRatio.toFixed(1)}% | ` +
+          `${compressionMetrics.originalChars.toLocaleString()} → ${compressionMetrics.charsSentToGemini.toLocaleString()} chars | ` +
+          `~${compressionMetrics.estimatedTokensSaved.toLocaleString()} tokens saved | ` +
+          `Jina: ${compressionMetrics.jinaUsed ? (compressionMetrics.jinaFromCache ? 'cache' : 'live') : 'off'}`,
+      );
 
       const startTime = Date.now();
       const prompt = buildUserPrompt(
         page.url,
         page.title,
-        cleanMarkdown,
+        optimizedContent,
         14, // legacy relevance score fallback
         'orchestrated query',
       );
@@ -383,7 +392,7 @@ Category:        Potential False Negative
 
         const providerLabel = rawExtracted?.metadata?.provider?.toUpperCase() ?? 'N/A';
         const modelLabel = rawExtracted?.metadata?.model ?? 'N/A';
-        const inputChars = cleanMarkdown.length;
+        const inputChars = optimizedContent.length;
         const inputTokens = Math.round(inputChars / 4);
 
         // ── Task 1: Complete Raw Response and Input Observability Logging ──
@@ -401,8 +410,8 @@ Token Estimate:   ${inputTokens} tokens
 Error Category:   ${parserStatus}
 Details:          ${err.message}
 
---- FIRST 2500 CHARACTERS OF EXTRACED PAGE CONTENT ---
-${cleanMarkdown.slice(0, 2500)}
+--- FIRST 2500 CHARACTERS OF OPTIMIZED CONTENT ---
+${optimizedContent.slice(0, 2500)}
 ------------------------------------------------------
 
 --- ENTIRE RAW MODEL RESPONSE ---
@@ -433,7 +442,10 @@ ${rawExtracted?.text || 'No response returned from provider.'}
                 charactersSent: inputChars,
                 errorCategory: parserStatus,
                 errorMessage: err.message,
-                pageContent: cleanMarkdown,
+                pageContent: optimizedContent,
+                compressionRatio: compressionMetrics.compressionRatio,
+                charsSentToGemini: compressionMetrics.charsSentToGemini,
+                jinaUsed: compressionMetrics.jinaUsed,
                 rawResponse: rawExtracted?.text || '',
                 timestamp: new Date().toISOString(),
               },
