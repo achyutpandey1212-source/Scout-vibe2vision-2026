@@ -71,7 +71,8 @@ const FRESHNESS_KEYWORDS = ['2026', 'july', 'august', 'apply now', 'last date', 
  */
 export function normalizeUrl(rawUrl: string): string {
   try {
-    const parsed = new URL(rawUrl);
+    const cleanUrl = rawUrl.split('#')[0]; // Remove hash anchors
+    const parsed = new URL(cleanUrl);
     let host = parsed.hostname.toLowerCase();
     if (host.startsWith('www.')) {
       host = host.slice(4);
@@ -91,14 +92,30 @@ export function normalizeUrl(rawUrl: string): string {
     for (const p of trackingParams) {
       params.delete(p);
     }
-    let path = parsed.pathname;
+
+    // Also remove common tracking parameters dynamically (starts with utm_)
+    const keysToDelete: string[] = [];
+    params.forEach((value, key) => {
+      if (
+        key.toLowerCase().startsWith('utm_') ||
+        key.toLowerCase() === 'ref' ||
+        key.toLowerCase() === 'source'
+      ) {
+        keysToDelete.push(key);
+      }
+    });
+    for (const k of keysToDelete) {
+      params.delete(k);
+    }
+
+    let path = parsed.pathname.toLowerCase();
     if (path.endsWith('/') && path.length > 1) {
       path = path.slice(0, -1);
     }
     const cleanSearch = params.toString();
     return `${parsed.protocol}//${host}${path}${cleanSearch ? '?' + cleanSearch : ''}`;
   } catch {
-    return rawUrl.trim().toLowerCase();
+    return rawUrl.trim().toLowerCase().split('#')[0].replace(/\/+$/, '');
   }
 }
 

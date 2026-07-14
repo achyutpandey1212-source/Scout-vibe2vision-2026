@@ -34,18 +34,57 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
   ): Promise<CandidateURL[]> {
     console.log('[Stage 1] Initializing registry-driven opportunity discovery...');
 
-    // 1. Get today's crawl targets from SourceRegistry
-    const targets = await crawlSchedulerService.getTargetsForToday();
+    // 1. Get crawl targets from SourceRegistry filtered by selected mode
+    const runMode = (context as any).runMode || 'due';
+    const runCategory = (context as any).runCategory;
+    const runCustomDomains = (context as any).runCustomDomains || [];
+    let targets: CrawlTarget[] = [];
+
+    const { SourceRegistryModel } = await import('../sources/source-registry.model');
+
+    const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+
+    const query: Record<string, any> = { isActive: true };
+
+    if (runMode === 'due') {
+      query.nextCrawlAt = { $lte: new Date() };
+    } else if (runMode === 'high-priority') {
+      query.priority = { $in: ['critical', 'high'] };
+    } else if (runMode === 'category' && runCategory) {
+      query.category = runCategory;
+    } else if (runMode === 'custom' && runCustomDomains.length > 0) {
+      const cleanDomains = runCustomDomains.map((d: string) => d.toLowerCase().trim());
+      query.domain = { $in: cleanDomains };
+    }
+
+    const sources = await SourceRegistryModel.find(query)
+      .sort({ trustScore: -1, nextCrawlAt: 1 })
+      .lean();
+
+    const mappedTargets = sources.map((s: any) => ({
+      domain: s.domain,
+      organization: s.organization,
+      homepage: s.homepage,
+      strategy: s.strategy,
+      defaultTags: s.defaultTags,
+      trustScore: s.trustScore,
+      priority: s.priority,
+    }));
+
+    // Sort by priority critical -> low
+    targets = mappedTargets.sort(
+      (a: any, b: any) =>
+        (priorityOrder[a.priority as keyof typeof priorityOrder] ?? 3) -
+          (priorityOrder[b.priority as keyof typeof priorityOrder] ?? 3) ||
+        b.trustScore - a.trustScore,
+    );
 
     if (targets.length === 0) {
-      console.warn(
-        '[Stage 1] No sources due for crawl today. ' +
-          'The SourceRegistry may need seeding or all sources are scheduled for future dates.',
-      );
+      console.warn(`[Stage 1] No sources found matching filter criteria (Mode: ${runMode}).`);
       return [];
     }
 
-    console.log(`[Stage 1] ${targets.length} sources scheduled for crawl today.`);
+    console.log(`[Stage 1] ${targets.length} sources resolved for crawl (Mode: ${runMode}).`);
 
     const allCandidates: CandidateURL[] = [];
     const tavilyClient = new TavilyClient();

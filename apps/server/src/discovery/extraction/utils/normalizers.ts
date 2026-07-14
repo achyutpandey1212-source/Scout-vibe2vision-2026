@@ -1,5 +1,47 @@
 import { OpportunityType, SourceType } from '../types/opportunity.types';
 
+// Deterministic organization mapping for known domain blocks
+const KNOWN_ORGANIZATIONS: Record<string, string> = {
+  'google.com': 'Google',
+  'buildyourfuture.withgoogle.com': 'Google',
+  'microsoft.com': 'Microsoft',
+  'careers.microsoft.com': 'Microsoft',
+  'amazon.jobs': 'Amazon',
+  'amazon.com': 'Amazon',
+  'nvidia.com': 'NVIDIA',
+  'anitab.org': 'AnitaB.org',
+  'ghc.anitab.org': 'Grace Hopper Celebration',
+  'womentechmakers.com': 'Women Techmakers',
+  'womenwhocode.com': 'Women Who Code',
+  'devfolio.co': 'Devfolio',
+  'mlh.io': 'MLH',
+  'unstop.com': 'Unstop',
+  'cern.ch': 'CERN',
+  'careers.cern': 'CERN',
+  'isro.gov.in': 'ISRO',
+  'daad.de': 'DAAD',
+  'erasmus-plus.ec.europa.eu': 'Erasmus+',
+  'obamaorg.org': 'Obama Foundation',
+  'obamafoundation.org': 'Obama Foundation',
+  'foundation.mozilla.org': 'Mozilla Foundation',
+  'mozilla.org': 'Mozilla Foundation',
+};
+
+// Common organization suffixes to strip out
+const CORPORATE_SUFFIXES = [
+  /\bLLC\b/gi,
+  /\bLtd\b/gi,
+  /\bInc\b/gi,
+  /\bCorp\b/gi,
+  /\bCo\b/gi,
+  /\bCorporation\b/gi,
+  /\bCompany\b/gi,
+  /\bCareers\b/gi,
+  /\bJobs\b/gi,
+  /\bRecruitment\b/gi,
+  /\bPortal\b/gi,
+];
+
 /**
  * Converts empty strings to null, trims whitespace, and standardizes formats safely.
  */
@@ -59,21 +101,145 @@ export function normalizeArray(list: any): string[] {
 }
 
 /**
- * Helper to normalize date formats to YYYY-MM-DD when possible.
+ * Helper to normalize date formats to YYYY-MM-DD or standard placeholders (Rolling, etc.)
  */
 export function normalizeDate(val: any): string | null {
   const dateStr = normalizeString(val);
   if (!dateStr) return null;
 
+  const lower = dateStr.toLowerCase().trim();
+
+  // Recognized rolling/status placeholders
+  if (lower.includes('rolling') || lower.includes('always open') || lower.includes('ongoing')) {
+    return 'Rolling';
+  }
+  if (lower.includes('filled') || lower.includes('open until filled')) {
+    return 'Open until filled';
+  }
+  if (lower.includes('not announced') || lower.includes('tba') || lower.includes('tbd')) {
+    return 'Deadline not announced';
+  }
+
   try {
-    const timestamp = Date.parse(dateStr);
+    // Force UTC timezone context for non-ISO textual strings to avoid local timezone offset shifts
+    let cleanStr = dateStr;
+    if (!dateStr.includes('T') && !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      // Append GMT suffix if not already present
+      if (!/gmt|utc/i.test(dateStr)) {
+        cleanStr = `${dateStr} GMT`;
+      }
+    }
+    const timestamp = Date.parse(cleanStr);
     if (!isNaN(timestamp)) {
-      return new Date(timestamp).toISOString().split('T')[0];
+      const d = new Date(timestamp);
+      // Format as YYYY-MM-DD using UTC values to avoid local timezone offset shifting the day
+      const year = d.getUTCFullYear();
+      const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(d.getUTCDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
     }
   } catch {
-    // Return original string if standard parsing fails, as it might be descriptive
+    // Fail-through
   }
-  return dateStr;
+
+  // Regex fallback: try parsing formats like "30 Aug", "30 August 2026", "Aug 30, 2026"
+  try {
+    const currentYear = new Date().getFullYear();
+    // Parse "DD Month YYYY" or "DD Month" (e.g., 30 August, 30th Aug 2026)
+    const match = dateStr.match(/(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)(?:\s+(\d{4}))?/i);
+    if (match) {
+      const dayNum = parseInt(match[1], 10);
+      const monthStr = match[2];
+      const yearNum = match[3] ? parseInt(match[3], 10) : currentYear;
+
+      const testDateStr = `${monthStr} ${dayNum}, ${yearNum} GMT`;
+      const ts = Date.parse(testDateStr);
+      if (!isNaN(ts)) {
+        const d = new Date(ts);
+        const year = d.getUTCFullYear();
+        const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(d.getUTCDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+    }
+  } catch {
+    // Silently fall through
+  }
+
+  // If not standard parseable and not a status placeholder, return null to clear dirty formats
+  return null;
+}
+
+/**
+ * Deterministically normalizes organization names by domain and stripping corporate suffixes.
+ */
+export function normalizeOrganization(org: any, domain: string | null): string {
+  const orgStr = normalizeString(org);
+  const cleanDomain = domain
+    ? domain
+        .toLowerCase()
+        .replace(/^www\./, '')
+        .trim()
+    : '';
+
+  // 1. Cross-reference source domain against known SourceRegistry domains
+  if (cleanDomain && KNOWN_ORGANIZATIONS[cleanDomain]) {
+    return KNOWN_ORGANIZATIONS[cleanDomain];
+  }
+
+  if (!orgStr) {
+    return 'Unknown Organization';
+  }
+
+  let cleanOrg = orgStr;
+
+  // 2. Strip common corporate suffixes
+  for (const regex of CORPORATE_SUFFIXES) {
+    cleanOrg = cleanOrg.replace(regex, '');
+  }
+
+  // Standardize spacing and trim
+  cleanOrg = cleanOrg.replace(/\s+/g, ' ').trim();
+
+  // 3. Fallback check on string matching if suffix removal left it empty
+  if (!cleanOrg || cleanOrg.length === 0) {
+    return orgStr;
+  }
+
+  return cleanOrg;
+}
+
+/**
+ * Standardizes dynamic enum variations to canonical representations.
+ */
+export function normalizeEnum<T extends string>(val: any, allowedValues: T[], defaultValue: T): T {
+  const str = normalizeString(val);
+  if (!str) return defaultValue;
+
+  const upper = str
+    .toUpperCase()
+    .trim()
+    .replace(/[-\s]+/g, '_');
+
+  // Try matching directly
+  if (allowedValues.includes(upper as any)) {
+    return upper as any;
+  }
+
+  // Try partial mapping/cleaning (e.g. "SCHOLARSHIPS" -> "SCHOLARSHIP")
+  const stripped = upper.replace(/S$/, ''); // Remove plural suffix
+  if (allowedValues.includes(stripped as any)) {
+    return stripped as any;
+  }
+
+  // Find prefix/fuzzy match
+  for (const allowed of allowedValues) {
+    if (allowed.startsWith(upper) || upper.startsWith(allowed)) {
+      return allowed;
+    }
+  }
+
+  return defaultValue;
 }
 
 /**
@@ -84,7 +250,111 @@ export function normalizeOpportunity(opp: any): any {
     opp = {};
   }
 
-  // Normalize audience and intelligence lists
+  // Eliminate "Untitled Opportunity" or placeholder titles by returning empty string (fails Zod schema validation)
+  const rawTitle = normalizeString(opp.title) || '';
+  const isPlaceholderTitle =
+    rawTitle.toLowerCase().trim() === 'untitled' ||
+    rawTitle.toLowerCase().trim() === 'unknown' ||
+    rawTitle.toLowerCase().trim() === 'n/a' ||
+    rawTitle.toLowerCase().trim() === 'placeholder' ||
+    rawTitle.toLowerCase().trim() === 'empty' ||
+    rawTitle.toLowerCase().trim() === 'untitled opportunity';
+
+  const title = isPlaceholderTitle ? '' : rawTitle;
+
+  const domain =
+    normalizeString(opp.sourceDomain) || (opp.sourceURL ? new URL(opp.sourceURL).hostname : '');
+  const organization = normalizeOrganization(opp.organization, domain);
+
+  // Normalize enums canonically
+  const opportunityType = normalizeEnum(
+    opp.opportunityType,
+    [
+      'JOB',
+      'INTERNSHIP',
+      'SCHOLARSHIP',
+      'FELLOWSHIP',
+      'GRANT',
+      'FREELANCE',
+      'COMPETITION',
+      'BOOTCAMP',
+      'COURSE',
+      'VOLUNTEER',
+      'EVENT',
+      'PROGRAM',
+      'OTHER',
+    ],
+    'OTHER',
+  );
+
+  const sourceType = normalizeEnum(
+    opp.sourceType,
+    [
+      'GOVERNMENT',
+      'COMPANY',
+      'UNIVERSITY',
+      'NGO',
+      'FOUNDATION',
+      'AGGREGATOR',
+      'COMMUNITY',
+      'OTHER',
+    ],
+    'OTHER',
+  );
+
+  const experienceRequired = opp.experienceRequired
+    ? normalizeEnum(opp.experienceRequired, ['NONE', 'SOME', 'EXPERIENCED'], 'SOME')
+    : null;
+
+  const fundingType = opp.fundingType
+    ? normalizeEnum(opp.fundingType, ['FULLY_FUNDED', 'PARTIALLY_FUNDED', 'PAID', 'UNPAID'], 'PAID')
+    : null;
+
+  const estimatedCompetition = opp.estimatedCompetition
+    ? normalizeEnum(opp.estimatedCompetition, ['LOW', 'MEDIUM', 'HIGH', 'UNKNOWN'], 'UNKNOWN')
+    : null;
+
+  const organizationType = opp.organizationType
+    ? normalizeEnum(
+        opp.organizationType,
+        ['GOVERNMENT', 'MNC', 'STARTUP', 'NGO', 'UNIVERSITY', 'FOUNDATION', 'COMMUNITY', 'OTHER'],
+        'OTHER',
+      )
+    : null;
+
+  const opportunityVertical = opp.opportunityVertical
+    ? normalizeEnum(
+        opp.opportunityVertical,
+        [
+          'CAREERS',
+          'SCHOLARSHIPS',
+          'FELLOWSHIPS',
+          'GOVERNMENT_SCHEMES',
+          'COMPETITIONS',
+          'COURSES',
+          'TRAINING',
+          'ENTREPRENEURSHIP',
+          'FINANCIAL_AID',
+          'EVENTS',
+          'OTHER',
+        ],
+        'OTHER',
+      )
+    : null;
+
+  const applicationDifficulty = opp.applicationDifficulty
+    ? normalizeEnum(
+        opp.applicationDifficulty,
+        ['LOW', 'MEDIUM', 'HIGH', 'VERY_HIGH', 'UNKNOWN'],
+        'UNKNOWN',
+      )
+    : null;
+
+  const genderEligibility = opp.genderEligibility
+    ? normalizeEnum(opp.genderEligibility, ['FEMALE', 'ALL', 'OTHER'], 'ALL')
+    : null;
+
+  // Normalize list elements
   const audiencePersonas = normalizeArray(opp.audiencePersonas).map((item) =>
     item.toLowerCase().trim(),
   ) as any[];
@@ -94,38 +364,14 @@ export function normalizeOpportunity(opp: any): any {
     item.toLowerCase().trim(),
   );
 
-  const expRequiredRaw = normalizeString(opp.experienceRequired);
-  const experienceRequired = expRequiredRaw ? (expRequiredRaw.toUpperCase().trim() as any) : null;
-
-  const fundTypeRaw = normalizeString(opp.fundingType);
-  const fundingType = fundTypeRaw ? (fundTypeRaw.toUpperCase().trim() as any) : null;
-
-  const estCompRaw = normalizeString(opp.estimatedCompetition);
-  const estimatedCompetition = estCompRaw ? (estCompRaw.toUpperCase().trim() as any) : null;
-
-  const orgTypeRaw = normalizeString(opp.organizationType);
-  const organizationType = orgTypeRaw ? (orgTypeRaw.toUpperCase().trim() as any) : null;
-
   const searchCategory = normalizeString(opp.searchCategory);
-
-  const oppVertRaw = normalizeString(opp.opportunityVertical);
-  const opportunityVertical = oppVertRaw ? (oppVertRaw.toUpperCase().trim() as any) : null;
-
-  const appDiffRaw = normalizeString(opp.applicationDifficulty);
-  const applicationDifficulty = appDiffRaw ? (appDiffRaw.toUpperCase().trim() as any) : null;
-
-  const opportunityTypeRaw = normalizeString(opp.opportunityType);
-  const opportunityType = (opportunityTypeRaw || 'OTHER').toUpperCase() as OpportunityType;
-
-  const sourceTypeRaw = normalizeString(opp.sourceType);
-  const sourceType = (sourceTypeRaw || 'OTHER').toUpperCase() as SourceType;
 
   return {
     ...opp,
-    title: normalizeString(opp.title) || 'Untitled Opportunity',
+    title,
     description: normalizeString(opp.description) || '',
     summary: normalizeString(opp.summary) || '',
-    organization: normalizeString(opp.organization) || 'Unknown Organization',
+    organization,
     opportunityType,
     category: normalizeString(opp.category) || 'General',
     country: normalizeCountry(opp.country),
@@ -161,17 +407,17 @@ export function normalizeOpportunity(opp: any): any {
         : isNaN(Number(opp.ageLimit))
           ? null
           : Number(opp.ageLimit),
-    genderEligibility: opp.genderEligibility ? String(opp.genderEligibility).toUpperCase() : null,
+    genderEligibility,
     documentsRequired: normalizeArray(opp.documentsRequired),
     selectionProcess: normalizeString(opp.selectionProcess),
     benefits: normalizeString(opp.benefits),
     tags: normalizeArray(opp.tags),
     sourceURL: normalizeString(opp.sourceURL),
-    sourceDomain: normalizeString(opp.sourceDomain),
+    sourceDomain: domain,
     sourceType,
     confidence: typeof opp.confidence === 'number' ? opp.confidence : 0.5,
 
-    // Classifications normalized
+    // Normalized classifications
     audiencePersonas,
     educationEligibility,
     professionalDomains,

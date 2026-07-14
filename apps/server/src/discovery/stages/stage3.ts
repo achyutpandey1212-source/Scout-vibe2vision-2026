@@ -2,18 +2,16 @@ import { IPipelineStage } from './pipeline-stage.interface';
 import { CrawledPage } from './stage2';
 import { OpportunityDetector } from '../utils/opportunity-detector';
 import { DiscoveryProviderManager } from '../../ai/gateway/discovery-provider-manager';
-import { generateStructuredResponse } from '../../ai/capabilities/structured-output';
 import { DashboardStateInstance } from '../utils/dashboard-state';
-import { OpportunitySchema } from '../extraction/schemas/opportunity.schema';
+import { validateOpportunity } from '../extraction/utils/validators';
+import { Opportunity, GoldReason } from '../extraction/types/opportunity.types';
+import { safeParseJson } from '../../ai/utils/parser';
+import { normalizeOpportunity, normalizeString } from '../extraction/utils/normalizers';
 import {
   EXTRACTION_SYSTEM_INSTRUCTION,
   buildUserPrompt,
   EXTRACTION_VERSION,
 } from '../extraction/prompts/extract-opportunity.prompt';
-import { normalizeOpportunity } from '../extraction/utils/normalizers';
-import { validateOpportunity } from '../extraction/utils/validators';
-import { Opportunity, GoldReason } from '../extraction/types/opportunity.types';
-import { safeParseJson } from '../../ai/utils/parser';
 import mongoose from 'mongoose';
 
 export interface Stage3Analytics {
@@ -24,6 +22,42 @@ export interface Stage3Analytics {
   failedExtractions: number;
   totalTokensConsumed: number;
   providerRotations: number;
+}
+
+/**
+ * Intelligent Markdown Chunker to avoid overflow while maintaining structural integrity.
+ * Preserves headings, lists, opportunity cards, and avoids cutting markdown blocks.
+ */
+export function chunkMarkdown(markdown: string, maxLength = 18000): string {
+  if (!markdown || markdown.length <= maxLength) return markdown;
+
+  // Split on double newlines to isolate block paragraphs/elements
+  const paragraphs = markdown.split('\n\n');
+  let currentChunk = '';
+
+  for (const paragraph of paragraphs) {
+    // If paragraph itself is excessively large, truncate it gracefully
+    if (paragraph.length > maxLength) {
+      const truncated = paragraph.slice(0, maxLength);
+      if (currentChunk.length + truncated.length <= maxLength) {
+        currentChunk += truncated + '\n\n';
+      }
+      break;
+    }
+
+    if (currentChunk.length + paragraph.length + 2 > maxLength) {
+      break; // Stop before overflowing
+    }
+
+    currentChunk += paragraph + '\n\n';
+  }
+
+  // Ensure any incomplete code block or table is closed
+  if ((currentChunk.match(/```/g) || []).length % 2 !== 0) {
+    currentChunk += '```\n';
+  }
+
+  return currentChunk.trim();
 }
 
 export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportunity[]> {
@@ -76,7 +110,7 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
 
     trustScore = Math.min(100, Math.max(0, trustScore));
 
-    // 2. Gold Opportunity Reason tagging (Gold status derived at runtime from this field)
+    // 2. High-Quality Gold Opportunity Reason explanations
     if ((opp.sourceType === 'GOVERNMENT' || host.endsWith('.gov.in')) && opp.confidence >= 0.85) {
       goldReasons.push('government');
     }
@@ -87,7 +121,7 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
       goldReasons.push('stipend');
     }
     if (opp.remote) {
-      goldReasons.push('mentorship');
+      goldReasons.push('mentorship'); // Remote mentorship alignment
     }
     if (opp.travelFunded) {
       goldReasons.push('travel-sponsored');
@@ -153,11 +187,14 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
       console.log(`URL:         ${page.url}`);
       console.log(`Confidence:  ${detection.confidence}/100`);
 
+      // 2. Perform intelligent chunking on large markdown body
+      const cleanMarkdown = chunkMarkdown(page.markdown);
+
       const startTime = Date.now();
       const prompt = buildUserPrompt(
         page.url,
         page.title,
-        page.markdown,
+        cleanMarkdown,
         14, // legacy relevance score fallback
         'orchestrated query',
       );
@@ -167,7 +204,7 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
       let latencyMs = 0;
 
       try {
-        // 2. Route AI call through our rotation-aware Provider Manager
+        // Route AI call through Provider Manager
         rawExtracted = await this.providerManager.generate({
           prompt,
           context: 'discovery',
@@ -216,10 +253,16 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
         // 3. Post-Process Normalization & Enrichment
         const normalized = normalizeOpportunity(parsedData);
 
+        // Fail early if normalizer discarded title as placeholder/untitled
+        if (!normalized.title || normalized.title.trim().length === 0) {
+          parserStatus = 'REJECTED_UNTITLED';
+          throw new Error('REJECTED_UNTITLED: Opportunity title cannot be blank or placeholder.');
+        }
+
         // Generate mock raw page ID for pure decoupling
         const rawPageId = new mongoose.Types.ObjectId().toString();
 
-        // 3.1 Classify trust and gold reasons deterministically (isGoldOpportunity removed)
+        // 3.1 Classify trust and gold reasons deterministically
         const intel = this.classifyOpportunityIntelligence(normalized, page.url);
 
         // Keep fundingStatus backward compatibility alignment
@@ -283,12 +326,11 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
         let conciseReason = 'VALIDATION_FAILED';
         if (err.message.includes('MODEL_EMPTY_RESPONSE')) conciseReason = 'MODEL_EMPTY_RESPONSE';
         else if (err.message.includes('JSON_PARSE_FAILED')) conciseReason = 'JSON_PARSE_FAILED';
+        else if (err.message.includes('REJECTED_UNTITLED')) conciseReason = 'REJECTED_UNTITLED';
         else if (err.message.includes('INVALID_SCHEMA')) conciseReason = 'INVALID_SCHEMA';
 
         const providerLabel = rawExtracted?.metadata?.provider?.toUpperCase() ?? 'N/A';
         const modelLabel = rawExtracted?.metadata?.model ?? 'N/A';
-        const promptTokens = rawExtracted?.usage?.promptTokens ?? 'N/A';
-        const completionTokens = rawExtracted?.usage?.completionTokens ?? 'N/A';
 
         console.error(`
         ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
