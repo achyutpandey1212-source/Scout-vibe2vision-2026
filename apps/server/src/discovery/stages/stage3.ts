@@ -162,6 +162,7 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
     let countSchemaError = 0;
     let countLowInfo = 0;
     let countParserException = 0;
+    let countRootHomepage = 0;
 
     for (const page of crawledPages) {
       if (page.crawlStatus !== 'SUCCESS') {
@@ -183,6 +184,46 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
         console.log(`Confidence:  ${detection.confidence}/100`);
         console.log(`Penalties:   ${detection.penalties.join('; ')}`);
         console.log(`Reasons:     ${detection.reasons.join('; ')}`);
+        continue;
+      }
+
+      // 1.1 Deterministic Homepage Guard
+      let isHomepage = false;
+      try {
+        const urlObj = new URL(page.url);
+        const p = urlObj.pathname;
+        isHomepage = p === '/' || p === '' || p === '/index.html' || p === '/index.php';
+      } catch {
+        // Fallback
+      }
+
+      const envHpThreshold = process.env.HOMEPAGE_DETECTOR_THRESHOLD;
+      const homepageThreshold = envHpThreshold ? parseInt(envHpThreshold, 10) : 60;
+
+      const strongOpportunityKeywords = [
+        'deadline',
+        'eligibility',
+        'application process',
+        'apply link',
+        'apply now',
+        'how to apply',
+        'stipend',
+        'salary',
+      ];
+      const markdownLower = page.markdown.toLowerCase();
+      const hasStrongEvidence = strongOpportunityKeywords.some((keyword) =>
+        markdownLower.includes(keyword),
+      );
+
+      if (isHomepage && detection.confidence < homepageThreshold && !hasStrongEvidence) {
+        pagesSkippedDetector++;
+        countRootHomepage++;
+        console.log(
+          `\n[Stage 3] [HOMEPAGE SHORT-CIRCUIT] Skipped generic landing page: ${page.url}`,
+        );
+        console.log(
+          `Reason: URL is root/index path, confidence (${detection.confidence}/100) < threshold (${homepageThreshold}), and no strong opportunity evidence found.`,
+        );
         continue;
       }
 
@@ -478,6 +519,7 @@ ${rawExtracted?.text || 'No response returned from provider.'}
     Parser Failures:         ${failedCount}
     
     -- Parser Failure Breakdown --
+    Root Homepages:          ${countRootHomepage}
     Untitled / Placeholder:  ${countPlaceholderTitle}
     Invalid JSON:            ${countInvalidJson}
     Schema Validation:       ${countSchemaError}

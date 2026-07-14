@@ -123,12 +123,13 @@ Sources Crawled:          ${TRUSTED_SOURCES.length}
 Pages Discovered:        ${candidates.length}
 Pages Fetched:           ${runResult.crawledPages}
 Successful Extractions:  ${extractions.length}
-Duplicates Merged:        ${runResult.duplicatesMerged}
+New Opportunities:       ${runResult.inserted}
+Updated Opportunities:   ${runResult.updated}
+Duplicates Merged:       ${runResult.duplicatesMerged}
 Archived Opportunities:   ${runResult.archived}
 Rejected (Low Quality):   ${rejectedCount}
 
 Average Quality Score:   ${runResult.averageQuality}
-New Opportunities:       ${runResult.inserted}
 
 Duration: ${durationStr}
 ============================================`);

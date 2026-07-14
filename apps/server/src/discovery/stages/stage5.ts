@@ -3,6 +3,7 @@ import { QualityEvaluatedOpportunity } from './stage4';
 import { OpportunityModel } from '../extraction/models/opportunity.model';
 import { DISCOVERY_CONFIG } from '../config/discovery.config';
 import { DashboardStateInstance } from '../utils/dashboard-state';
+import { Types } from 'mongoose';
 
 export interface RunAnalytics {
   startedAt: Date;
@@ -211,30 +212,39 @@ export class Stage5Persistence implements IPipelineStage<
           });
           updated++;
         } else {
-          // No match: Add as a new opportunity doc
-          const newDoc = {
+          // No match: Add as a new opportunity doc, but use upsert to prevent E11000 duplicates
+          const filterUrl =
+            opp.applicationUrl || opp.sourceURL || `empty_url_${new Types.ObjectId()}`;
+          const filter = { applicationUrl: filterUrl };
+          const updateFields: any = {
             ...opp,
-            discoveredAt: new Date(),
-            firstSeenAt: new Date(),
             lastCheckedAt: new Date(),
-            createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             archived: false,
-            intelligence: {
-              normalizedOrganization: opp.organization,
-              normalizedDeadline: opp.deadline,
-              daysRemaining: null,
-              expired: false,
-              metadata: null,
-              version: 'v2',
-              enriched: false,
-              lastEnrichedAt: null,
-            },
           };
 
           bulkOps.push({
-            insertOne: {
-              document: newDoc,
+            updateOne: {
+              filter,
+              update: {
+                $setOnInsert: {
+                  discoveredAt: new Date(),
+                  firstSeenAt: new Date(),
+                  createdAt: new Date().toISOString(),
+                  intelligence: {
+                    normalizedOrganization: opp.organization,
+                    normalizedDeadline: opp.deadline,
+                    daysRemaining: null,
+                    expired: false,
+                    metadata: null,
+                    version: 'v2',
+                    enriched: false,
+                    lastEnrichedAt: null,
+                  },
+                },
+                $set: updateFields,
+              },
+              upsert: true,
             },
           });
           inserted++;
@@ -248,13 +258,21 @@ export class Stage5Persistence implements IPipelineStage<
     // 2. Persistence execution: Run bulkWrite
     if (bulkOps.length > 0) {
       try {
-        await OpportunityModel.bulkWrite(bulkOps, { ordered: false });
+        const result = await OpportunityModel.bulkWrite(bulkOps, { ordered: false });
         console.log(
           `[Stage 5] Database BulkWrite executed successfully with ${bulkOps.length} operations.`,
         );
+        inserted = result.upsertedCount || 0;
+        updated = result.modifiedCount || 0;
       } catch (bulkErr: any) {
-        failures++;
-        console.error(`[Stage 5] BulkWrite execution failed:`, bulkErr.message);
+        console.error(
+          `[Stage 5] BulkWrite execution encountered errors (safely handled):`,
+          bulkErr.message,
+        );
+        if (bulkErr.result) {
+          inserted = bulkErr.result.nUpserted || bulkErr.result.upsertedCount || 0;
+          updated = bulkErr.result.nModified || bulkErr.result.modifiedCount || 0;
+        }
       }
     }
 
