@@ -93,6 +93,9 @@ export async function optimizeContext(
         jinaUsed: false,
         jinaFromCache: false,
         pageSizeProfile,
+        visualElementsRemoved: 0,
+        logoAssetsRemoved: 0,
+        uiBoilerplateRemoved: 0,
       },
     };
   }

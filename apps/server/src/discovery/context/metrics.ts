@@ -157,6 +157,12 @@ export interface CompressionMetrics {
   jinaFromCache: boolean;
   /** The page size profile used for budgeting */
   pageSizeProfile: PageSizeProfile;
+  /** Number of markdown images removed by the cleaner (Stage 4.2.2) */
+  visualElementsRemoved: number;
+  /** Number of standalone logo/asset filename lines removed (Stage 4.2.2) */
+  logoAssetsRemoved: number;
+  /** Number of UI/marketing boilerplate lines removed (Stage 4.2.2) */
+  uiBoilerplateRemoved: number;
 }
 
 // ─── Result ──────────────────────────────────────────────────────────────────

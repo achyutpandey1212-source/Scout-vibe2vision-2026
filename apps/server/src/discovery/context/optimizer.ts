@@ -188,6 +188,9 @@ Chosen:              ${m.chosenSource.toUpperCase()}
 Reason:              ${m.sourceRoutingReason}
 
 ↓ Cleaner:           ${m.charsAfterCleaning.toLocaleString()} chars
+  Visual Removed:    ${m.visualElementsRemoved} image(s)
+  Logo Assets:       ${m.logoAssetsRemoved} line(s)
+  UI Boilerplate:    ${m.uiBoilerplateRemoved} line(s)
 ↓ Chunks:            ${m.chunksGenerated}
   High:              ${m.highChunksRetained} retained
   Normal:            ${m.normalChunksRetained} retained
@@ -244,6 +247,9 @@ export async function runOptimizer(
     jinaUsed: false,
     jinaFromCache: false,
     pageSizeProfile,
+    visualElementsRemoved: 0,
+    logoAssetsRemoved: 0,
+    uiBoilerplateRemoved: 0,
   };
 
   // ── Stage 1: Adaptive Content Routing ────────────────────────────────────
@@ -267,6 +273,9 @@ export async function runOptimizer(
     cleanedDoc = cleanerResult.doc as any;
     metrics.cleaningLatencyMs = cleanerResult.cleaningLatencyMs;
     metrics.charsAfterCleaning = cleanedDoc.pageContent.length;
+    metrics.visualElementsRemoved = cleanerResult.visualElementsRemoved;
+    metrics.logoAssetsRemoved = cleanerResult.logoAssetsRemoved;
+    metrics.uiBoilerplateRemoved = cleanerResult.uiBoilerplateRemoved;
   } catch (cleanErr: any) {
     console.warn(`[ContextOptimizer] Cleaner failed — using raw content: ${cleanErr.message}`);
     metrics.charsAfterCleaning = doc.pageContent.length;

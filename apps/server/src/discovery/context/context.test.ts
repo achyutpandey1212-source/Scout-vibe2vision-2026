@@ -87,6 +87,61 @@ describe('cleanDocument', () => {
     const { cleaningLatencyMs } = cleanDocument(doc as any);
     expect(cleaningLatencyMs).toBeGreaterThanOrEqual(0);
   });
+
+  // Stage 4.2.2 Visual element and boilerplate removal tests
+  it('removes markdown images but preserves markdown links', () => {
+    const doc = makeDoc(
+      '![CNN Logo](https://example.com/logo.png)\n\n[Apply Now](https://example.com/apply)',
+    );
+    const { doc: cleaned, visualElementsRemoved } = cleanDocument(doc as any);
+    expect(cleaned.pageContent).not.toContain('![CNN Logo]');
+    expect(cleaned.pageContent).toContain('[Apply Now]');
+    expect(visualElementsRemoved).toBe(1);
+  });
+
+  it('removes standalone logo asset lines', () => {
+    const doc = makeDoc('GeorgiaTech_RGB\n\nFrame-77\n\nCNN_Logo.svg\n\nKeep this text line.');
+    const { doc: cleaned, logoAssetsRemoved } = cleanDocument(doc as any);
+    expect(cleaned.pageContent).not.toContain('GeorgiaTech_RGB');
+    expect(cleaned.pageContent).not.toContain('Frame-77');
+    expect(cleaned.pageContent).not.toContain('CNN_Logo.svg');
+    expect(cleaned.pageContent).toContain('Keep this text line.');
+    expect(logoAssetsRemoved).toBe(3);
+  });
+
+  it('removes decorative image alt texts', () => {
+    const doc = makeDoc(
+      'Previous scholarship winner\n\nStudent smiling\n\nLegitimate content description.',
+    );
+    const { doc: cleaned, logoAssetsRemoved } = cleanDocument(doc as any);
+    expect(cleaned.pageContent).not.toContain('Previous scholarship winner');
+    expect(cleaned.pageContent).not.toContain('Student smiling');
+    expect(cleaned.pageContent).toContain('Legitimate content description.');
+    expect(logoAssetsRemoved).toBe(2);
+  });
+
+  it('removes homepage marketing boilerplate and UI button text', () => {
+    const doc = makeDoc(
+      'Trusted by thousands\n\nJoin today\n\n100% free forever\n\nCalculating your matches...\n\nEligibility rules.',
+    );
+    const { doc: cleaned, uiBoilerplateRemoved } = cleanDocument(doc as any);
+    expect(cleaned.pageContent).not.toContain('Trusted by thousands');
+    expect(cleaned.pageContent).not.toContain('Join today');
+    expect(cleaned.pageContent).not.toContain('100% free forever');
+    expect(cleaned.pageContent).not.toContain('Calculating your matches...');
+    expect(cleaned.pageContent).toContain('Eligibility rules.');
+    expect(uiBoilerplateRemoved).toBe(4);
+  });
+
+  it('preserves important links and keywords', () => {
+    const doc = makeDoc(
+      '[Apply Now](https://link)\n\n[Official Website](https://site)\n\n[Deadline](https://deadline)',
+    );
+    const { doc: cleaned } = cleanDocument(doc as any);
+    expect(cleaned.pageContent).toContain('[Apply Now]');
+    expect(cleaned.pageContent).toContain('[Official Website]');
+    expect(cleaned.pageContent).toContain('[Deadline]');
+  });
 });
 
 // ─── Chunker Tests (three-tier priority) ─────────────────────────────────────
