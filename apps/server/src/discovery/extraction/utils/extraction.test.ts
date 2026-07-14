@@ -83,4 +83,30 @@ describe('Sprint 1 — Extraction & Cleanup Normalization tests', () => {
       expect(normalizeOpportunity(opp3).title).toBe('Valid Tech Internship');
     });
   });
+
+  describe('6. Stage 4.1 Provider Alias Mapping Layer', () => {
+    it('should map provider specific alias attributes to Scout canonical properties', () => {
+      const providerOutput = {
+        opportunityName: 'Google Summer of Code',
+        deadline: '2026-11-20',
+        stipend: 1500,
+        applicationProcess: 'Apply online through portal.',
+        confidenceEstimator: 0.99,
+        officialWeb: 'https://summerofcode.withgoogle.com',
+      };
+
+      const normalized = normalizeOpportunity(providerOutput);
+      expect(normalized.title).toBe('Google Summer of Code');
+      expect(normalized.deadline).toBe('2026-11-20');
+      expect(normalized.salary).toBe(1500);
+      expect(normalized.stipend).toBe(1500); // verify mapped compatibility
+      expect(normalized.selectionProcess).toBe('Apply online through portal.');
+      expect(normalized.confidence).toBe(0.99);
+      expect(normalized.officialWebsite).toBe('https://summerofcode.withgoogle.com');
+
+      // Check normalization change logs
+      expect(normalized._normalizationChanges).toBeDefined();
+      expect(normalized._normalizationChanges.length).toBeGreaterThan(0);
+    });
+  });
 });

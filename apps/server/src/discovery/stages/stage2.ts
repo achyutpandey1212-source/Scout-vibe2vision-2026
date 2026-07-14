@@ -189,17 +189,38 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
             }
 
             // Cache successfully scraped page
-            const metadata = {
-              description: scrapeResponse.data?.metadata?.description || '',
+            const rawMetadata = scrapeResponse.data?.metadata || {};
+            const cleanMetadata: Record<string, any> = {
               domain: new URL(candidate.url).hostname,
             };
+
+            // Recursively flatten arrays and convert array-wrapped elements to primitive string values
+            const cleanValue = (val: any): any => {
+              if (Array.isArray(val)) {
+                if (val.length === 0) return undefined;
+                return cleanValue(val[0]);
+              }
+              return val;
+            };
+
+            for (const key in rawMetadata) {
+              const cleaned = cleanValue(rawMetadata[key]);
+              if (cleaned !== undefined) {
+                cleanMetadata[key] = String(cleaned);
+              }
+            }
+
+            // Guarantee description and language defaults exist
+            if (!cleanMetadata.description) cleanMetadata.description = '';
+            if (!cleanMetadata.language) cleanMetadata.language = 'en';
+
             try {
               await redisClient.setex(
                 cacheKey,
                 86400, // 24 Hours TTL
                 JSON.stringify({
                   markdown: rawMarkdown,
-                  metadata,
+                  metadata: cleanMetadata,
                   timestamp: new Date().toISOString(),
                 }),
               );
@@ -228,7 +249,7 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
               url: candidate.url,
               title: candidate.source,
               markdown: rawMarkdown,
-              metadata,
+              metadata: cleanMetadata,
               fetchMethod: 'firecrawl' as const,
               crawlStatus: 'SUCCESS' as const,
               crawlTime: duration,

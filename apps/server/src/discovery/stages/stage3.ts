@@ -13,6 +13,8 @@ import {
   EXTRACTION_VERSION,
 } from '../extraction/prompts/extract-opportunity.prompt';
 import mongoose from 'mongoose';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface Stage3Analytics {
   pagesReceived: number;
@@ -36,7 +38,6 @@ export function chunkMarkdown(markdown: string, maxLength = 18000): string {
   let currentChunk = '';
 
   for (const paragraph of paragraphs) {
-    // If paragraph itself is excessively large, truncate it gracefully
     if (paragraph.length > maxLength) {
       const truncated = paragraph.slice(0, maxLength);
       if (currentChunk.length + truncated.length <= maxLength) {
@@ -152,7 +153,14 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
     let pagesPassedDetector = 0;
     let pagesSkippedDetector = 0;
     let successfulExtractions = 0;
-    let failedExtractions = 0;
+
+    // Categorized failure counts (Task 2 & Task 4)
+    let countEmptyResponse = 0;
+    let countInvalidJson = 0;
+    let countPlaceholderTitle = 0;
+    let countSchemaError = 0;
+    let countLowInfo = 0;
+    let countParserException = 0;
 
     for (const page of crawledPages) {
       if (page.crawlStatus !== 'SUCCESS') {
@@ -186,6 +194,8 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
       console.log(`\n[Stage 3] [DETECTOR PASS] Extracting opportunity...`);
       console.log(`URL:         ${page.url}`);
       console.log(`Confidence:  ${detection.confidence}/100`);
+      // Task 3: Detector log explains why it passed:
+      console.log(`Pass Reasons: ${detection.reasons.join('; ')}`);
 
       // 2. Perform intelligent chunking on large markdown body
       const cleanMarkdown = chunkMarkdown(page.markdown);
@@ -215,18 +225,15 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
         latencyMs = Date.now() - startTime;
 
         if (!rawExtracted.text || rawExtracted.text.trim() === '') {
-          parserStatus = 'MODEL_EMPTY_RESPONSE';
-          throw new Error('MODEL_EMPTY_RESPONSE');
+          parserStatus = 'REJECTED_EMPTY_RESPONSE';
+          countEmptyResponse++;
+          throw new Error('REJECTED_EMPTY_RESPONSE: Model output is empty.');
         }
 
         let parsedData: any;
         try {
           parsedData = safeParseJson(rawExtracted.text);
-          parserStatus = 'SUCCESS';
         } catch (parseErr: any) {
-          console.error(`[Stage 3] [JSON_PARSE_FAILED] Failed to parse JSON from AI response.`);
-          console.error(`Raw Response:\n${rawExtracted.text}`);
-
           // Try standard extraction fallback as a last resort
           let fallbackCleaned = rawExtracted.text.trim();
           const firstBrace = fallbackCleaned.indexOf('{');
@@ -235,28 +242,48 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
             fallbackCleaned = fallbackCleaned.substring(firstBrace, lastBrace + 1);
             try {
               parsedData = JSON.parse(fallbackCleaned);
-              parserStatus = 'SUCCESS';
               console.log(`[Stage 3] Recovered JSON parsing via fallback substring extraction.`);
             } catch (innerErr) {
-              console.error(`Cleaned Response tried:\n${fallbackCleaned}`);
-              console.error(`Parser error:`, parseErr);
-              parserStatus = 'JSON_PARSE_FAILED';
-              throw new Error('JSON_PARSE_FAILED');
+              parserStatus = 'REJECTED_INVALID_JSON';
+              countInvalidJson++;
+              throw new Error('REJECTED_INVALID_JSON: Failed to parse raw model JSON.');
             }
           } else {
-            console.error(`Parser error:`, parseErr);
-            parserStatus = 'JSON_PARSE_FAILED';
-            throw new Error('JSON_PARSE_FAILED');
+            parserStatus = 'REJECTED_INVALID_JSON';
+            countInvalidJson++;
+            throw new Error('REJECTED_INVALID_JSON: No JSON braces matched in text.');
           }
+        }
+
+        // Check if LLM explicitly filtered page as non-opportunity
+        if (parsedData.isOpportunity === false) {
+          parserStatus = 'REJECTED_LOW_INFORMATION';
+          countLowInfo++;
+          throw new Error(
+            'REJECTED_LOW_INFORMATION: Page explicitly classified as non-opportunity by LLM.',
+          );
         }
 
         // 3. Post-Process Normalization & Enrichment
         const normalized = normalizeOpportunity(parsedData);
+        const appliedNorms = normalized._normalizationChanges || [];
 
-        // Fail early if normalizer discarded title as placeholder/untitled
+        // Task 2: REJECTED_UNTITLED check
         if (!normalized.title || normalized.title.trim().length === 0) {
           parserStatus = 'REJECTED_UNTITLED';
-          throw new Error('REJECTED_UNTITLED: Opportunity title cannot be blank or placeholder.');
+          countPlaceholderTitle++;
+          throw new Error('REJECTED_UNTITLED: Opportunity title is blank or placeholder.');
+        }
+
+        // Task 2: REJECTED_LOW_INFORMATION check
+        const descriptionLength = normalized.description ? normalized.description.trim().length : 0;
+        const summaryLength = normalized.summary ? normalized.summary.trim().length : 0;
+        if (descriptionLength < 25 && summaryLength < 25) {
+          parserStatus = 'REJECTED_LOW_INFORMATION';
+          countLowInfo++;
+          throw new Error(
+            'REJECTED_LOW_INFORMATION: Extracted fields contain insufficient details.',
+          );
         }
 
         // Generate mock raw page ID for pure decoupling
@@ -300,8 +327,17 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
         // 4. Validate output schema consistency
         const validation = validateOpportunity(enriched);
         if (!validation.success) {
-          parserStatus = 'INVALID_SCHEMA';
-          throw new Error(`INVALID_SCHEMA: ${validation.error}`);
+          parserStatus = 'REJECTED_SCHEMA';
+          countSchemaError++;
+          // Extract specific validation keys that failed
+          const zodDetails = JSON.stringify(validation.error);
+          throw new Error(`REJECTED_SCHEMA: Zod constraints failed: ${zodDetails}`);
+        }
+
+        // If normalized mappings corrected keys, output warnings for auditing
+        if (appliedNorms.length > 0) {
+          console.log(`[Stage 3] [NORMALIZATION APPLIED] Normalized aliases for ${page.url}:`);
+          appliedNorms.forEach((change: string) => console.log(`  - ${change}`));
         }
 
         successfulExtractions++;
@@ -315,49 +351,127 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
         Detector:      ${detection.confidence}/100
         Provider:      ${rawExtracted.metadata.provider.toUpperCase()} (${rawExtracted.metadata.model})
         Latency:       ${(latencyMs / 1000).toFixed(1)}s
-        Parser Status: ${parserStatus}
         Title:         ${enriched.title}
-        Gold Reasons:  ${enriched.goldReasons?.join(', ')}
         Trust Score:   ${enriched.trustScore}/100
         ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       } catch (err: any) {
-        failedExtractions++;
+        if (parserStatus === 'PENDING') {
+          parserStatus = 'REJECTED_PARSER_EXCEPTION';
+          countParserException++;
+        }
 
-        let conciseReason = 'VALIDATION_FAILED';
-        if (err.message.includes('MODEL_EMPTY_RESPONSE')) conciseReason = 'MODEL_EMPTY_RESPONSE';
-        else if (err.message.includes('JSON_PARSE_FAILED')) conciseReason = 'JSON_PARSE_FAILED';
-        else if (err.message.includes('REJECTED_UNTITLED')) conciseReason = 'REJECTED_UNTITLED';
-        else if (err.message.includes('INVALID_SCHEMA')) conciseReason = 'INVALID_SCHEMA';
+        // ── Task 3: Detector / LLM Disagreement Logging ──
+        if (
+          err.message.includes('REJECTED_LOW_INFORMATION') ||
+          parserStatus === 'REJECTED_LOW_INFORMATION'
+        ) {
+          console.warn(`
+================================================================================
+DETECTOR / LLM DISAGREEMENT
+================================================================================
+URL:              ${page.url}
+Detector Score:   ${detection.confidence}/100
+Detector Reasons:
+${detection.reasons.map((r) => `  - ${r}`).join('\n')}
+Detector Penalties:
+${detection.penalties.map((p) => `  - ${p}`).join('\n')}
+
+LLM Decision:    isOpportunity = false
+Category:        Potential False Negative
+================================================================================`);
+        }
 
         const providerLabel = rawExtracted?.metadata?.provider?.toUpperCase() ?? 'N/A';
         const modelLabel = rawExtracted?.metadata?.model ?? 'N/A';
+        const inputChars = cleanMarkdown.length;
+        const inputTokens = Math.round(inputChars / 4);
 
+        // ── Task 1: Complete Raw Response and Input Observability Logging ──
         console.error(`
-        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        [Extraction Failure]
-        URL:           ${page.url}
-        Detector:      ${detection.confidence}/100
-        Provider:      ${providerLabel} (${modelLabel})
-        Latency:       ${(latencyMs / 1000).toFixed(1)}s
-        Parser Status: ${parserStatus}
-        Concise Error: ${conciseReason}
-        Details:       ${err.message}
-        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+================================================================================
+RAW EXTRACTION FAILURE DIAGNOSTIC
+================================================================================
+URL:              ${page.url}
+Provider:         ${providerLabel}
+Model:            ${modelLabel}
+Detector Score:   ${detection.confidence}/100
+Prompt Version:   ${EXTRACTION_VERSION}
+Characters Sent:  ${inputChars} chars
+Token Estimate:   ${inputTokens} tokens
+Error Category:   ${parserStatus}
+Details:          ${err.message}
+
+--- FIRST 2500 CHARACTERS OF EXTRACED PAGE CONTENT ---
+${cleanMarkdown.slice(0, 2500)}
+------------------------------------------------------
+
+--- ENTIRE RAW MODEL RESPONSE ---
+${rawExtracted?.text || 'No response returned from provider.'}
+================================================================================`);
+
+        // ── Task 5: Persist failures to disk for future auditing ──
+        try {
+          const logDir = path.join(
+            process.cwd(),
+            'logs',
+            'extraction-failures',
+            new Date().toISOString().split('T')[0],
+          );
+          fs.mkdirSync(logDir, { recursive: true });
+          const fileSafeUrl = page.url.replace(/[^a-z0-9]/gi, '_').substring(0, 100);
+          const logPath = path.join(logDir, `${fileSafeUrl}_${Date.now()}_failure.json`);
+
+          fs.writeFileSync(
+            logPath,
+            JSON.stringify(
+              {
+                url: page.url,
+                provider: providerLabel,
+                model: modelLabel,
+                detectorScore: detection.confidence,
+                promptVersion: EXTRACTION_VERSION,
+                charactersSent: inputChars,
+                errorCategory: parserStatus,
+                errorMessage: err.message,
+                pageContent: cleanMarkdown,
+                rawResponse: rawExtracted?.text || '',
+                timestamp: new Date().toISOString(),
+              },
+              null,
+              2,
+            ),
+          );
+        } catch (logWriteErr: any) {
+          console.warn(`[Stage 3] Failed to write failure dump: ${logWriteErr.message}`);
+        }
       }
     }
+
+    const failedCount = crawledPages.length - pagesSkippedDetector - successfulExtractions;
 
     DashboardStateInstance.updateState({
       detectorSkipped: pagesSkippedDetector,
       aiProcessed: pagesPassedDetector,
     });
 
+    // ── Task 4: Detailed Summary Log Breakdown ──
     console.log(`
-    ========== Stage 3 Extraction Summary ==========
-    Pages Received:          ${crawledPages.length}
-    Passed Detector Filter:  ${pagesPassedDetector}
-    Skipped by Detector:     ${pagesSkippedDetector}
-    Successful Extractions:  ${successfulExtractions}
-    Failed Extractions:      ${failedExtractions}
+    ================================================
+    Stage 3 Extraction Final Summary
+    ================================================
+    Pages Processed:         ${crawledPages.length}
+    Detector Passed:         ${pagesPassedDetector}
+    Detector Rejected:       ${pagesSkippedDetector}
+    Extraction Success:      ${successfulExtractions}
+    Parser Failures:         ${failedCount}
+    
+    -- Parser Failure Breakdown --
+    Untitled / Placeholder:  ${countPlaceholderTitle}
+    Invalid JSON:            ${countInvalidJson}
+    Schema Validation:       ${countSchemaError}
+    Low Information Content: ${countLowInfo}
+    Empty response text:     ${countEmptyResponse}
+    Other parser exceptions: ${countParserException}
     ================================================`);
 
     return extractions;

@@ -250,6 +250,53 @@ export function normalizeOpportunity(opp: any): any {
     opp = {};
   }
 
+  // ── Task 1: Provider Alias Mapping Layer ──
+  const normalizationChangesApplied: string[] = [];
+  const aliasMap: Record<string, string> = {
+    // Title mappings
+    opportunityName: 'title',
+    oppName: 'title',
+    name: 'title',
+    headline: 'title',
+    // Deadline mappings
+    applicationDeadline: 'deadline',
+    applyBy: 'deadline',
+    lastDate: 'deadline',
+    // Salary/Stipend mappings
+    stipend: 'salary',
+    compensation: 'salary',
+    payment: 'salary',
+    // Selection process / application details
+    applicationProcess: 'selectionProcess',
+    howToApply: 'selectionProcess',
+    applicationSteps: 'selectionProcess',
+    // Confidence score mappings
+    confidenceEstimator: 'confidence',
+    confidenceScore: 'confidence',
+    score: 'confidence',
+    // Link mappings
+    officialWeb: 'officialWebsite',
+    webpage: 'officialWebsite',
+    link: 'officialWebsite',
+    applicationUrl: 'applicationUrl',
+  };
+
+  // Convert aliases to canonical keys if not explicitly defined on the canonical key
+  for (const aliasKey in aliasMap) {
+    const canonicalKey = aliasMap[aliasKey];
+    if (aliasKey in opp && opp[aliasKey] !== undefined && opp[aliasKey] !== null) {
+      if (opp[canonicalKey] === undefined || opp[canonicalKey] === null) {
+        opp[canonicalKey] = opp[aliasKey];
+        normalizationChangesApplied.push(
+          `Mapped alias property [${aliasKey}] to canonical key [${canonicalKey}]`,
+        );
+      }
+    }
+  }
+
+  // Store changes directly as a transient array for diagnostics checks
+  opp._normalizationChanges = normalizationChangesApplied;
+
   // Eliminate "Untitled Opportunity" or placeholder titles by returning empty string (fails Zod schema validation)
   const rawTitle = normalizeString(opp.title) || '';
   const isPlaceholderTitle =
