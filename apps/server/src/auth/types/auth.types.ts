@@ -19,6 +19,7 @@ export interface ScoutUser {
   emailVerified: boolean;
   isActive: boolean;
   role: string;
+  status?: 'ACTIVE' | 'SUSPENDED' | 'DELETED' | 'PENDING';
   createdAt?: Date;
   updatedAt?: Date;
   lastLoginAt?: Date;

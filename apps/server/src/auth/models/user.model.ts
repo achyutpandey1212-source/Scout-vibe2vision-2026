@@ -41,6 +41,12 @@ const UserSchema = new Schema<IUser>(
       type: String,
       default: 'USER',
     },
+    status: {
+      type: String,
+      enum: ['ACTIVE', 'SUSPENDED', 'DELETED', 'PENDING'],
+      default: 'ACTIVE',
+      index: true,
+    },
     lastLoginAt: {
       type: Date,
       default: Date.now,

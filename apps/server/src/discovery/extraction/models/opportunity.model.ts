@@ -32,7 +32,7 @@ const OpportunitySchema = new Schema<IOpportunity>(
     duration: { type: String, default: null },
     eligibility: { type: String, default: null },
     minimumQualification: { type: String, default: null },
-    skills: [{ type: String }],
+    skills: { type: [String], index: true },
     experienceLevel: { type: String, default: null },
     ageLimit: { type: Number, default: null },
     genderEligibility: { type: String, default: null },
@@ -153,11 +153,107 @@ const OpportunitySchema = new Schema<IOpportunity>(
       },
       default: null,
     },
+
+    // ── V2 Core Fields ──────────────────────────────────────────────────────────
+    canonicalId: { type: String, default: null },
+    slug: { type: String, default: null },
+    type: { type: String, index: true, default: null },
+    subCategory: { type: String, default: null },
+    eligibleBranches: { type: [String], index: true, default: [] },
+    eligibleYears: { type: [String], default: [] },
+    minimumEducation: { type: String, default: null },
+    requirements: { type: [String], default: [] },
+    hybrid: { type: Boolean, default: false },
+    onsite: { type: Boolean, default: false },
+    publishedAt: { type: Date, default: null },
+    sourceUrl: { type: String, index: true, sparse: true },
+    officialPage: { type: String, default: null },
+    crawlDate: { type: Date, default: null },
+    crawlMethod: { type: String, default: null },
+    contentHash: { type: String, default: null },
+    lastSeen: { type: Date, default: null },
+    lastUpdated: { type: Date, default: null },
+    keywords: { type: [String], default: [] },
+    hiddenGemScore: { type: Number, index: true, default: null },
+    sourceAuthority: { type: Number, default: null },
+    recommendationTags: { type: [String], default: [] },
+    careerStages: { type: [String], default: [] },
+    domains: { type: [String], default: [] },
+    difficulty: { type: String, default: null },
+    womenFocused: { type: Boolean, default: false },
+    status: {
+      type: String,
+      enum: ['ACTIVE', 'EXPIRED', 'ARCHIVED'],
+      default: 'ACTIVE',
+      index: true,
+    },
+    visibility: {
+      type: String,
+      enum: ['PUBLIC', 'PRIVATE', 'HIDDEN'],
+      default: 'PUBLIC',
+      index: true,
+    },
+
+    // ── V2 Deferred Fields (TODO) ────────────────────────────────────────────────
+    // TODO: Add when Discovery V2 starts producing these
+    // competitionEstimate: { type: String },
+    // categoryPrediction: { type: String },
+    // eligibilitySummary: { type: String },
+    // trustSignals: { type: [String] },
+    // qualitySignals: { type: [String] },
+    // warnings: { type: [String] },
   },
   {
     timestamps: true,
   },
 );
+
+// Pre-save hook for backward compatibility syncing
+OpportunitySchema.pre('save', function (this: any, next: any) {
+  // Sync type <-> opportunityType
+  if (this.opportunityType && !this.type) {
+    this.type = this.opportunityType;
+  } else if (this.type && !this.opportunityType) {
+    this.opportunityType = this.type as any;
+  }
+
+  // Sync sourceUrl <-> sourceURL
+  if (this.sourceURL && !this.sourceUrl) {
+    this.sourceUrl = this.sourceURL;
+  } else if (this.sourceUrl && !this.sourceURL) {
+    this.sourceURL = this.sourceUrl;
+  }
+
+  // Sync discoveredAt <-> publishedAt
+  if (this.discoveredAt && !this.publishedAt) {
+    this.publishedAt = this.discoveredAt;
+  } else if (this.publishedAt && !this.discoveredAt) {
+    this.discoveredAt = this.publishedAt;
+  }
+
+  // Sync officialWebsite <-> officialPage
+  if (this.officialWebsite && !this.officialPage) {
+    this.officialPage = this.officialWebsite;
+  } else if (this.officialPage && !this.officialWebsite) {
+    this.officialWebsite = this.officialPage;
+  }
+
+  // Sync applicationDifficulty <-> difficulty
+  if (this.applicationDifficulty && !this.difficulty) {
+    this.difficulty = this.applicationDifficulty;
+  } else if (this.difficulty && !this.applicationDifficulty) {
+    this.applicationDifficulty = this.difficulty as any;
+  }
+
+  // Sync hash <-> contentHash
+  if (this.hash && !this.contentHash) {
+    this.contentHash = this.hash;
+  } else if (this.contentHash && !this.hash) {
+    this.hash = this.contentHash;
+  }
+
+  next();
+});
 
 export const OpportunityModel =
   mongoose.models.Opportunity || mongoose.model<IOpportunity>('Opportunity', OpportunitySchema);

@@ -233,6 +233,45 @@ export interface Opportunity {
   intelligence?: OpportunityIntelligence | null;
   createdAt?: string;
   updatedAt?: string;
+
+  // ── V2 Core Fields ──────────────────────────────────────────────────────────
+  canonicalId?: string;
+  slug?: string;
+  type?: string;
+  subCategory?: string;
+  eligibleBranches?: string[];
+  eligibleYears?: string[];
+  minimumEducation?: string;
+  requirements?: string[];
+  hybrid?: boolean;
+  onsite?: boolean;
+  publishedAt?: string;
+  sourceUrl?: string;
+  officialPage?: string;
+  crawlDate?: string;
+  crawlMethod?: string;
+  contentHash?: string;
+  lastSeen?: string;
+  lastUpdated?: string;
+  keywords?: string[];
+  hiddenGemScore?: number;
+  sourceAuthority?: number;
+  recommendationTags?: string[];
+  careerStages?: string[];
+  domains?: string[];
+  difficulty?: string;
+  womenFocused?: boolean;
+  status?: 'ACTIVE' | 'EXPIRED' | 'ARCHIVED';
+  visibility?: 'PUBLIC' | 'PRIVATE' | 'HIDDEN';
+
+  // ── V2 Deferred Fields (TODO) ────────────────────────────────────────────────
+  // TODO: Add when Discovery V2 starts producing these
+  competitionEstimate?: string;
+  categoryPrediction?: string;
+  eligibilitySummary?: string;
+  trustSignals?: string[];
+  qualitySignals?: string[];
+  warnings?: string[];
 }
 
 export interface OpportunityIntelligence {
