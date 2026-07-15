@@ -3,7 +3,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface IProfile extends Document {
   userId: mongoose.Types.ObjectId;
   fullName: string;
-  gender: string;
+  gender: 'MALE' | 'FEMALE' | 'UNKNOWN';
   age?: number;
   state: string;
   city: string;
@@ -92,7 +92,12 @@ const ProfileSchema = new Schema<IProfile>(
       index: true,
     },
     fullName: { type: String, default: '' },
-    gender: { type: String, default: 'Female' },
+    gender: {
+      type: String,
+      enum: ['MALE', 'FEMALE', 'UNKNOWN'],
+      default: 'UNKNOWN',
+      index: true,
+    },
     age: { type: Number },
     state: { type: String, default: '' },
     city: { type: String, default: '' },

@@ -26,7 +26,7 @@ export async function migrateUserIntelligenceToProfile(): Promise<{
       const profileData = {
         userId,
         fullName: ui.identity?.preferredName || '',
-        gender: 'Female', // Default to female based on Scout target audience
+        gender: 'UNKNOWN',
         college: ui.educationDetail?.college || '',
         university: '',
         degree: ui.educationDetail?.qualification || '',
@@ -61,7 +61,7 @@ export async function migrateUserIntelligenceToProfile(): Promise<{
       await ProfileModel.findOneAndUpdate(
         { userId },
         { $set: profileData },
-        { upsert: true, new: true },
+        { upsert: true, returnDocument: 'after' },
       );
       migrated++;
     } catch (err) {
