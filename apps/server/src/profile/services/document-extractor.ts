@@ -1,4 +1,4 @@
-import pdfParse from 'pdf-parse';
+import { PDFParse } from 'pdf-parse';
 
 export interface ExtractorFile {
   originalName: string;
@@ -16,13 +16,16 @@ export interface ExtractionResult {
 export class DocumentExtractor {
   static async extract(file: ExtractorFile): Promise<ExtractionResult> {
     try {
-      const parsed = await pdfParse(file.buffer);
-      const rawText = typeof parsed.text === 'string' ? parsed.text : '';
+      const parser = new PDFParse({ data: file.buffer });
+      const textResult = await parser.getText();
+      const rawText = textResult.text || '';
+
+      const numPages = textResult.pages?.length || 0;
 
       return {
         rawText: rawText || '',
         metadata: {
-          numPages: parsed.numpages || 0,
+          numPages,
           originalName: file.originalName,
           mimeType: file.mimeType,
           size: file.size,

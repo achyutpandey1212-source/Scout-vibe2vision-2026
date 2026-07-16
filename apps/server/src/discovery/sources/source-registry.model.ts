@@ -45,6 +45,7 @@ const SourceRegistrySchema = new Schema<ISourceRegistryDocument>(
     category: {
       type: String,
       enum: [
+        'INTERNSHIPS',
         'TECH_CAREERS',
         'WOMEN_IN_TECH',
         'SCHOLARSHIPS',
@@ -55,6 +56,13 @@ const SourceRegistrySchema = new Schema<ISourceRegistryDocument>(
         'RESEARCH',
         'SKILL_DEVELOPMENT',
         'GENERAL',
+        'GOVERNMENT_INTERNSHIP',
+        'RESEARCH_INTERNSHIP',
+        'CAMPUS_AMBASSADOR',
+        'STUDENT_COMPETITION',
+        'SUMMER_SCHOOL',
+        'BOOTCAMP',
+        'OPEN_SOURCE_PROGRAM',
       ] satisfies SourceCategory[],
       required: true,
     },

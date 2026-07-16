@@ -23,6 +23,8 @@ import {
   ExternalLink,
 } from 'lucide-react';
 
+import { CATEGORY_REGISTRY } from '@scout/shared';
+
 export default function AdminDiscoveryControlCenter() {
   const [activeTab, setActiveTab] = useState<'health' | 'source' | 'daily' | 'metrics'>('daily');
   const [status, setStatus] = useState<any>(null);
@@ -39,8 +41,9 @@ export default function AdminDiscoveryControlCenter() {
   const [runMode, setRunMode] = useState<'due' | 'all' | 'high-priority' | 'category' | 'custom'>(
     'due',
   );
-  const [runCategory, setRunCategory] = useState<string>('TECH_CAREERS');
+  const [runCategory, setRunCategory] = useState<string>('INTERNSHIPS');
   const [customDomainsInput, setCustomDomainsInput] = useState<string>('');
+  const [showInactiveCategories, setShowInactiveCategories] = useState<boolean>(false);
 
   // Weekly setup overrides
   const [totalBatches, setTotalBatches] = useState<number>(6);
@@ -520,16 +523,13 @@ export default function AdminDiscoveryControlCenter() {
                         disabled={status?.isRunning}
                         className="w-full bg-neutral-900 border border-neutral-800 rounded px-2.5 py-1.5 text-xs text-neutral-200 outline-none"
                       >
-                        <option value="TECH_CAREERS">Tech Careers</option>
-                        <option value="WOMEN_IN_TECH">Women in Tech</option>
-                        <option value="SCHOLARSHIPS">Scholarships</option>
-                        <option value="FELLOWSHIPS">Fellowships</option>
-                        <option value="GOVERNMENT">Government Schemes</option>
-                        <option value="HACKATHONS">Hackathons</option>
-                        <option value="ENTREPRENEURSHIP">Entrepreneurship</option>
-                        <option value="RESEARCH">Research</option>
-                        <option value="SKILL_DEVELOPMENT">Skill Development</option>
-                        <option value="GENERAL">General</option>
+                        {CATEGORY_REGISTRY.filter((c) => c.isActive || showInactiveCategories).map(
+                          (c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name} {!c.isActive ? ' (Inactive)' : ''}
+                            </option>
+                          ),
+                        )}
                       </select>
                     </div>
                   )}
@@ -1027,7 +1027,16 @@ export default function AdminDiscoveryControlCenter() {
                     className="pl-8 pr-2.5 py-1 bg-neutral-950 border border-neutral-850 rounded text-xs text-neutral-200 outline-none w-44 font-mono"
                   />
                 </div>
-                {/* Category selector */}
+                {/* Category selector toggle & filter */}
+                <label className="flex items-center space-x-1.5 text-xs text-neutral-500 select-none mr-2 font-mono cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showInactiveCategories}
+                    onChange={(e) => setShowInactiveCategories(e.target.checked)}
+                    className="rounded bg-neutral-950 border-neutral-800 text-purple-600 focus:ring-purple-600/40"
+                  />
+                  <span>Show inactive categories</span>
+                </label>
                 <select
                   value={categoryFilter}
                   onChange={(e) => {
@@ -1037,16 +1046,13 @@ export default function AdminDiscoveryControlCenter() {
                   className="bg-neutral-950 border border-neutral-850 rounded px-2.5 py-1 text-xs text-neutral-300 outline-none font-mono"
                 >
                   <option value="">All Categories</option>
-                  <option value="TECH_CAREERS">Tech Careers</option>
-                  <option value="WOMEN_IN_TECH">Women in Tech</option>
-                  <option value="SCHOLARSHIPS">Scholarships</option>
-                  <option value="FELLOWSHIPS">Fellowships</option>
-                  <option value="GOVERNMENT">Government Schemes</option>
-                  <option value="HACKATHONS">Hackathons</option>
-                  <option value="ENTREPRENEURSHIP">Entrepreneurship</option>
-                  <option value="RESEARCH">Research</option>
-                  <option value="SKILL_DEVELOPMENT">Skill Development</option>
-                  <option value="GENERAL">General</option>
+                  {CATEGORY_REGISTRY.filter((c) => c.isActive || showInactiveCategories).map(
+                    (c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {!c.isActive ? ' (Inactive)' : ''}
+                      </option>
+                    ),
+                  )}
                 </select>
               </div>
             </div>

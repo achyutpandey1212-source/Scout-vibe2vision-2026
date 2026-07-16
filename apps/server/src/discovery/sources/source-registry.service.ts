@@ -347,6 +347,13 @@ class SourceRegistryService {
 function inferCategoryFromTags(tags: string[]): SourceCategory {
   const tagStr = tags.join(' ').toLowerCase();
   if (tagStr.includes('women-in-tech') || tagStr.includes('women-focused')) return 'WOMEN_IN_TECH';
+  if (tagStr.includes('government') && tagStr.includes('internship'))
+    return 'GOVERNMENT_INTERNSHIP';
+  if (tagStr.includes('research') && tagStr.includes('internship')) return 'RESEARCH_INTERNSHIP';
+  if (tagStr.includes('open-source') || tagStr.includes('open source'))
+    return 'OPEN_SOURCE_PROGRAM';
+  if (tagStr.includes('ambassador')) return 'CAMPUS_AMBASSADOR';
+  if (tagStr.includes('bootcamp')) return 'BOOTCAMP';
   if (tagStr.includes('hackathon') || tagStr.includes('competition')) return 'HACKATHONS';
   if (tagStr.includes('scholarship')) return 'SCHOLARSHIPS';
   if (tagStr.includes('fellowship')) return 'FELLOWSHIPS';

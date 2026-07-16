@@ -19,17 +19,8 @@ export type SourceType =
   | 'Research Lab'
   | 'Other';
 
-export type SourceCategory =
-  | 'TECH_CAREERS'
-  | 'WOMEN_IN_TECH'
-  | 'SCHOLARSHIPS'
-  | 'FELLOWSHIPS'
-  | 'GOVERNMENT'
-  | 'HACKATHONS'
-  | 'ENTREPRENEURSHIP'
-  | 'RESEARCH'
-  | 'SKILL_DEVELOPMENT'
-  | 'GENERAL';
+import { SourceCategory } from '@scout/shared';
+export type { SourceCategory };
 
 // ─── Core Interface ───────────────────────────────────────────────────────────
 

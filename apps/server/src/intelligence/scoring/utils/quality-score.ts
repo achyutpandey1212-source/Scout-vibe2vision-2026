@@ -4,7 +4,7 @@ import { ScoreResult } from '../types/scoring.types';
 
 /**
  * Computes a quality score between 0 and 100.
- * Rewards data completeness, deadline availability, and detailed opportunity descriptions.
+ * Rewards data completeness, student eligibility, freshness, and official student opportunity types.
  */
 export function calculateQualityScore(opp: Opportunity): ScoreResult {
   const factors: Record<string, number> = {};
@@ -53,6 +53,90 @@ export function calculateQualityScore(opp: Opportunity): ScoreResult {
   if (opp.description && opp.description.trim().length > 300) {
     factors['descriptionLengthBonus'] = SCORING_CONFIG.qualityWeights.descriptionLengthBonus;
     score += SCORING_CONFIG.qualityWeights.descriptionLengthBonus;
+  }
+
+  // === V2 QUALITY SCORES (STUDENT-FIRST ALIGNMENT) ===
+  const audience = opp.audiencePersonas || [];
+  const hasStudentAudience = audience.some((p) =>
+    ['college-student', 'fresher', 'graduate'].includes(p),
+  );
+  if (hasStudentAudience) {
+    factors['studentEligibilityBonus'] = 15;
+    score += 15;
+  }
+
+  const isOfficial =
+    opp.sourceType === 'GOVERNMENT' ||
+    opp.sourceType === 'UNIVERSITY' ||
+    opp.organizationType === 'GOVERNMENT' ||
+    opp.organizationType === 'UNIVERSITY';
+  if (isOfficial) {
+    factors['officialOrganizationBonus'] = 15;
+    score += 15;
+  }
+
+  // Freshness (e.g. if deadline is active and has days remaining or is recently discovered)
+  const isFresh = opp.intelligence?.daysRemaining && opp.intelligence.daysRemaining > 0;
+  if (isFresh) {
+    factors['freshnessBonus'] = 10;
+    score += 10;
+  }
+
+  // Specific student opportunity type
+  const isStudentType =
+    ['INTERNSHIP', 'SCHOLARSHIP', 'COMPETITION'].includes(opp.opportunityType || '') ||
+    [
+      'Government Internship',
+      'Research Internship',
+      'Student Competition',
+      'Summer School',
+      'Bootcamp',
+      'Open Source Program',
+    ].includes(opp.category || '');
+  if (isStudentType) {
+    factors['studentOpportunityTypeBonus'] = 15;
+    score += 15;
+  }
+
+  // Government internship specific bonus
+  const isGovInternship =
+    (opp.sourceType === 'GOVERNMENT' || opp.organizationType === 'GOVERNMENT') &&
+    (opp.opportunityType === 'INTERNSHIP' || opp.category?.includes('Internship'));
+  if (isGovInternship) {
+    factors['governmentInternshipBonus'] = 15;
+    score += 15;
+  }
+
+  // === PENALTIES ===
+  // Mid-level jobs or senior hiring
+  const isMidSenior =
+    opp.experienceRequired === 'EXPERIENCED' ||
+    (opp.experienceLevel && /mid|senior|experienced|lead/i.test(opp.experienceLevel)) ||
+    /mid|senior|experienced|lead/i.test(opp.title || '');
+  if (isMidSenior) {
+    factors['midSeniorPenalty'] = -25;
+    score -= 25;
+  }
+
+  // Generic recruitment or walk-in interviews
+  const titleAndDesc = ((opp.title || '') + ' ' + (opp.description || '')).toLowerCase();
+  const isGenericWalkin =
+    titleAndDesc.includes('walk-in') ||
+    titleAndDesc.includes('walkin') ||
+    titleAndDesc.includes('recruitment drive') ||
+    titleAndDesc.includes('mass hiring');
+  if (isGenericWalkin) {
+    factors['genericRecruitmentPenalty'] = -15;
+    score -= 15;
+  }
+
+  // Non-engineering opportunities
+  const hasNonEngineeringKeywords = /tailoring|sewing|beautician|makeup|nursing/i.test(
+    titleAndDesc,
+  );
+  if (hasNonEngineeringKeywords) {
+    factors['nonEngineeringPenalty'] = -25;
+    score -= 25;
   }
 
   // Ensure score is bounded between 0 and 100

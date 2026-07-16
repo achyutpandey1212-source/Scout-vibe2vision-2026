@@ -1,49 +1,127 @@
 import { DiscoveryContext, QueryPlannerResponse } from '../types/query.types';
+import { CATEGORY_REGISTRY, SourceCategory } from '@scout/shared';
 
-// Deterministic query banks mapped to target categories and country-level tags.
-// Formulated strictly for SEO space-separated keyword searches.
+// Deterministic query banks mapped to target categories.
+// Formulated strictly for SEO space-separated keyword searches for early-career students.
 const DETERMINISTIC_QUERIES: Record<string, string[]> = {
-  Careers: [
-    'women internship recruitment 2026',
-    'female fresher entry level jobs 2026',
-    'women career returnship program return break',
-    'remote customer service support jobs women work from home',
-    'apprenticeship program women industry 2026',
-    'part time work from home women assistant typing',
-    'campus recruitment hiring drive women engineers graduates',
+  INTERNSHIPS: [
+    'software engineering internship',
+    'frontend internship',
+    'backend internship',
+    'full stack internship',
+    'ai internship',
+    'ml internship',
+    'data science internship',
+    'cybersecurity internship',
+    'cloud internship',
+    'devops internship',
+    'embedded systems internship',
+    'electronics internship',
+    'iot internship',
+    'mobile development internship',
+    'startup internship',
+    'remote internship',
+    'bangalore startup internship',
+    'gurgaon startup internship',
+    'hyderabad startup internship',
+    'pune startup internship',
+    'chennai startup internship',
+    'noida startup internship',
+    'student internship program',
+    'graduate internship',
+    'engineering internship',
+    'sde internship',
+    'summer internship',
+    'winter internship',
+    'off-cycle internship',
+    'research internship',
+    'bangalore startups hiring interns',
+    'gurgaon startups hiring interns',
+    'hyderabad startups hiring interns',
+    'pune startups hiring interns',
+    'chennai startups hiring interns',
+    'noida startups hiring interns',
   ],
-  Scholarships: [
-    'women engineering scholarship 2026',
-    'female mba scholarships management degree',
-    'women commerce arts college scholarship',
-    'nursing medical college scholarship female student',
-    'postgraduate phd research fellowship women',
-    'bca bsc computer applications scholarship girls',
+  HACKATHONS: [
+    'student hackathon coding competition development',
+    'devfolio student hackathon registration',
+    'mlh major league hacking student events hackathons',
+    'unstop student competition quiz challenge',
+    'hackerearth hackerrank coding challenges students',
   ],
-  Government: [
-    'government scheme women training skill development 2026',
-    'pmkvy skill india training centers women registry',
-    'national rural livelihood mission nrlm women self help group',
-    'anganwadi helper worker recruitment vacancy 2026',
-    'government teacher recruitment primary secondary female reservation',
+  SCHOLARSHIPS: [
+    'engineering college scholarship female student',
+    'bca bsc computer applications girls scholarship',
+    'university computer science student fellowship grant',
+    'merit based scholarship engineering students',
+    'national scholarship portal nsp engineering application',
   ],
-  SkillDevelopment: [
-    'free tailoring sewing training program women government NGO',
-    'beautician makeup artist training course free registration women',
-    'digital marketing computer literacy training women course NGO',
-    'english speaking communication skill development course women training',
-    'retail hospitality machine operator training women program PMKVY',
+  GOVERNMENT_INTERNSHIP: [
+    'isro student internship application',
+    'drdo internship program application',
+    'barc research student internship training',
+    'aicte national internship portal student',
+    'nic government internship computer science students',
+    'cdac project associate internship training program',
+    'meity student internship digital india learning',
+    'rbi summer internship student application',
+    'sebi student internship technology',
+    'bel bhel ntpc gail ongc psu student internship',
+    'smart india hackathon sih student registration',
+    'toycathon student registration innovation challenge',
+    'government innovation challenge student',
+    'ministry student research program government',
   ],
-  Entrepreneurship: [
-    'mudra loan women entrepreneur application startup scheme',
-    'stand up india scheme loan women SC ST entrepreneur registry',
-    'women startup incubator grant funding msme india',
-    'mahila e haat product listing women self help group registry',
+  RESEARCH_INTERNSHIP: [
+    'iisc research internship student summer program',
+    'cern summer student programme physics computer science',
+    'csir national lab student internship training',
+    'dst research project internship fellowship engineering',
+    'daad working internships science engineering research',
+    'academic research ecosystem lab student internship',
   ],
-  Competitions: [
-    'women hackathon coding innovation challenge 2026',
-    'female entrepreneur pitch competition startup grant awards',
-    'women fellowship leadership program community impact awards',
+  CAMPUS_AMBASSADOR: [
+    'student campus representative program advocate',
+    'github campus expert ambassador student program',
+    'campus ambassador student internship recruit',
+  ],
+  OPEN_SOURCE_PROGRAM: [
+    'gsoc google summer of code student project',
+    'outreachy internship open source software',
+    'lfx mentorship linux foundation program',
+    'season of kde open source student program',
+  ],
+  WOMEN_IN_TECH: [
+    'women techmakers scholar program',
+    'outreachy internship open source women',
+    'adobe women in technology scholarship',
+    'grace hopper celebration student scholarship',
+    'microsoft women engineers program mentorship',
+    'women hackathon coding challenge',
+    'girls in ai ml bootcamp mentorship',
+    'anitab org student leadership program',
+    'women engineers mentoring program',
+  ],
+  STUDENT_COMPETITION: [
+    'student technology innovation challenge competition',
+    'national college tech competition team registration',
+    'global student coding challenge hack',
+  ],
+  SUMMER_SCHOOL: [
+    'academic research summer school student',
+    'scientific summer school program application',
+    'cern summer student programme computer science',
+  ],
+  BOOTCAMP: [
+    'free coding bootcamp web development student',
+    'ai developer workshop machine learning certification',
+    'student development bootcamp training program',
+  ],
+  FELLOWSHIPS: [
+    'student fellowship technology leadership program',
+    'early career researcher fellowship engineering',
+    'open source fellowship program github mozilla',
+    'social impact tech fellowship program',
   ],
 };
 
@@ -57,37 +135,35 @@ export async function generateSearchQueries(
   const targetCountry = context.country || 'India';
   const queries: string[] = [];
 
-  // Categorized template iterations to construct queries matching exact target percentages.
-  // 1. Careers (7 queries)
-  const careerTemplates = DETERMINISTIC_QUERIES.Careers.slice(0, 7);
-  careerTemplates.forEach((q) => queries.push(`${q} ${targetCountry}`.toLowerCase()));
+  // Determine active categories and sort them by priority descending
+  const sortedActiveCategories = CATEGORY_REGISTRY.filter((c) => c.isActive)
+    .sort((a, b) => b.priority - a.priority)
+    .map((c) => c.id as string);
 
-  // 2. Scholarships (5 queries)
-  const scholarshipTemplates = DETERMINISTIC_QUERIES.Scholarships.slice(0, 6);
-  scholarshipTemplates.forEach((q) => queries.push(`${q} ${targetCountry}`.toLowerCase()));
+  // If specific categories are requested, filter them to active ones, else use sortedActiveCategories
+  const targetCategories =
+    context.categories && context.categories.length > 0
+      ? context.categories.filter((cat) => sortedActiveCategories.includes(cat))
+      : sortedActiveCategories;
 
-  // 3. Government Schemes (4 queries)
-  const govtTemplates = DETERMINISTIC_QUERIES.Government.slice(0, 5);
-  govtTemplates.forEach((q) => queries.push(`${q} ${targetCountry}`.toLowerCase()));
-
-  // 4. Skill Development (4 queries)
-  const skillTemplates = DETERMINISTIC_QUERIES.SkillDevelopment.slice(0, 5);
-  skillTemplates.forEach((q) => queries.push(`${q} ${targetCountry}`.toLowerCase()));
-
-  // 5. Entrepreneurship (3 queries)
-  const entrepreneurTemplates = DETERMINISTIC_QUERIES.Entrepreneurship.slice(0, 4);
-  entrepreneurTemplates.forEach((q) => queries.push(`${q} ${targetCountry}`.toLowerCase()));
-
-  // 6. Competitions (2 queries)
-  const compTemplates = DETERMINISTIC_QUERIES.Competitions.slice(0, 3);
-  compTemplates.forEach((q) => queries.push(`${q} ${targetCountry}`.toLowerCase()));
+  for (const cat of targetCategories) {
+    const templates = DETERMINISTIC_QUERIES[cat] || [];
+    templates.forEach((q) => {
+      const lowerQ = q.toLowerCase();
+      if (!lowerQ.includes(targetCountry.toLowerCase())) {
+        queries.push(`${q} ${targetCountry}`.toLowerCase());
+      } else {
+        queries.push(lowerQ);
+      }
+    });
+  }
 
   // Deduplicate and slice to context limits or default budget limit
   const limit = context.maxQueries || 25;
   const deduplicated = Array.from(new Set(queries)).slice(0, limit);
 
   console.log(
-    `[Query Planner] Generated ${deduplicated.length} deterministic query terms for ${targetCountry}.`,
+    `[Query Planner] Generated ${deduplicated.length} deterministic query terms for ${targetCountry} across categories: ${targetCategories.join(', ')}.`,
   );
   return {
     queries: deduplicated,

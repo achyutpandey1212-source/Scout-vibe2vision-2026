@@ -217,6 +217,7 @@ export default function OnboardingPage() {
     setSaving(true);
     try {
       localStorage.removeItem('scout_onboarding_v2_step');
+      await profileApi.completeOnboarding();
       await syncWithBackend();
       router.replace('/dashboard');
     } catch (err) {
