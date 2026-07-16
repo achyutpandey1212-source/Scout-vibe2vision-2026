@@ -32,7 +32,8 @@ app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
 // Parse JSON request bodies
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Main status endpoint (Phase 1)
 app.get('/', (req, res) => {

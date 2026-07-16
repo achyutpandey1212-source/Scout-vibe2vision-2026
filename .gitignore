@@ -119,3 +119,8 @@ dist
 *.njsproj
 *.sln
 *.sw?
+
+# Local Resume Benchmark Dataset
+test-data/resumes/**/*
+!test-data/resumes/**/.gitkeep
+

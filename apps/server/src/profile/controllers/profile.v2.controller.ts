@@ -3,6 +3,11 @@ import { AuthenticatedRequest } from '../../auth/types/auth.types';
 import { ProfileModel } from '../models/profile.model';
 import { ResumeModel } from '../models/resume.model';
 import { calculateCareerReadiness } from '../utils/readiness-calculator';
+import { DocumentExtractor } from '../services/document-extractor';
+import { ResumeSectionParser } from '../services/resume-section-parser';
+import { SkillNormalizer } from '../services/skill-normalizer';
+import { ProfileMergeEngine } from '../services/profile-merge-engine';
+import { SKILLS_VERSION } from '@scout/shared';
 import { z } from 'zod';
 
 const ProfileV2UpdateSchema = z.object({
@@ -78,7 +83,6 @@ export class ProfileV2Controller {
       let profile = await ProfileModel.findOne({ userId });
 
       if (!profile) {
-        // Initialize an empty V2 profile
         profile = await ProfileModel.create({
           userId,
           fullName: '',
@@ -152,8 +156,6 @@ export class ProfileV2Controller {
 
     try {
       const userId = req.dbUser._id;
-
-      // Validation check
       const parsed = ProfileV2UpdateSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({
@@ -166,21 +168,16 @@ export class ProfileV2Controller {
         });
       }
 
-      // Upsert profile
       let profile = await ProfileModel.findOne({ userId });
       if (!profile) {
         profile = new ProfileModel({ userId });
       }
 
-      // Apply changes manually or via Object.assign to respect nested schemas safely
       const updateData = parsed.data;
-
-      // Update fields
       Object.keys(updateData).forEach((key) => {
         const value = (updateData as any)[key];
         if (value !== undefined) {
           if (key === 'confidenceProfile' || key === 'opportunityPreferences') {
-            // Merge nested objects
             (profile as any)[key] = { ...(profile as any)[key], ...value };
           } else {
             (profile as any)[key] = value;
@@ -188,7 +185,6 @@ export class ProfileV2Controller {
         }
       });
 
-      // Recalculate Career Readiness & Profile Completeness
       const readiness = calculateCareerReadiness(profile);
       profile.careerReadinessScore = readiness.careerReadinessScore;
       profile.profileCompleteness = readiness.completionPercentage;
@@ -222,12 +218,34 @@ export class ProfileV2Controller {
 
     try {
       const userId = req.dbUser._id;
-      const {
-        fileName = 'resume.pdf',
-        fileUrl = 'https://scout-resumes.storage.googleapis.com/placeholder.pdf',
-      } = req.body;
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'BAD_REQUEST', message: 'No file uploaded.' },
+        });
+      }
 
-      // Create/Update Resume document (placeholder for Phase 2)
+      const extractorFile = {
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        size: file.size,
+        uploadedAt: new Date(),
+        buffer: file.buffer,
+      };
+
+      const extraction = await DocumentExtractor.extract(extractorFile);
+      const rawText = extraction.rawText;
+      const fileName = file.originalname;
+      const fileUrl = 'https://scout-resumes.storage.googleapis.com/placeholder.pdf';
+
+      // Segmentation parsing
+      const parsed = ResumeSectionParser.parse(rawText);
+
+      // Normalize Skills
+      const normalizedSkills = SkillNormalizer.normalize(parsed.skillsText);
+
+      // Create/Update Resume metadata in DB
       const resume = await ResumeModel.findOneAndUpdate(
         { userId },
         {
@@ -235,25 +253,93 @@ export class ProfileV2Controller {
           fileName,
           fileUrl,
           uploadedAt: new Date(),
+          skills: normalizedSkills,
+          education: [
+            {
+              institution: parsed.detectedCollege || '',
+              degree: parsed.detectedDegree || '',
+              fieldOfStudy: parsed.detectedFieldOfStudy || '',
+              endDate: parsed.detectedGraduationYear
+                ? parsed.detectedGraduationYear.toString()
+                : '',
+            },
+          ],
+          projects: parsed.detectedProjects.map((p) => ({
+            title: p.title,
+            description: p.description,
+            technologies: p.technologies,
+            url: p.githubLink || p.liveLink || '',
+          })),
+          experience: parsed.detectedExperience.map((e) => ({
+            company: e.organization,
+            role: e.role,
+            startDate: e.startDate || '',
+            endDate: e.endDate || '',
+            description: e.description,
+          })),
+          links: parsed.detectedLinks,
           aiMetadata: {
-            provider: 'none',
-            model: 'none',
-            confidence: 100,
-            version: '1.0',
+            provider: 'pdf-parse',
+            model: SKILLS_VERSION, // Store taxonomyVersion in model field to respect schema type
+            confidence: parsed.overallConfidence,
+            version: '1.0', // Store parserVersion in version field
             parsedAt: new Date(),
           },
         },
         { upsert: true, returnDocument: 'after' },
       );
 
-      // Mark resumeUploaded as true on Profile
+      // Return DTO containing parsed fields, overall confidence, and warnings
+      return res.json({
+        success: true,
+        data: {
+          resume,
+          overallConfidence: parsed.overallConfidence,
+          warnings: parsed.warnings,
+          layoutDetected: parsed.layoutDetected,
+          parsedFields: {
+            fullName: '',
+            college: parsed.detectedCollege || '',
+            degree: parsed.detectedDegree || '',
+            branch: parsed.detectedFieldOfStudy || '',
+            expectedGraduation: parsed.detectedGraduationYear || null,
+            technicalSkills: normalizedSkills,
+            detectedLinks: parsed.detectedLinks,
+            detectedProjects: parsed.detectedProjects,
+            detectedExperience: parsed.detectedExperience,
+          },
+        },
+      });
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error('[PROFILE V2] Error uploading resume:', errMsg);
+      return res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Failed to parse resume.' },
+      });
+    }
+  }
+
+  static async mergeProfile(req: AuthenticatedRequest, res: Response) {
+    if (!req.dbUser) {
+      return res.status(401).json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'User identity not found in database.' },
+      });
+    }
+
+    try {
+      const userId = req.dbUser._id;
       let profile = await ProfileModel.findOne({ userId });
       if (!profile) {
         profile = new ProfileModel({ userId });
       }
+
+      // Merge the user confirmed/edited fields using ProfileMergeEngine
+      profile = ProfileMergeEngine.merge(profile, req.body);
       profile.resumeUploaded = true;
 
-      // Recalculate Career Readiness & Profile Completeness
+      // Recalculate Career Readiness
       const readiness = calculateCareerReadiness(profile);
       profile.careerReadinessScore = readiness.careerReadinessScore;
       profile.profileCompleteness = readiness.completionPercentage;
@@ -263,17 +349,16 @@ export class ProfileV2Controller {
       return res.json({
         success: true,
         data: {
-          resume,
           profile,
           readiness,
         },
       });
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : String(error);
-      console.error('[PROFILE V2] Error uploading resume:', errMsg);
+      console.error('[PROFILE V2] Error merging profile:', errMsg);
       return res.status(500).json({
         success: false,
-        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Failed to record resume upload.' },
+        error: { code: 'INTERNAL_SERVER_ERROR', message: 'Failed to merge profile details.' },
       });
     }
   }

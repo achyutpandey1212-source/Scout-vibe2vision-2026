@@ -64,6 +64,13 @@ export const SKILLS_TAXONOMY: Skill[] = [
   { id: 'aws', name: 'AWS', aliases: ['amazon web services'], category: 'Cloud' },
   { id: 'gcp', name: 'GCP', aliases: ['google cloud', 'google cloud platform'], category: 'Cloud' },
   { id: 'azure', name: 'Azure', aliases: ['microsoft azure'], category: 'Cloud' },
+  {
+    id: 'cloudrun',
+    name: 'Google Cloud Run',
+    aliases: ['cloud run', 'google cloud run'],
+    category: 'Cloud',
+  },
+  { id: 'vercel', name: 'Vercel', aliases: [], category: 'Tools' },
 
   // AI & Data Science
   { id: 'tensorflow', name: 'TensorFlow', aliases: ['tf'], category: 'AI/ML' },
@@ -71,11 +78,35 @@ export const SKILLS_TAXONOMY: Skill[] = [
   { id: 'pandas', name: 'Pandas', aliases: [], category: 'AI/ML' },
   { id: 'numpy', name: 'NumPy', aliases: [], category: 'AI/ML' },
   { id: 'scikitlearn', name: 'Scikit-Learn', aliases: ['sklearn'], category: 'AI/ML' },
+  { id: 'langchain', name: 'LangChain', aliases: [], category: 'AI/ML' },
+  { id: 'langgraph', name: 'LangGraph', aliases: [], category: 'AI/ML' },
+  { id: 'gemini', name: 'Gemini API', aliases: ['gemini', 'gemini api'], category: 'AI/ML' },
 
   // Design & Others
   { id: 'figma', name: 'Figma', aliases: [], category: 'Design' },
   { id: 'adobexd', name: 'Adobe XD', aliases: [], category: 'Design' },
   { id: 'postman', name: 'Postman', aliases: [], category: 'Tools' },
+  { id: 'vscode', name: 'VS Code', aliases: ['vscode', 'visual studio code'], category: 'Tools' },
+
+  // APIs, Auth & Libraries
+  {
+    id: 'googlecalendarapi',
+    name: 'Google Calendar API',
+    aliases: ['google calendar api', 'google calendar'],
+    category: 'APIs',
+  },
+  { id: 'resend', name: 'Resend', aliases: [], category: 'APIs' },
+  { id: 'restapi', name: 'REST API', aliases: ['rest api', 'rest apis'], category: 'APIs' },
+  { id: 'jwt', name: 'JSON Web Token', aliases: ['jwt', 'json web token'], category: 'Auth' },
+  { id: 'bcrypt', name: 'Bcrypt', aliases: [], category: 'Auth' },
+  {
+    id: 'firebaseauth',
+    name: 'Firebase Authentication',
+    aliases: ['firebase authentication', 'firebase auth'],
+    category: 'Auth',
+  },
+  { id: 'imagekit', name: 'ImageKit', aliases: [], category: 'Tools' },
+  { id: 'multer', name: 'Multer', aliases: [], category: 'Tools' },
 ];
 
 export const SKILLS_VERSION = '2026.1';

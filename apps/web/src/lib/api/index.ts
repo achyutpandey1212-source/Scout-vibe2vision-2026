@@ -40,7 +40,11 @@ export const profileApi = {
   completeOnboarding: () => api.post('/api/v1/profile/onboarding/complete'),
   getV2: () => api.get('/api/v1/profile/v2'),
   updateV2: (data: any) => api.post('/api/v1/profile/v2', data),
-  uploadResumeV2: (data: any) => api.post('/api/v1/profile/v2/resume', data),
+  uploadResumeV2: (formData: FormData) =>
+    api.post('/api/v1/profile/v2/resume', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  mergeProfileV2: (data: any) => api.post('/api/v1/profile/v2/merge', data),
 };
 
 export const opportunitiesApi = {

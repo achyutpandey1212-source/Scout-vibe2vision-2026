@@ -27,6 +27,8 @@ import {
   Upload,
   X,
   AlertCircle,
+  AlertTriangle,
+  FileText,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 
@@ -45,6 +47,18 @@ export default function OnboardingPage() {
   // Resume upload mock state
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState('');
+
+  // Resume Review Screen State
+  const [parsedResumeData, setParsedResumeData] = useState<any>(null);
+  const [reviewFields, setReviewFields] = useState<any>({
+    fullName: '',
+    college: '',
+    degree: '',
+    branch: '',
+    expectedGraduation: '',
+    technicalSkills: [] as string[],
+    detectedLinks: [] as any[],
+  });
 
   // Career Readiness Score states (fetched dynamically)
   const [readinessData, setReadinessData] = useState({
@@ -202,7 +216,6 @@ export default function OnboardingPage() {
   const handleComplete = async () => {
     setSaving(true);
     try {
-      // Clear wizard steps from storage
       localStorage.removeItem('scout_onboarding_v2_step');
       await syncWithBackend();
       router.replace('/dashboard');
@@ -221,28 +234,63 @@ export default function OnboardingPage() {
     setUploadedFileName(file.name);
 
     try {
-      // Simulate small delay for file storage placeholder
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const formDataObj = new FormData();
+      formDataObj.append('file', file);
+      formDataObj.append('fileName', file.name);
 
-      const res = await profileApi.uploadResumeV2({
-        fileName: file.name,
-        fileUrl: `https://scout-resumes.storage.googleapis.com/${Date.now()}_${file.name}`,
-      });
+      const res = await profileApi.uploadResumeV2(formDataObj);
 
       if (res.data && res.data.success) {
-        setFormData((prev) => ({ ...prev, resumeUploaded: true }));
-        if (res.data.data.readiness) {
-          setReadinessData(res.data.data.readiness);
-        }
+        const data = res.data.data;
+        setParsedResumeData(data);
+        setReviewFields({
+          fullName: data.parsedFields.fullName || formData.fullName,
+          college: data.parsedFields.college || formData.college,
+          degree: data.parsedFields.degree || formData.degree,
+          branch: data.parsedFields.branch || formData.branch,
+          expectedGraduation: data.parsedFields.expectedGraduation || formData.expectedGraduation,
+          technicalSkills: data.parsedFields.technicalSkills || formData.technicalSkills,
+          detectedLinks: data.parsedFields.detectedLinks || [],
+        });
       }
     } catch (err) {
-      console.error('Failed to upload resume metadata:', err);
+      console.error('Failed to upload/parse resume multipart:', err);
     } finally {
       setUploadingFile(false);
     }
   };
 
-  // Multiple choice for checklists / arrays
+  const handleMergeConfirm = async () => {
+    setSaving(true);
+    try {
+      const res = await profileApi.mergeProfileV2(reviewFields);
+      if (res.data && res.data.success) {
+        const profile = res.data.data.profile;
+        const readiness = res.data.data.readiness;
+
+        setFormData((prev) => ({
+          ...prev,
+          fullName: profile.fullName || prev.fullName,
+          college: profile.college || prev.college,
+          degree: profile.degree || prev.degree,
+          branch: profile.branch || prev.branch,
+          expectedGraduation: profile.expectedGraduation || prev.expectedGraduation,
+          technicalSkills: profile.technicalSkills || prev.technicalSkills,
+          resumeUploaded: true,
+        }));
+
+        if (readiness) {
+          setReadinessData(readiness);
+        }
+        setParsedResumeData(null);
+      }
+    } catch (err) {
+      console.error('Merge confirmation failed:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const togglePreference = (key: keyof typeof formData.opportunityPreferences) => {
     setFormData((prev) => ({
       ...prev,
@@ -258,6 +306,15 @@ export default function OnboardingPage() {
       const skills = prev.technicalSkills.includes(skill)
         ? prev.technicalSkills.filter((s) => s !== skill)
         : [...prev.technicalSkills, skill];
+      return { ...prev, technicalSkills: skills };
+    });
+  };
+
+  const toggleReviewSkill = (skillId: string) => {
+    setReviewFields((prev: any) => {
+      const skills = prev.technicalSkills.includes(skillId)
+        ? prev.technicalSkills.filter((s: string) => s !== skillId)
+        : [...prev.technicalSkills, skillId];
       return { ...prev, technicalSkills: skills };
     });
   };
@@ -282,14 +339,12 @@ export default function OnboardingPage() {
 
   const progressPercent = Math.round((step / TOTAL_STEPS) * 100);
 
-  // Filter skills for searchable list
   const filteredSkills = SKILLS_TAXONOMY.filter(
     (skill) =>
       skill.name.toLowerCase().includes(skillSearch.toLowerCase()) ||
       skill.aliases.some((alias) => alias.toLowerCase().includes(skillSearch.toLowerCase())),
   );
 
-  // Generate Career Readiness Suggestions deterministically from missing fields
   const getReadinessSuggestions = () => {
     const suggestions: string[] = [];
     if (!formData.resumeUploaded) {
@@ -863,81 +918,300 @@ export default function OnboardingPage() {
               {/* STEP 7: RESUME & CAREER READINESS */}
               {step === 7 && (
                 <div className="space-y-4">
-                  <h1 className="text-2xl font-light">Resume & Career Readiness 📈</h1>
-                  <p className="text-xs text-secondary font-light">
-                    Completing your profile generates better recommendation match rates.
-                  </p>
+                  {parsedResumeData ? (
+                    /* RESUME REVIEW SCREEN PANEL */
+                    <div className="p-5 border border-border bg-card rounded-2xl space-y-4 shadow-lg animate-in fade-in zoom-in duration-200">
+                      <div className="flex items-center space-x-2 border-b border-border/60 pb-3">
+                        <FileText className="w-5 h-5 text-primary" />
+                        <div>
+                          <h2 className="text-lg font-medium text-foreground">
+                            Review Extracted Information
+                          </h2>
+                          <p className="text-[10px] text-secondary font-light">
+                            Confirm or correct these fields before saving them to your profile.
+                          </p>
+                        </div>
+                      </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    {/* Resume container */}
-                    <div className="flex flex-col items-center justify-center p-4 border border-dashed border-border rounded-2xl bg-card hover:bg-accent/10 transition-all cursor-pointer relative min-h-[120px]">
-                      <input
-                        type="file"
-                        accept=".pdf,.doc,.docx"
-                        onChange={handleFileUpload}
-                        className="absolute inset-0 opacity-0 cursor-pointer"
-                        disabled={uploadingFile}
-                      />
-                      {uploadingFile ? (
-                        <div className="text-center space-y-1">
-                          <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-                          <p className="text-[10px] font-light text-secondary">Uploading...</p>
-                        </div>
-                      ) : formData.resumeUploaded ? (
-                        <div className="text-center space-y-1">
-                          <Check className="w-5 h-5 text-primary mx-auto" />
-                          <p className="text-xs font-semibold text-primary">Resume registered!</p>
-                          <p className="text-[9px] text-secondary truncate max-w-[120px] mx-auto">
-                            {uploadedFileName || 'resume.pdf'}
+                      {/* Score and Warnings */}
+                      <div className="grid grid-cols-3 gap-3 bg-accent/15 p-3 rounded-xl border border-border/40">
+                        <div className="col-span-1 text-center border-r border-border/40 pr-2">
+                          <span className="text-[9px] uppercase tracking-wide font-medium text-secondary">
+                            Match Confidence
+                          </span>
+                          <p className="text-xl font-bold text-primary">
+                            {Math.round(parsedResumeData.overallConfidence * 100)}%
                           </p>
                         </div>
-                      ) : (
-                        <div className="text-center space-y-1">
-                          <Upload className="w-5 h-5 text-secondary/60 mx-auto" />
-                          <p className="text-xs font-light text-secondary">
-                            Click to upload resume
-                          </p>
-                          <p className="text-[8px] text-secondary/40">Optional for MVP</p>
+                        <div className="col-span-2 pl-2">
+                          <span className="text-[9px] uppercase tracking-wide font-medium text-secondary">
+                            Attention Areas
+                          </span>
+                          {parsedResumeData.warnings && parsedResumeData.warnings.length > 0 ? (
+                            <ul className="text-[9px] text-secondary/80 font-light list-disc pl-3 mt-0.5">
+                              {parsedResumeData.warnings.slice(0, 3).map((w: string, i: number) => (
+                                <li key={i}>{w}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-[9px] text-primary/80 font-light mt-0.5">
+                              Perfect match! No warning indicators detected.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Fields form */}
+                      <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                        <div>
+                          <label className="text-[10px] font-semibold text-secondary uppercase block mb-1">
+                            Full Name
+                          </label>
+                          <input
+                            type="text"
+                            value={reviewFields.fullName}
+                            onChange={(e) =>
+                              setReviewFields({ ...reviewFields, fullName: e.target.value })
+                            }
+                            className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:border-primary text-xs font-light"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] font-semibold text-secondary uppercase block mb-1">
+                              College
+                            </label>
+                            <input
+                              type="text"
+                              value={reviewFields.college}
+                              onChange={(e) =>
+                                setReviewFields({ ...reviewFields, college: e.target.value })
+                              }
+                              className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:border-primary text-xs font-light"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-semibold text-secondary uppercase block mb-1">
+                              Degree
+                            </label>
+                            <input
+                              type="text"
+                              value={reviewFields.degree}
+                              onChange={(e) =>
+                                setReviewFields({ ...reviewFields, degree: e.target.value })
+                              }
+                              className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:border-primary text-xs font-light"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] font-semibold text-secondary uppercase block mb-1">
+                              Branch
+                            </label>
+                            <input
+                              type="text"
+                              value={reviewFields.branch}
+                              onChange={(e) =>
+                                setReviewFields({ ...reviewFields, branch: e.target.value })
+                              }
+                              className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:border-primary text-xs font-light"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-semibold text-secondary uppercase block mb-1">
+                              Graduation Year
+                            </label>
+                            <input
+                              type="number"
+                              value={reviewFields.expectedGraduation}
+                              onChange={(e) =>
+                                setReviewFields({
+                                  ...reviewFields,
+                                  expectedGraduation: e.target.value,
+                                })
+                              }
+                              className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:border-primary text-xs font-light"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Extracted Skills List with Quick Toggles */}
+                        <div>
+                          <label className="text-[10px] font-semibold text-secondary uppercase block mb-1">
+                            Extracted Skills (Toggle to select)
+                          </label>
+                          <div className="flex flex-wrap gap-1 bg-background p-2 border border-border rounded-lg">
+                            {SKILLS_TAXONOMY.map((skill) => {
+                              const isSelected = reviewFields.technicalSkills.includes(skill.id);
+                              return (
+                                <button
+                                  key={skill.id}
+                                  type="button"
+                                  onClick={() => toggleReviewSkill(skill.id)}
+                                  className={`px-2 py-0.5 border rounded-full text-[10px] transition-all ${
+                                    isSelected
+                                      ? 'border-primary bg-primary text-primary-foreground font-medium'
+                                      : 'border-border bg-card text-secondary/60 hover:bg-accent'
+                                  }`}
+                                >
+                                  {skill.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Extracted Projects Checklist */}
+                        {parsedResumeData.parsedFields.detectedProjects &&
+                          parsedResumeData.parsedFields.detectedProjects.length > 0 && (
+                            <div>
+                              <label className="text-[10px] font-semibold text-secondary uppercase block mb-1">
+                                Projects Found (
+                                {parsedResumeData.parsedFields.detectedProjects.length})
+                              </label>
+                              <div className="space-y-1 p-2 border border-border bg-background rounded-lg text-xs font-light text-secondary">
+                                {parsedResumeData.parsedFields.detectedProjects.map(
+                                  (p: any, i: number) => (
+                                    <div key={i} className="flex items-center space-x-1">
+                                      <span className="text-primary font-bold">✓</span>
+                                      <span className="font-medium text-foreground">{p.title}</span>
+                                    </div>
+                                  ),
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                        {/* Extracted Experience Checklist */}
+                        {parsedResumeData.parsedFields.detectedExperience &&
+                          parsedResumeData.parsedFields.detectedExperience.length > 0 && (
+                            <div>
+                              <label className="text-[10px] font-semibold text-secondary uppercase block mb-1">
+                                Leadership & Experience
+                              </label>
+                              <div className="space-y-1 p-2 border border-border bg-background rounded-lg text-xs font-light text-secondary">
+                                {parsedResumeData.parsedFields.detectedExperience.map(
+                                  (e: any, i: number) => (
+                                    <div key={i} className="flex items-center space-x-1">
+                                      <span className="text-primary font-bold">✓</span>
+                                      <span className="font-medium text-foreground">{e.role}</span>
+                                      {e.organization && (
+                                        <span className="text-secondary/60">
+                                          at {e.organization}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ),
+                                )}
+                              </div>
+                            </div>
+                          )}
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center space-x-2 pt-2 border-t border-border/40">
+                        <button
+                          onClick={() => setParsedResumeData(null)}
+                          className="w-1/3 py-2 border border-border hover:bg-accent text-secondary font-medium text-xs rounded-xl"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleMergeConfirm}
+                          className="w-2/3 py-2 bg-primary hover:opacity-90 text-primary-foreground font-semibold text-xs rounded-xl shadow-md flex items-center justify-center space-x-1"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Use this information</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* STANDALONE RESUME UPLOAD DASHBOARD */
+                    <>
+                      <h1 className="text-2xl font-light">Resume & Career Readiness 📈</h1>
+                      <p className="text-xs text-secondary font-light">
+                        Completing your profile generates better recommendation match rates.
+                      </p>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* Resume container */}
+                        <div className="flex flex-col items-center justify-center p-4 border border-dashed border-border rounded-2xl bg-card hover:bg-accent/10 transition-all cursor-pointer relative min-h-[120px]">
+                          <input
+                            type="file"
+                            accept=".pdf"
+                            onChange={handleFileUpload}
+                            className="absolute inset-0 opacity-0 cursor-pointer"
+                            disabled={uploadingFile}
+                          />
+                          {uploadingFile ? (
+                            <div className="text-center space-y-1">
+                              <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+                              <p className="text-[10px] font-light text-secondary">
+                                Uploading & Parsing...
+                              </p>
+                            </div>
+                          ) : formData.resumeUploaded ? (
+                            <div className="text-center space-y-1">
+                              <Check className="w-5 h-5 text-primary mx-auto" />
+                              <p className="text-xs font-semibold text-primary">
+                                Resume registered!
+                              </p>
+                              <p className="text-[9px] text-secondary truncate max-w-[120px] mx-auto">
+                                {uploadedFileName || 'resume.pdf'}
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="text-center space-y-1">
+                              <Upload className="w-5 h-5 text-secondary/60 mx-auto" />
+                              <p className="text-xs font-light text-secondary">
+                                Click to upload resume (PDF)
+                              </p>
+                              <p className="text-[8px] text-secondary/40">Optional for MVP</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Readiness score circular indicator */}
+                        <div className="flex flex-col items-center justify-center bg-card border border-border p-4 rounded-2xl min-h-[120px] text-center">
+                          <span className="text-xs font-semibold text-secondary/80 block uppercase tracking-wider mb-1">
+                            Career Ready
+                          </span>
+                          <span className="text-2xl font-bold text-primary">
+                            {readinessData.careerReadinessScore}%
+                          </span>
+                          <span className="text-[9px] text-secondary/50 block mt-1">
+                            Completeness: {readinessData.completionPercentage}%
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Dynamic checklist suggestions */}
+                      {suggestionsList.length > 0 && (
+                        <div className="p-4 bg-accent/20 border border-border rounded-xl space-y-2">
+                          <label className="text-[10px] font-semibold text-secondary/60 uppercase tracking-wide flex items-center space-x-1">
+                            <AlertCircle className="w-3.5 h-3.5 text-primary" />
+                            <span>Complete these to improve recommendations:</span>
+                          </label>
+                          <ul className="space-y-1 text-xs text-secondary font-light pl-1.5 list-disc list-inside">
+                            {suggestionsList.map((suggestion) => (
+                              <li key={suggestion}>{suggestion}</li>
+                            ))}
+                          </ul>
                         </div>
                       )}
-                    </div>
 
-                    {/* Readiness score circular indicator */}
-                    <div className="flex flex-col items-center justify-center bg-card border border-border p-4 rounded-2xl min-h-[120px] text-center">
-                      <span className="text-xs font-semibold text-secondary/80 block uppercase tracking-wider mb-1">
-                        Career Ready
-                      </span>
-                      <span className="text-2xl font-bold text-primary">
-                        {readinessData.careerReadinessScore}%
-                      </span>
-                      <span className="text-[9px] text-secondary/50 block mt-1">
-                        Completeness: {readinessData.completionPercentage}%
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Dynamic checklist suggestions */}
-                  {suggestionsList.length > 0 && (
-                    <div className="p-4 bg-accent/20 border border-border rounded-xl space-y-2">
-                      <label className="text-[10px] font-semibold text-secondary/60 uppercase tracking-wide flex items-center space-x-1">
-                        <AlertCircle className="w-3.5 h-3.5 text-primary" />
-                        <span>Complete these to improve recommendations:</span>
-                      </label>
-                      <ul className="space-y-1 text-xs text-secondary font-light pl-1.5 list-disc list-inside">
-                        {suggestionsList.map((suggestion) => (
-                          <li key={suggestion}>{suggestion}</li>
-                        ))}
-                      </ul>
-                    </div>
+                      <div className="space-y-2 text-center pt-2">
+                        <h2 className="text-xl font-light">All Set! ✨</h2>
+                        <p className="text-xs text-secondary font-light max-w-xs mx-auto">
+                          Click the button below to land on your personalized dashboard and discover
+                          opportunities.
+                        </p>
+                      </div>
+                    </>
                   )}
-
-                  <div className="space-y-2 text-center pt-2">
-                    <h2 className="text-xl font-light">All Set! ✨</h2>
-                    <p className="text-xs text-secondary font-light max-w-xs mx-auto">
-                      Click the button below to land on your personalized dashboard and discover
-                      opportunities.
-                    </p>
-                  </div>
                 </div>
               )}
             </motion.div>
@@ -963,8 +1237,8 @@ export default function OnboardingPage() {
             {step === TOTAL_STEPS ? (
               <button
                 onClick={handleComplete}
-                disabled={saving}
-                className="flex items-center space-x-2 px-8 py-3 bg-primary hover:opacity-90 text-primary-foreground rounded-full text-sm font-semibold transition-all shadow-md"
+                disabled={saving || parsedResumeData !== null}
+                className="flex items-center space-x-2 px-8 py-3 bg-primary hover:opacity-90 text-primary-foreground disabled:opacity-50 rounded-full text-sm font-semibold transition-all shadow-md"
               >
                 <span>Go to Dashboard</span>
                 <ChevronRight className="w-4 h-4" />
