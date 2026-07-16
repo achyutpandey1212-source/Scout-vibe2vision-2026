@@ -2,7 +2,7 @@ import express, { Response } from 'express';
 import cors, { CorsOptions } from 'cors';
 import { env, db, redis, firebase } from '@/config';
 import { authRouter } from './auth';
-import { profileRouter } from './profile';
+import { profileRouter, profileV2Router } from './profile';
 import { recommendationRouter } from './intelligence/recommendation';
 import { opportunityRouter } from './discovery/routes/opportunity.routes';
 import { bookmarkRouter } from './auth/routes/bookmark.routes';
@@ -68,6 +68,7 @@ app.use('/api/v1/auth', authRouter);
 
 // Register Profile / User Intelligence Router
 app.use('/api/v1/profile', profileRouter);
+app.use('/api/v1/profile/v2', profileV2Router);
 
 // Register Recommendations Router
 app.use('/api/v1/recommendations', recommendationRouter);

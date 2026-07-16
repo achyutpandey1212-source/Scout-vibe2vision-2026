@@ -1,16 +1,36 @@
 'use client';
 
+/**
+ * ==========================================
+ *          ONBOARDING V2 FROZEN
+ *
+ * Changing onboarding requires updating:
+ * - Personalization
+ * - Discovery
+ * - Recommendation
+ * ==========================================
+ */
+
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useAuth } from '@/context/auth-context';
-import { api } from '@/lib/api';
-import { ChevronLeft, ChevronRight, Sparkles, Check } from 'lucide-react';
+import { profileApi } from '@/lib/api';
+import { SKILLS_TAXONOMY } from '@scout/shared';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Sparkles,
+  Check,
+  Search,
+  Upload,
+  X,
+  AlertCircle,
+} from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 
-// Steps setup
-const TOTAL_STEPS = 16;
+const TOTAL_STEPS = 7;
 
 export default function OnboardingPage() {
   const { syncWithBackend } = useAuth();
@@ -20,85 +40,118 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [skillSearch, setSkillSearch] = useState('');
 
-  // User Intelligence Form Data
-  const [formData, setFormData] = useState({
-    identity: { preferredName: '' },
-    situations: [] as string[],
-    educationDetail: { qualification: '', college: '', course: '', graduationYear: 2026 },
-    workDetail: { role: '', industry: '', experienceYears: 0 },
-    whyHere: [] as string[],
-    happiestDestination: '',
-    magicOneProblem: '',
-    timeLossActivities: [] as string[],
-    discoveryChannels: [] as string[],
-    biggestObstacles: [] as string[],
-    readinessIllustrativeLevel: 3,
-    motivatedTime: [] as string[],
-    availability: { timeOfDay: [] as string[], hoursPerWeek: 10 },
-    opportunityExcitement: [] as string[],
-    workPreferences: [] as string[],
-    companionPreferences: {
-      tone: 'gentle',
-      celebrationStyle: '🌸 Gentle',
-      guidanceLevel: 'Recommend opportunities',
-      preferredLanguage: 'English',
-      reminderStyle: 'Flexible',
-    },
+  // Resume upload mock state
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState('');
+
+  // Career Readiness Score states (fetched dynamically)
+  const [readinessData, setReadinessData] = useState({
+    careerReadinessScore: 0,
+    completionPercentage: 0,
+    missingFields: [] as string[],
   });
 
-  // Fetch existing state on mount
+  // Profile V2 state matching ProfileModel
+  const [formData, setFormData] = useState({
+    fullName: '',
+    gender: 'UNKNOWN' as 'MALE' | 'FEMALE' | 'UNKNOWN',
+    age: '' as string | number,
+    state: '',
+    city: '',
+    college: '',
+    degree: '',
+    branch: '',
+    currentYear: '' as string | number,
+    expectedGraduation: '' as string | number,
+    technicalSkills: [] as string[],
+    careerGoals: [] as string[],
+    biggestChallenge: '',
+    confidenceProfile: {
+      applyIfNoMeet: '',
+      avoidCompetitive: '',
+      preferSafer: '',
+    },
+    opportunityPreferences: {
+      internships: false,
+      hackathons: false,
+      scholarships: false,
+      research: false,
+      events: false,
+      bootcamps: false,
+      opensource: false,
+      competitions: false,
+      training: false,
+      volunteer: false,
+      earlyCareerPrograms: false,
+      partTime: false,
+    },
+    resumeUploaded: false,
+  });
+
+  // Fetch V2 profile state on mount
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const res = await api.get('/api/v1/profile');
+        const res = await profileApi.getV2();
         if (res.data && res.data.success) {
-          const profile = res.data.data;
-          // Merge defaults
-          setFormData((prev) => ({
-            ...prev,
-            identity: { preferredName: profile.identity?.preferredName || '' },
-            situations: profile.situations || [],
-            educationDetail: {
-              qualification: profile.educationDetail?.qualification || '',
-              college: profile.educationDetail?.college || '',
-              course: profile.educationDetail?.course || '',
-              graduationYear: profile.educationDetail?.graduationYear || 2026,
-            },
-            workDetail: {
-              role: profile.workDetail?.role || '',
-              industry: profile.workDetail?.industry || '',
-              experienceYears: profile.workDetail?.experienceYears || 0,
-            },
-            whyHere: profile.whyHere || [],
-            happiestDestination: profile.happiestDestination || '',
-            magicOneProblem: profile.magicOneProblem || '',
-            timeLossActivities: profile.timeLossActivities || [],
-            discoveryChannels: profile.discoveryChannels || [],
-            biggestObstacles: profile.biggestObstacles || [],
-            readinessIllustrativeLevel: profile.readinessIllustrativeLevel || 3,
-            motivatedTime: profile.motivatedTime || [],
-            availability: {
-              timeOfDay: profile.availability?.timeOfDay || [],
-              hoursPerWeek: profile.availability?.hoursPerWeek || 10,
-            },
-            opportunityExcitement: profile.opportunityExcitement || [],
-            workPreferences: profile.workPreferences || [],
-            companionPreferences: {
-              tone: profile.companionPreferences?.tone || 'gentle',
-              celebrationStyle: profile.companionPreferences?.celebrationStyle || '🌸 Gentle',
-              guidanceLevel:
-                profile.companionPreferences?.guidanceLevel || 'Recommend opportunities',
-              preferredLanguage: profile.companionPreferences?.preferredLanguage || 'English',
-              reminderStyle: profile.companionPreferences?.reminderStyle || 'Flexible',
-            },
-          }));
-          if (profile.onboarding?.currentStep) {
-            setStep(profile.onboarding.currentStep);
+          const profile = res.data.data.profile;
+          const readiness = res.data.data.readiness;
+
+          if (profile) {
+            setFormData((prev) => ({
+              ...prev,
+              fullName: profile.fullName || '',
+              gender: profile.gender || 'UNKNOWN',
+              age: profile.age || '',
+              state: profile.state || '',
+              city: profile.city || '',
+              college: profile.college || '',
+              degree: profile.degree || '',
+              branch: profile.branch || '',
+              currentYear: profile.currentYear || '',
+              expectedGraduation: profile.expectedGraduation || '',
+              technicalSkills: profile.technicalSkills || [],
+              careerGoals: profile.careerGoals || [],
+              biggestChallenge: profile.biggestChallenge || '',
+              confidenceProfile: {
+                applyIfNoMeet: profile.confidenceProfile?.applyIfNoMeet || '',
+                avoidCompetitive: profile.confidenceProfile?.avoidCompetitive || '',
+                preferSafer: profile.confidenceProfile?.preferSafer || '',
+              },
+              opportunityPreferences: {
+                internships: profile.opportunityPreferences?.internships || false,
+                hackathons: profile.opportunityPreferences?.hackathons || false,
+                scholarships: profile.opportunityPreferences?.scholarships || false,
+                research: profile.opportunityPreferences?.research || false,
+                events: profile.opportunityPreferences?.events || false,
+                bootcamps: profile.opportunityPreferences?.bootcamps || false,
+                opensource: profile.opportunityPreferences?.opensource || false,
+                competitions: profile.opportunityPreferences?.competitions || false,
+                training: profile.opportunityPreferences?.training || false,
+                volunteer: profile.opportunityPreferences?.volunteer || false,
+                earlyCareerPrograms: profile.opportunityPreferences?.earlyCareerPrograms || false,
+                partTime: profile.opportunityPreferences?.partTime || false,
+              },
+              resumeUploaded: profile.resumeUploaded || false,
+            }));
+          }
+
+          if (readiness) {
+            setReadinessData(readiness);
+          }
+
+          const savedStep = localStorage.getItem('scout_onboarding_v2_step');
+          if (savedStep) {
+            const parsedStep = parseInt(savedStep, 10);
+            if (parsedStep <= TOTAL_STEPS) {
+              setStep(parsedStep);
+            }
           }
         }
       } catch (err) {
-        console.error('Failed to load onboarding profile:', err);
+        console.error('Failed to load onboarding V2 profile:', err);
       } finally {
         setLoading(false);
       }
@@ -109,14 +162,20 @@ export default function OnboardingPage() {
   // Autosave when transitioning steps
   const saveProgress = async (nextStep: number) => {
     setSaving(true);
+    localStorage.setItem('scout_onboarding_v2_step', nextStep.toString());
     try {
-      await api.post('/api/v1/profile', {
+      const payload = {
         ...formData,
-        onboarding: {
-          currentStep: nextStep,
-          completed: false,
-        },
-      });
+        age: formData.age !== '' ? Number(formData.age) : null,
+        currentYear: formData.currentYear !== '' ? Number(formData.currentYear) : null,
+        expectedGraduation:
+          formData.expectedGraduation !== '' ? Number(formData.expectedGraduation) : null,
+      };
+
+      const res = await profileApi.updateV2(payload);
+      if (res.data && res.data.success && res.data.data.readiness) {
+        setReadinessData(res.data.data.readiness);
+      }
     } catch (err) {
       console.error('Autosave failed:', err);
     } finally {
@@ -124,19 +183,8 @@ export default function OnboardingPage() {
     }
   };
 
-  // Navigations
   const handleNext = async () => {
-    let nextStep = step + 1;
-
-    // Check branching: Skip step 4 (Education & Work) if not applicable
-    if (step === 3) {
-      const isStudying = formData.situations.includes("🌸 I'm studying right now");
-      const isWorking = formData.situations.includes("💼 I'm already working");
-      if (!isStudying && !isWorking) {
-        nextStep = 5; // skip details
-      }
-    }
-
+    const nextStep = step + 1;
     if (nextStep <= TOTAL_STEPS) {
       setStep(nextStep);
       await saveProgress(nextStep);
@@ -144,17 +192,7 @@ export default function OnboardingPage() {
   };
 
   const handleBack = async () => {
-    let prevStep = step - 1;
-
-    // Check branching: Skip step 4 on going backward
-    if (step === 5) {
-      const isStudying = formData.situations.includes("🌸 I'm studying right now");
-      const isWorking = formData.situations.includes("💼 I'm already working");
-      if (!isStudying && !isWorking) {
-        prevStep = 3;
-      }
-    }
-
+    const prevStep = step - 1;
     if (prevStep >= 1) {
       setStep(prevStep);
       await saveProgress(prevStep);
@@ -164,32 +202,67 @@ export default function OnboardingPage() {
   const handleComplete = async () => {
     setSaving(true);
     try {
-      // Save final state
-      await api.post('/api/v1/profile', formData);
-      // Mark onboarding complete
-      await api.post('/api/v1/profile/onboarding/complete');
-      // Sync auth context
+      // Clear wizard steps from storage
+      localStorage.removeItem('scout_onboarding_v2_step');
       await syncWithBackend();
       router.replace('/dashboard');
     } catch (err) {
-      console.error('Failed to complete onboarding:', err);
+      console.error('Failed to complete onboarding V2:', err);
     } finally {
       setSaving(false);
     }
   };
 
-  // Multiple Choice Helpers
-  const toggleArrayItem = (fieldName: keyof typeof formData, item: string) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingFile(true);
+    setUploadedFileName(file.name);
+
+    try {
+      // Simulate small delay for file storage placeholder
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      const res = await profileApi.uploadResumeV2({
+        fileName: file.name,
+        fileUrl: `https://scout-resumes.storage.googleapis.com/${Date.now()}_${file.name}`,
+      });
+
+      if (res.data && res.data.success) {
+        setFormData((prev) => ({ ...prev, resumeUploaded: true }));
+        if (res.data.data.readiness) {
+          setReadinessData(res.data.data.readiness);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to upload resume metadata:', err);
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  // Multiple choice for checklists / arrays
+  const togglePreference = (key: keyof typeof formData.opportunityPreferences) => {
+    setFormData((prev) => ({
+      ...prev,
+      opportunityPreferences: {
+        ...prev.opportunityPreferences,
+        [key]: !prev.opportunityPreferences[key],
+      },
+    }));
+  };
+
+  const toggleSkill = (skill: string) => {
     setFormData((prev) => {
-      const current = prev[fieldName] as string[];
-      const updated = current.includes(item)
-        ? current.filter((x) => x !== item)
-        : [...current, item];
-      return { ...prev, [fieldName]: updated };
+      const skills = prev.technicalSkills.includes(skill)
+        ? prev.technicalSkills.filter((s) => s !== skill)
+        : [...prev.technicalSkills, skill];
+      return { ...prev, technicalSkills: skills };
     });
   };
 
-  // Framer Motion Animation Config
+  // Slide Animation Config
   const slideVariants = {
     initial: { opacity: 0, x: 20 },
     animate: { opacity: 1, x: 0 },
@@ -201,26 +274,59 @@ export default function OnboardingPage() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-background space-y-4">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         <span className="text-sm font-light text-secondary tracking-wide">
-          Loading your memory...
+          Loading your profile...
         </span>
       </div>
     );
   }
 
-  // Calculate progress percentage
   const progressPercent = Math.round((step / TOTAL_STEPS) * 100);
+
+  // Filter skills for searchable list
+  const filteredSkills = SKILLS_TAXONOMY.filter(
+    (skill) =>
+      skill.name.toLowerCase().includes(skillSearch.toLowerCase()) ||
+      skill.aliases.some((alias) => alias.toLowerCase().includes(skillSearch.toLowerCase())),
+  );
+
+  // Generate Career Readiness Suggestions deterministically from missing fields
+  const getReadinessSuggestions = () => {
+    const suggestions: string[] = [];
+    if (!formData.resumeUploaded) {
+      suggestions.push('Upload your resume');
+    }
+    if (formData.technicalSkills.length < 3) {
+      suggestions.push('Add at least 3 skills');
+    }
+    const hasPrefs = Object.values(formData.opportunityPreferences).some((val) => val === true);
+    if (!hasPrefs) {
+      suggestions.push('Select opportunity preferences');
+    }
+    return suggestions;
+  };
+
+  const suggestionsList = getReadinessSuggestions();
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen flex flex-col bg-background text-foreground font-sans relative pb-24">
+      <div className="min-h-screen flex flex-col bg-background text-foreground font-sans relative pb-28">
         {/* Progress Bar Header */}
-        <header className="sticky top-0 bg-background/80 backdrop-blur z-20 w-full p-4 border-b border-border">
+        <header className="sticky top-0 bg-background/85 backdrop-blur z-20 w-full p-4 border-b border-border/80">
           <div className="max-w-xl mx-auto flex items-center justify-between">
             <div className="flex flex-col">
-              <span className="text-xs font-light text-secondary">Onboarding Progress</span>
-              <span className="text-xs font-medium text-primary">{progressPercent}% Complete</span>
+              <span className="text-xs font-light text-secondary">
+                Step {step} of {TOTAL_STEPS}
+              </span>
+              <span className="text-xs font-medium text-primary">{progressPercent}% Progress</span>
             </div>
-            <ThemeToggle />
+            <div className="flex items-center space-x-2">
+              {saving && (
+                <span className="text-[10px] text-primary/80 animate-pulse font-light">
+                  Saving...
+                </span>
+              )}
+              <ThemeToggle />
+            </div>
           </div>
           <div className="max-w-xl mx-auto mt-2 h-1 bg-muted rounded-full overflow-hidden">
             <div
@@ -230,8 +336,8 @@ export default function OnboardingPage() {
           </div>
         </header>
 
-        {/* Form Container */}
-        <main className="flex-1 max-w-xl mx-auto w-full px-6 pt-8 md:pt-16 flex flex-col justify-center">
+        {/* Wizard Forms */}
+        <main className="flex-1 max-w-xl mx-auto w-full px-6 pt-6 flex flex-col justify-center">
           <AnimatePresence mode="wait">
             <motion.div
               key={step}
@@ -240,692 +346,325 @@ export default function OnboardingPage() {
               animate="animate"
               exit="exit"
               transition={{ duration: 0.3 }}
-              className="space-y-8"
+              className="space-y-6"
             >
-              {/* SCREEN 1: WELCOME */}
+              {/* STEP 1: WELCOME */}
               {step === 1 && (
                 <div className="space-y-6 text-center">
-                  <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary">
-                    <Sparkles className="w-6 h-6 animate-pulse" />
+                  <div className="mx-auto w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center text-primary">
+                    <Sparkles className="w-7 h-7 animate-pulse" />
                   </div>
                   <h1 className="text-3xl md:text-4xl font-light leading-tight">
-                    Welcome to <span className="font-semibold text-primary">Scout</span>
+                    Welcome to <span className="font-semibold text-primary">Scout V2</span>
                   </h1>
                   <p className="text-secondary font-light leading-relaxed max-w-md mx-auto">
-                    We will help you discover opportunities, learning pathways, and mentorship
-                    milestones that actually fit your unique journey. 🌸
+                    Let&apos;s build your personalization profile. We will help you discover
+                    internships, hackathons, and early career opportunities matching your
+                    engineering studies. 🌸
                   </p>
                   <p className="text-xs text-secondary/60">
-                    Onboarding takes about 3 minutes. Your progress is saved automatically.
+                    Takes under 5 minutes. Your progress is saved automatically.
                   </p>
                 </div>
               )}
 
-              {/* SCREEN 2: PREFERRED NAME */}
+              {/* STEP 2: BASIC INFO */}
               {step === 2 && (
-                <div className="space-y-6">
-                  <h1 className="text-2xl font-light">How should Scout address you? 🌸</h1>
-                  <p className="text-sm text-secondary font-light">
-                    We prefer your preferred name or nickname to make conversations warmer.
+                <div className="space-y-4">
+                  <h1 className="text-2xl font-light">Introduce yourself 🌸</h1>
+                  <p className="text-xs text-secondary font-light">
+                    We use this to verify identity and location-based opportunities.
                   </p>
-                  <input
-                    type="text"
-                    placeholder="Enter your name"
-                    value={formData.identity.preferredName}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        identity: { preferredName: e.target.value },
-                      }))
-                    }
-                    className="w-full px-4 py-3 bg-card border border-border rounded-2xl focus:outline-none focus:border-primary text-base font-light transition-all"
-                  />
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs text-secondary font-medium block mb-1">
+                        Full Name
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Enter your full name"
+                        value={formData.fullName}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, fullName: e.target.value }))
+                        }
+                        className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-secondary font-medium block mb-1">
+                        Gender
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        <button
+                          onClick={() => setFormData((prev) => ({ ...prev, gender: 'FEMALE' }))}
+                          className={`py-2 px-3 border rounded-xl text-xs font-light text-center transition-all ${
+                            formData.gender === 'FEMALE'
+                              ? 'border-primary bg-primary/5 text-primary font-medium'
+                              : 'border-border bg-card text-secondary'
+                          }`}
+                        >
+                          Female
+                        </button>
+                        <button
+                          disabled
+                          className="py-2 px-3 border border-border bg-card/50 text-secondary/40 rounded-xl text-xs font-light text-center relative cursor-not-allowed"
+                        >
+                          Male{' '}
+                          <span className="block text-[8px] text-primary/60 font-medium">
+                            🚧 Coming Soon
+                          </span>
+                        </button>
+                        <button
+                          disabled
+                          className="py-2 px-3 border border-border bg-card/50 text-secondary/40 rounded-xl text-xs font-light text-center relative cursor-not-allowed"
+                        >
+                          Other{' '}
+                          <span className="block text-[8px] text-primary/60 font-medium">
+                            🚧 Coming Soon
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 pt-2">
+                      <div className="col-span-1">
+                        <label className="text-xs text-secondary font-medium block mb-1">
+                          Age (Optional)
+                        </label>
+                        <input
+                          type="number"
+                          placeholder="e.g. 20"
+                          value={formData.age}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, age: e.target.value }))
+                          }
+                          className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <label className="text-xs text-secondary font-medium block mb-1">
+                          State
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Delhi"
+                          value={formData.state}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, state: e.target.value }))
+                          }
+                          className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <label className="text-xs text-secondary font-medium block mb-1">
+                          City
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. New Delhi"
+                          value={formData.city}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, city: e.target.value }))
+                          }
+                          className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
-              {/* SCREEN 3: SITUATION */}
+              {/* STEP 3: EDUCATION */}
               {step === 3 && (
-                <div className="space-y-6">
-                  <h1 className="text-2xl font-light">Tell us a little about yourself.</h1>
-                  <p className="text-sm text-secondary font-light">
-                    Select options that describe your current lifestyle. You can select more than
-                    one!
+                <div className="space-y-4">
+                  <h1 className="text-2xl font-light">Your Academic Context 🎓</h1>
+                  <p className="text-xs text-secondary font-light">
+                    Helps us filter opportunities requiring specific graduation windows or degrees.
                   </p>
-                  <div className="grid grid-cols-1 gap-3">
-                    {[
-                      "🌸 I'm studying right now",
-                      "💼 I'm already working",
-                      "🏠 I'm managing my home and family",
-                      "🚀 I'm building something on my own",
-                      "🔄 I'm planning a comeback",
-                      "❤️ Just exploring what's possible",
-                    ].map((sit) => {
-                      const isSelected = formData.situations.includes(sit);
-                      return (
-                        <button
-                          key={sit}
-                          onClick={() => toggleArrayItem('situations', sit)}
-                          className={`p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${
-                            isSelected
-                              ? 'border-primary bg-primary/5 text-primary font-medium'
-                              : 'border-border bg-card hover:bg-accent text-secondary'
-                          }`}
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs text-secondary font-medium block mb-1">
+                        College / Institute
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Name of your college"
+                        value={formData.college}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, college: e.target.value }))
+                        }
+                        className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-secondary font-medium block mb-1">
+                          Degree
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. B.Tech"
+                          value={formData.degree}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, degree: e.target.value }))
+                          }
+                          className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-secondary font-medium block mb-1">
+                          Branch / Major
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Computer Science"
+                          value={formData.branch}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, branch: e.target.value }))
+                          }
+                          className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 pt-2">
+                      <div>
+                        <label className="text-xs text-secondary font-medium block mb-1">
+                          Current Year
+                        </label>
+                        <select
+                          value={formData.currentYear}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, currentYear: e.target.value }))
+                          }
+                          className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
                         >
-                          <span className="text-sm font-light">{sit}</span>
-                          {isSelected && <Check className="w-4 h-4 text-primary" />}
-                        </button>
-                      );
-                    })}
+                          <option value="">Select Year</option>
+                          {[1, 2, 3, 4, 5, 6].map((yr) => (
+                            <option key={yr} value={yr}>
+                              Year {yr}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-secondary font-medium block mb-1">
+                          Expected Graduation
+                        </label>
+                        <input
+                          type="number"
+                          placeholder="e.g. 2027"
+                          value={formData.expectedGraduation}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, expectedGraduation: e.target.value }))
+                          }
+                          className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* SCREEN 4: EDUCATION & WORK DETAILS */}
+              {/* STEP 4: SKILLS */}
               {step === 4 && (
-                <div className="space-y-6">
-                  <h1 className="text-2xl font-light">
-                    A few more details about your daily routine
-                  </h1>
-
-                  {formData.situations.includes("🌸 I'm studying right now") && (
-                    <div className="space-y-4 pt-2">
-                      <h2 className="text-sm font-medium text-secondary">Education Details</h2>
-                      <div className="grid grid-cols-2 gap-3">
-                        <input
-                          type="text"
-                          placeholder="Degree / Course (e.g. B.Tech)"
-                          value={formData.educationDetail.course}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              educationDetail: { ...prev.educationDetail, course: e.target.value },
-                            }))
-                          }
-                          className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
-                        />
-                        <input
-                          type="text"
-                          placeholder="College / school Name"
-                          value={formData.educationDetail.college}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              educationDetail: { ...prev.educationDetail, college: e.target.value },
-                            }))
-                          }
-                          className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {formData.situations.includes("💼 I'm already working") && (
-                    <div className="space-y-4 pt-4 border-t border-border/50">
-                      <h2 className="text-sm font-medium text-secondary">Work details</h2>
-                      <div className="grid grid-cols-2 gap-3">
-                        <input
-                          type="text"
-                          placeholder="Current Role (e.g. Designer)"
-                          value={formData.workDetail.role}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              workDetail: { ...prev.workDetail, role: e.target.value },
-                            }))
-                          }
-                          className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Industry (e.g. IT)"
-                          value={formData.workDetail.industry}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              workDetail: { ...prev.workDetail, industry: e.target.value },
-                            }))
-                          }
-                          className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* SCREEN 5: WHY INSTALLED */}
-              {step === 5 && (
-                <div className="space-y-6">
-                  <h1 className="text-2xl font-light">What&apos;s bringing you here today?</h1>
-                  <p className="text-sm text-secondary font-light">
-                    Select the key outcomes you are hoping to get.
+                <div className="space-y-4">
+                  <h1 className="text-2xl font-light">What are your skills? 💻</h1>
+                  <p className="text-xs text-secondary font-light">
+                    Search and select the technical skills you know or are currently learning.
                   </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {[
-                      '🌱 Find my first internship',
-                      '💻 Learn new skills',
-                      '💼 Switch jobs',
-                      '👩 Restart my career',
-                      '🎓 Scholarships',
-                      '🏆 Competitions',
-                      '🌍 Remote work',
-                      '❤️ Just exploring',
-                    ].map((w) => {
-                      const isSelected = formData.whyHere.includes(w);
-                      return (
-                        <button
-                          key={w}
-                          onClick={() => toggleArrayItem('whyHere', w)}
-                          className={`p-3.5 rounded-2xl border text-left flex items-center justify-between transition-all ${
-                            isSelected
-                              ? 'border-primary bg-primary/5 text-primary font-medium'
-                              : 'border-border bg-card hover:bg-accent text-secondary'
-                          }`}
-                        >
-                          <span className="text-sm font-light">{w}</span>
-                          {isSelected && <Check className="w-4 h-4 text-primary" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
 
-              {/* SCREEN 6: HAPPIEST DESTINATION */}
-              {step === 6 && (
-                <div className="space-y-6">
-                  <h1 className="text-2xl font-light">Imagine it&apos;s one year from now.</h1>
-                  <p className="text-sm text-secondary font-light">
-                    Which of these achievements would make you happiest?
-                  </p>
-                  <div className="grid grid-cols-1 gap-3">
-                    {[
-                      'I landed my first internship',
-                      'I got my first job',
-                      "I'm earning online",
-                      'I restarted my career after a break',
-                      'I got into my dream company',
-                      'I received a scholarship to support my studies',
-                      'I started freelancing',
-                      'I started my own business',
-                    ].map((dest) => {
-                      const isSelected = formData.happiestDestination === dest;
-                      return (
-                        <button
-                          key={dest}
-                          onClick={() =>
-                            setFormData((prev) => ({ ...prev, happiestDestination: dest }))
-                          }
-                          className={`p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${
-                            isSelected
-                              ? 'border-primary bg-primary/5 text-primary font-medium'
-                              : 'border-border bg-card hover:bg-accent text-secondary'
-                          }`}
-                        >
-                          <span className="text-sm font-light">{dest}</span>
-                          {isSelected && <Check className="w-4 h-4 text-primary" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* SCREEN 7: MAGIC ONE PROBLEM */}
-              {step === 7 && (
-                <div className="space-y-6">
-                  <h1 className="text-2xl font-light">If Scout could solve just ONE problem...</h1>
-                  <p className="text-sm text-secondary font-light">
-                    What would you want it to be over the next few months?
-                  </p>
-                  <div className="grid grid-cols-1 gap-3">
-                    {[
-                      'Find my first internship',
-                      'Help me restart my career',
-                      'Find work from home jobs',
-                      'Help me earn online as a student',
-                      'Prepare me for placements',
-                      'Guide me every day like a mentor',
-                      'Help me learn coding/AI from scratch',
-                    ].map((prob) => {
-                      const isSelected = formData.magicOneProblem === prob;
-                      return (
-                        <button
-                          key={prob}
-                          onClick={() =>
-                            setFormData((prev) => ({ ...prev, magicOneProblem: prob }))
-                          }
-                          className={`p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${
-                            isSelected
-                              ? 'border-primary bg-primary/5 text-primary font-medium'
-                              : 'border-border bg-card hover:bg-accent text-secondary'
-                          }`}
-                        >
-                          <span className="text-sm font-light">{prob}</span>
-                          {isSelected && <Check className="w-4 h-4 text-primary" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* SCREEN 8: INTERESTS ACTIVITIES */}
-              {step === 8 && (
-                <div className="space-y-6">
-                  <h1 className="text-2xl font-light">Which things make you lose track of time?</h1>
-                  <p className="text-sm text-secondary font-light">
-                    Select activities you genuinely enjoy or have spent time doing.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      'Coding',
-                      'Design',
-                      'Teaching',
-                      'Drawing',
-                      'Writing',
-                      'Public Speaking',
-                      'Cooking',
-                      'Fashion',
-                      'Beauty',
-                      'Photography',
-                      'Finance',
-                      'Editing',
-                      'Content Creation',
-                      'Business',
-                      'Gaming',
-                      'Marketing',
-                      'Crafts',
-                      'Tailoring',
-                      'Dancing',
-                      'Music',
-                    ].map((act) => {
-                      const isSelected = formData.timeLossActivities.includes(act);
-                      return (
-                        <button
-                          key={act}
-                          onClick={() => toggleArrayItem('timeLossActivities', act)}
-                          className={`px-4 py-2 rounded-full border text-xs transition-all ${
-                            isSelected
-                              ? 'border-primary bg-primary text-primary-foreground font-medium'
-                              : 'border-border bg-card hover:bg-accent text-secondary'
-                          }`}
-                        >
-                          {act}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* SCREEN 9: DISCOVERY */}
-              {step === 9 && (
-                <div className="space-y-6">
-                  <h1 className="text-2xl font-light">How do you discover opportunities today?</h1>
-                  <p className="text-sm text-secondary font-light">Choose your main sources.</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {[
-                      'Instagram',
-                      'LinkedIn',
-                      'Friends',
-                      'WhatsApp Groups',
-                      'Telegram Channels',
-                      'College Notification Boards',
-                      'Google Searches',
-                      "I don't know where to look",
-                    ].map((ch) => {
-                      const isSelected = formData.discoveryChannels.includes(ch);
-                      return (
-                        <button
-                          key={ch}
-                          onClick={() => toggleArrayItem('discoveryChannels', ch)}
-                          className={`p-3.5 rounded-2xl border text-left flex items-center justify-between transition-all ${
-                            isSelected
-                              ? 'border-primary bg-primary/5 text-primary font-medium'
-                              : 'border-border bg-card hover:bg-accent text-secondary'
-                          }`}
-                        >
-                          <span className="text-sm font-light">{ch}</span>
-                          {isSelected && <Check className="w-4 h-4 text-primary" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* SCREEN 10: OBSTACLES */}
-              {step === 10 && (
-                <div className="space-y-6">
-                  <h1 className="text-2xl font-light">Which of these feels familiar?</h1>
-                  <p className="text-sm text-secondary font-light">
-                    We ask because Scout works to guide you past these roadblocks.
-                  </p>
-                  <div className="grid grid-cols-1 gap-2.5">
-                    {[
-                      "I don't know where to begin",
-                      "I don't have enough confidence",
-                      'Family responsibilities take up my day',
-                      'Financial difficulties',
-                      'College workload is too heavy',
-                      'I lack professional guidance',
-                      "I don't own a personal laptop",
-                      'Poor internet connectivity',
-                      'Fear of rejection keeps me from applying',
-                      "English isn't my strongest language",
-                      'None of these',
-                    ].map((ob) => {
-                      const isSelected = formData.biggestObstacles.includes(ob);
-                      return (
-                        <button
-                          key={ob}
-                          onClick={() => toggleArrayItem('biggestObstacles', ob)}
-                          className={`p-3.5 rounded-2xl border text-left flex items-center justify-between transition-all ${
-                            isSelected
-                              ? 'border-primary bg-primary/5 text-primary font-medium'
-                              : 'border-border bg-card hover:bg-accent text-secondary'
-                          }`}
-                        >
-                          <span className="text-xs font-light">{ob}</span>
-                          {isSelected && <Check className="w-4 h-4 text-primary" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* SCREEN 11: READINESS LEVEL */}
-              {step === 11 && (
-                <div className="space-y-6">
-                  <h1 className="text-2xl font-light">
-                    If the perfect opportunity appeared tomorrow, how ready would you feel?
-                  </h1>
-                  <p className="text-sm text-secondary font-light">
-                    Move the slider to match your current feeling.
-                  </p>
-                  <div className="space-y-8 pt-4">
+                  <div className="relative">
                     <input
-                      type="range"
-                      min="1"
-                      max="5"
-                      step="1"
-                      value={formData.readinessIllustrativeLevel}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          readinessIllustrativeLevel: parseInt(e.target.value),
-                        }))
-                      }
-                      className="w-full h-1 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                      type="text"
+                      placeholder="Search skills..."
+                      value={skillSearch}
+                      onChange={(e) => setSkillSearch(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
                     />
-
-                    <div className="p-6 border border-border bg-card rounded-2xl text-center space-y-2">
-                      {formData.readinessIllustrativeLevel === 1 && (
-                        <>
-                          <div className="text-3xl">🌱</div>
-                          <h2 className="text-sm font-semibold text-primary">
-                            {'"I\'m just exploring."'}
-                          </h2>
-                        </>
-                      )}
-                      {formData.readinessIllustrativeLevel === 2 && (
-                        <>
-                          <div className="text-3xl">🌿</div>
-                          <h2 className="text-sm font-semibold text-primary">
-                            {'"I\'ve started learning."'}
-                          </h2>
-                        </>
-                      )}
-                      {formData.readinessIllustrativeLevel === 3 && (
-                        <>
-                          <div className="text-3xl">🌸</div>
-                          <h2 className="text-sm font-semibold text-primary">
-                            {'"I\'m ready to apply."'}
-                          </h2>
-                        </>
-                      )}
-                      {formData.readinessIllustrativeLevel === 4 && (
-                        <>
-                          <div className="text-3xl">🌟</div>
-                          <h2 className="text-sm font-semibold text-primary">
-                            {'"I\'m actively applying."'}
-                          </h2>
-                        </>
-                      )}
-                      {formData.readinessIllustrativeLevel === 5 && (
-                        <>
-                          <div className="text-3xl">🚀</div>
-                          <h2 className="text-sm font-semibold text-primary">
-                            {'"I\'m chasing big opportunities."'}
-                          </h2>
-                        </>
-                      )}
-                    </div>
+                    <Search className="absolute left-3.5 top-3 w-4 h-4 text-secondary/60" />
                   </div>
-                </div>
-              )}
 
-              {/* SCREEN 12: MOTIVATED TIME */}
-              {step === 12 && (
-                <div className="space-y-6">
-                  <h1 className="text-2xl font-light">When do you usually feel motivated?</h1>
-                  <p className="text-sm text-secondary font-light">
-                    Helps us schedule matching notifications.
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {[
-                      'Morning hours',
-                      'Night owl sessions',
-                      'After college / work',
-                      'Quiet weekends',
-                      'Whenever someone reminds me',
-                    ].map((m) => {
-                      const isSelected = formData.motivatedTime.includes(m);
-                      return (
-                        <button
-                          key={m}
-                          onClick={() => toggleArrayItem('motivatedTime', m)}
-                          className={`p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${
-                            isSelected
-                              ? 'border-primary bg-primary/5 text-primary font-medium'
-                              : 'border-border bg-card hover:bg-accent text-secondary'
-                          }`}
-                        >
-                          <span className="text-sm font-light">{m}</span>
-                          {isSelected && <Check className="w-4 h-4 text-primary" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* SCREEN 13: AVAILABILITY */}
-              {step === 13 && (
-                <div className="space-y-6">
-                  <h1 className="text-2xl font-light">
-                    When do you usually get time for yourself?
-                  </h1>
-                  <p className="text-sm text-secondary font-light">
-                    Select the times and input hours.
-                  </p>
-
-                  <div className="flex flex-wrap gap-2">
-                    {['Morning', 'Afternoon', 'Evening', 'Late Night', 'Weekends', 'Flexible'].map(
-                      (time) => {
-                        const isSelected = formData.availability.timeOfDay.includes(time);
+                  {/* Selected skills tags */}
+                  {formData.technicalSkills.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-accent/20 rounded-xl">
+                      {formData.technicalSkills.map((skillId) => {
+                        const skillName =
+                          SKILLS_TAXONOMY.find((s) => s.id === skillId)?.name || skillId;
                         return (
-                          <button
-                            key={time}
-                            onClick={() => {
-                              const current = formData.availability.timeOfDay;
-                              const updated = current.includes(time)
-                                ? current.filter((x) => x !== time)
-                                : [...current, time];
-                              setFormData((prev) => ({
-                                ...prev,
-                                availability: { ...prev.availability, timeOfDay: updated },
-                              }));
-                            }}
-                            className={`px-4 py-2 rounded-full border text-xs transition-all ${
-                              isSelected
-                                ? 'border-primary bg-primary text-primary-foreground font-medium'
-                                : 'border-border bg-card hover:bg-accent text-secondary'
-                            }`}
+                          <span
+                            key={skillId}
+                            className="flex items-center space-x-1 px-2.5 py-1 bg-primary text-primary-foreground rounded-full text-xs font-light"
                           >
-                            {time}
-                          </button>
-                        );
-                      },
-                    )}
-                  </div>
-
-                  <div className="space-y-2 pt-4">
-                    <label className="text-sm text-secondary font-light">
-                      Hours per week:{' '}
-                      <span className="font-medium text-primary">
-                        {formData.availability.hoursPerWeek} hrs
-                      </span>
-                    </label>
-                    <input
-                      type="range"
-                      min="2"
-                      max="40"
-                      step="2"
-                      value={formData.availability.hoursPerWeek}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value);
-                        setFormData((prev) => ({
-                          ...prev,
-                          availability: { ...prev.availability, hoursPerWeek: val },
-                        }));
-                      }}
-                      className="w-full h-1 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* SCREEN 14: OPPORTUNITY PREFERENCES */}
-              {step === 14 && (
-                <div className="space-y-6">
-                  <h1 className="text-2xl font-light">
-                    Which of these would make you excited to wake up tomorrow?
-                  </h1>
-                  <p className="text-sm text-secondary font-light">
-                    Select all opportunity categories you&apos;d love to see.
-                  </p>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {[
-                      '🌱 Internship',
-                      '💼 Job',
-                      '🎓 Scholarship',
-                      '💻 Freelancing',
-                      '🚀 Startup',
-                      '❤️ Volunteering',
-                      '✨ Competitions',
-                      '📚 Courses',
-                      '💰 Grants',
-                      '🏆 Fellowships',
-                    ].map((exc) => {
-                      const isSelected = formData.opportunityExcitement.includes(exc);
-                      return (
-                        <button
-                          key={exc}
-                          onClick={() => toggleArrayItem('opportunityExcitement', exc)}
-                          className={`p-3 rounded-xl border text-left flex items-center justify-between transition-all ${
-                            isSelected
-                              ? 'border-primary bg-primary/5 text-primary font-medium'
-                              : 'border-border bg-card hover:bg-accent text-secondary'
-                          }`}
-                        >
-                          <span className="text-xs font-light">{exc}</span>
-                          {isSelected && <Check className="w-3 h-3 text-primary" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* SCREEN 15: COMPANION SETTINGS */}
-              {step === 15 && (
-                <div className="space-y-6">
-                  <h1 className="text-2xl font-light">
-                    How would you like Scout to interact with you? 🌸
-                  </h1>
-
-                  {/* Celebration preference */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-secondary">
-                      Celebrate wins style
-                    </label>
-                    <div className="grid grid-cols-4 gap-2">
-                      {[
-                        '🎉 Loud',
-                        '🌸 Gentle',
-                        '😊 Just Congratulations',
-                        "🙈 Don't Celebrate",
-                      ].map((style) => {
-                        const isSelected = formData.companionPreferences.celebrationStyle === style;
-                        return (
-                          <button
-                            key={style}
-                            onClick={() =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                companionPreferences: {
-                                  ...prev.companionPreferences,
-                                  celebrationStyle: style,
-                                },
-                              }))
-                            }
-                            className={`p-2 border rounded-xl text-[10px] text-center transition-all ${
-                              isSelected
-                                ? 'border-primary bg-primary/5 text-primary font-medium'
-                                : 'border-border bg-card hover:bg-accent text-secondary'
-                            }`}
-                          >
-                            {style}
-                          </button>
+                            <span>{skillName}</span>
+                            <button
+                              onClick={() => toggleSkill(skillId)}
+                              className="hover:opacity-85 focus:outline-none"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
                         );
                       })}
                     </div>
-                  </div>
+                  )}
 
-                  {/* Language preference */}
-                  <div className="space-y-2 pt-2">
-                    <label className="text-sm font-medium text-secondary">
-                      Language Natural Comfort
-                    </label>
+                  {/* Search results list */}
+                  <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto p-1 bg-card border border-border rounded-xl">
+                    {filteredSkills.map((skill) => {
+                      const isSelected = formData.technicalSkills.includes(skill.id);
+                      return (
+                        <button
+                          key={skill.id}
+                          onClick={() => toggleSkill(skill.id)}
+                          className={`p-2 border rounded-xl text-center text-xs transition-all ${
+                            isSelected
+                              ? 'border-primary bg-primary/5 text-primary font-medium'
+                              : 'border-border bg-card hover:bg-accent text-secondary'
+                          }`}
+                        >
+                          {skill.name}
+                        </button>
+                      );
+                    })}
+                    {filteredSkills.length === 0 && (
+                      <div className="col-span-3 py-6 text-center text-xs text-secondary font-light">
+                        No skills match your query
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 5: CAREER DIRECTION */}
+              {step === 5 && (
+                <div className="space-y-5">
+                  <div className="space-y-2">
+                    <h1 className="text-2xl font-light">What is your biggest goal right now? 🎯</h1>
+                    <p className="text-xs text-secondary font-light">
+                      Choose the main focus that dominates your career efforts currently.
+                    </p>
+
                     <div className="flex flex-wrap gap-2">
                       {[
-                        'English',
-                        'Hindi',
-                        'Hinglish',
-                        'Tamil',
-                        'Telugu',
-                        'Bengali',
-                        'Marathi',
-                        'Gujarati',
-                        'Kannada',
-                        'Malayalam',
-                        'Punjabi',
-                      ].map((lang) => {
-                        const isSelected = formData.companionPreferences.preferredLanguage === lang;
+                        'Get my first internship',
+                        'Build my resume',
+                        'Prepare for placements',
+                        'Learn through hackathons',
+                        'Explore opportunities',
+                        'Win scholarships',
+                        "I'm still exploring",
+                      ].map((goal) => {
+                        const isSelected = formData.careerGoals[0] === goal;
                         return (
                           <button
-                            key={lang}
+                            key={goal}
                             onClick={() =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                companionPreferences: {
-                                  ...prev.companionPreferences,
-                                  preferredLanguage: lang,
-                                },
-                              }))
+                              setFormData((prev) => ({ ...prev, careerGoals: [goal] }))
                             }
                             className={`px-3 py-1.5 border rounded-full text-xs transition-all ${
                               isSelected
@@ -933,7 +672,45 @@ export default function OnboardingPage() {
                                 : 'border-border bg-card hover:bg-accent text-secondary'
                             }`}
                           >
-                            {lang}
+                            {goal}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-3 border-t border-border/40">
+                    <h2 className="text-base font-light text-foreground">
+                      What is worrying you the most right now? 🌸
+                    </h2>
+                    <p className="text-xs text-secondary font-light">
+                      Let us know what roadblock is on your mind so we can help clear it first.
+                    </p>
+
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        "I don't know where to apply.",
+                        "I don't think I'm good enough.",
+                        'My resume is weak.',
+                        "I don't have enough projects.",
+                        "I don't know which skills to learn.",
+                        "I'm preparing for placements.",
+                        "I'm just exploring.",
+                      ].map((worry) => {
+                        const isSelected = formData.biggestChallenge === worry;
+                        return (
+                          <button
+                            key={worry}
+                            onClick={() =>
+                              setFormData((prev) => ({ ...prev, biggestChallenge: worry }))
+                            }
+                            className={`px-3 py-1.5 border rounded-full text-xs transition-all ${
+                              isSelected
+                                ? 'border-primary bg-primary text-primary-foreground font-medium'
+                                : 'border-border bg-card hover:bg-accent text-secondary'
+                            }`}
+                          >
+                            {worry}
                           </button>
                         );
                       })}
@@ -942,22 +719,225 @@ export default function OnboardingPage() {
                 </div>
               )}
 
-              {/* SCREEN 16: DONE */}
-              {step === 16 && (
-                <div className="space-y-6 text-center">
-                  <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary">
-                    <Sparkles className="w-6 h-6 animate-pulse" />
+              {/* STEP 6: PREFERENCES & CONFIDENCE */}
+              {step === 6 && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <h1 className="text-2xl font-light">What should Scout hunt for? 🌸</h1>
+                    <p className="text-xs text-secondary font-light">
+                      Select the types of student opportunities you want recommendations for.
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { key: 'internships', label: 'Internships' },
+                        { key: 'hackathons', label: 'Hackathons' },
+                        { key: 'scholarships', label: 'Scholarships' },
+                        { key: 'opensource', label: 'Open Source' },
+                        { key: 'events', label: 'Workshops' },
+                        { key: 'bootcamps', label: 'Bootcamps' },
+                        { key: 'competitions', label: 'Competitions' },
+                        { key: 'training', label: 'Learning Programs' },
+                      ].map((item) => {
+                        const isSelected =
+                          formData.opportunityPreferences[
+                            item.key as keyof typeof formData.opportunityPreferences
+                          ];
+                        return (
+                          <button
+                            key={item.key}
+                            onClick={() =>
+                              togglePreference(
+                                item.key as keyof typeof formData.opportunityPreferences,
+                              )
+                            }
+                            className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition-all ${
+                              isSelected
+                                ? 'border-primary bg-primary/5 text-primary font-medium'
+                                : 'border-border bg-card hover:bg-accent text-secondary'
+                            }`}
+                          >
+                            <span className="text-xs font-light">{item.label}</span>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-primary" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Future Categories (Coming Soon) */}
+                    <div className="pt-2">
+                      <div className="flex flex-wrap gap-1.5">
+                        {['Full-time Jobs', 'Freelancing Clients', 'Startup Funding'].map(
+                          (soon) => (
+                            <span
+                              key={soon}
+                              className="px-2 py-0.5 bg-card border border-border text-secondary/40 rounded-full text-[9px] font-light cursor-not-allowed"
+                            >
+                              {soon} 🚧 Coming Soon
+                            </span>
+                          ),
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <h1 className="text-3xl font-light">
-                    All Set, {formData.identity.preferredName}! ✨
-                  </h1>
-                  <p className="text-secondary font-light leading-relaxed max-w-md mx-auto">
-                    Scout is now building your intelligence model and searching opportunities
-                    tailored to your life.
+
+                  <div className="space-y-3 pt-3 border-t border-border/40">
+                    <h2 className="text-sm font-medium text-secondary">Self-Belief check</h2>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-secondary font-light">
+                          &quot;I apply even if I don&apos;t meet every requirement.&quot;
+                        </span>
+                        <div className="flex space-x-1">
+                          {['Agree', 'Neutral', 'Disagree'].map((o) => (
+                            <button
+                              key={o}
+                              onClick={() =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  confidenceProfile: {
+                                    ...prev.confidenceProfile,
+                                    applyIfNoMeet: o,
+                                  },
+                                }))
+                              }
+                              className={`px-2 py-0.5 border rounded text-[9px] ${formData.confidenceProfile.applyIfNoMeet === o ? 'border-primary bg-primary/5 text-primary' : 'border-border text-secondary'}`}
+                            >
+                              {o}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-secondary font-light">
+                          &quot;I avoid competitive opportunities.&quot;
+                        </span>
+                        <div className="flex space-x-1">
+                          {['Agree', 'Neutral', 'Disagree'].map((o) => (
+                            <button
+                              key={o}
+                              onClick={() =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  confidenceProfile: {
+                                    ...prev.confidenceProfile,
+                                    avoidCompetitive: o,
+                                  },
+                                }))
+                              }
+                              className={`px-2 py-0.5 border rounded text-[9px] ${formData.confidenceProfile.avoidCompetitive === o ? 'border-primary bg-primary/5 text-primary' : 'border-border text-secondary'}`}
+                            >
+                              {o}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-secondary font-light">
+                          &quot;I prefer safer opportunities over ambitious ones.&quot;
+                        </span>
+                        <div className="flex space-x-1">
+                          {['Agree', 'Neutral', 'Disagree'].map((o) => (
+                            <button
+                              key={o}
+                              onClick={() =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  confidenceProfile: { ...prev.confidenceProfile, preferSafer: o },
+                                }))
+                              }
+                              className={`px-2 py-0.5 border rounded text-[9px] ${formData.confidenceProfile.preferSafer === o ? 'border-primary bg-primary/5 text-primary' : 'border-border text-secondary'}`}
+                            >
+                              {o}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 7: RESUME & CAREER READINESS */}
+              {step === 7 && (
+                <div className="space-y-4">
+                  <h1 className="text-2xl font-light">Resume & Career Readiness 📈</h1>
+                  <p className="text-xs text-secondary font-light">
+                    Completing your profile generates better recommendation match rates.
                   </p>
-                  <p className="text-xs text-secondary/60">
-                    Welcome to the companion network. Let&apos;s make this year meaningful. 🌸
-                  </p>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Resume container */}
+                    <div className="flex flex-col items-center justify-center p-4 border border-dashed border-border rounded-2xl bg-card hover:bg-accent/10 transition-all cursor-pointer relative min-h-[120px]">
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx"
+                        onChange={handleFileUpload}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                        disabled={uploadingFile}
+                      />
+                      {uploadingFile ? (
+                        <div className="text-center space-y-1">
+                          <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+                          <p className="text-[10px] font-light text-secondary">Uploading...</p>
+                        </div>
+                      ) : formData.resumeUploaded ? (
+                        <div className="text-center space-y-1">
+                          <Check className="w-5 h-5 text-primary mx-auto" />
+                          <p className="text-xs font-semibold text-primary">Resume registered!</p>
+                          <p className="text-[9px] text-secondary truncate max-w-[120px] mx-auto">
+                            {uploadedFileName || 'resume.pdf'}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="text-center space-y-1">
+                          <Upload className="w-5 h-5 text-secondary/60 mx-auto" />
+                          <p className="text-xs font-light text-secondary">
+                            Click to upload resume
+                          </p>
+                          <p className="text-[8px] text-secondary/40">Optional for MVP</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Readiness score circular indicator */}
+                    <div className="flex flex-col items-center justify-center bg-card border border-border p-4 rounded-2xl min-h-[120px] text-center">
+                      <span className="text-xs font-semibold text-secondary/80 block uppercase tracking-wider mb-1">
+                        Career Ready
+                      </span>
+                      <span className="text-2xl font-bold text-primary">
+                        {readinessData.careerReadinessScore}%
+                      </span>
+                      <span className="text-[9px] text-secondary/50 block mt-1">
+                        Completeness: {readinessData.completionPercentage}%
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Dynamic checklist suggestions */}
+                  {suggestionsList.length > 0 && (
+                    <div className="p-4 bg-accent/20 border border-border rounded-xl space-y-2">
+                      <label className="text-[10px] font-semibold text-secondary/60 uppercase tracking-wide flex items-center space-x-1">
+                        <AlertCircle className="w-3.5 h-3.5 text-primary" />
+                        <span>Complete these to improve recommendations:</span>
+                      </label>
+                      <ul className="space-y-1 text-xs text-secondary font-light pl-1.5 list-disc list-inside">
+                        {suggestionsList.map((suggestion) => (
+                          <li key={suggestion}>{suggestion}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <div className="space-y-2 text-center pt-2">
+                    <h2 className="text-xl font-light">All Set! ✨</h2>
+                    <p className="text-xs text-secondary font-light max-w-xs mx-auto">
+                      Click the button below to land on your personalized dashboard and discover
+                      opportunities.
+                    </p>
+                  </div>
                 </div>
               )}
             </motion.div>
@@ -967,7 +947,7 @@ export default function OnboardingPage() {
         {/* Wizard Footer Navigation */}
         <footer className="fixed bottom-0 left-0 right-0 p-6 bg-background/80 backdrop-blur border-t border-border z-20">
           <div className="max-w-xl mx-auto flex items-center justify-between">
-            {step > 1 && step < 16 ? (
+            {step > 1 ? (
               <button
                 onClick={handleBack}
                 disabled={saving}
@@ -980,7 +960,7 @@ export default function OnboardingPage() {
               <div />
             )}
 
-            {step === 16 ? (
+            {step === TOTAL_STEPS ? (
               <button
                 onClick={handleComplete}
                 disabled={saving}
@@ -992,7 +972,7 @@ export default function OnboardingPage() {
             ) : (
               <button
                 onClick={handleNext}
-                disabled={saving || (step === 2 && !formData.identity.preferredName)}
+                disabled={saving || (step === 2 && !formData.fullName)}
                 className="flex items-center space-x-2 px-6 py-2.5 bg-primary hover:opacity-90 text-primary-foreground disabled:opacity-50 rounded-full text-sm font-semibold transition-all shadow-sm"
               >
                 <span>{step === 1 ? "Let's Begin" : 'Next'}</span>

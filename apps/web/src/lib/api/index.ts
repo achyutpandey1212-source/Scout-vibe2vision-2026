@@ -38,6 +38,9 @@ export const profileApi = {
   get: () => api.get('/api/v1/profile'),
   update: (data: any) => api.post('/api/v1/profile', data),
   completeOnboarding: () => api.post('/api/v1/profile/onboarding/complete'),
+  getV2: () => api.get('/api/v1/profile/v2'),
+  updateV2: (data: any) => api.post('/api/v1/profile/v2', data),
+  uploadResumeV2: (data: any) => api.post('/api/v1/profile/v2/resume', data),
 };
 
 export const opportunitiesApi = {

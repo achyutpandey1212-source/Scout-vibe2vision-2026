@@ -1,3 +1,13 @@
+/**
+ * ==========================================
+ *          ONBOARDING V2 FROZEN
+ *
+ * Changing onboarding requires updating:
+ * - Personalization
+ * - Discovery
+ * - Recommendation
+ * ==========================================
+ */
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IProfile extends Document {
@@ -31,6 +41,7 @@ export interface IProfile extends Document {
   // Motivation Signals
   primaryMotivation?: string;
   secondaryMotivations: string[];
+  biggestChallenge?: string;
 
   // Confidence Signals
   confidenceProfile?: any;
@@ -72,6 +83,8 @@ export interface IProfile extends Document {
   portfolioConnected: boolean;
 
   // Metadata
+  persona: 'COLLEGE_STUDENT' | 'WORKING_PROFESSIONAL' | 'RETURN_TO_WORK' | 'CAREER_SWITCHER';
+  onboardingVersion: number;
   lastRecommendationRefresh?: Date;
   notificationPreferences?: {
     dailyDelta: boolean;
@@ -125,6 +138,7 @@ const ProfileSchema = new Schema<IProfile>(
     // Motivation Signals
     primaryMotivation: { type: String, default: '' },
     secondaryMotivations: { type: [String], default: [] },
+    biggestChallenge: { type: String, default: '' },
 
     // Confidence Signals
     confidenceProfile: { type: Schema.Types.Mixed, default: {} },
@@ -166,6 +180,13 @@ const ProfileSchema = new Schema<IProfile>(
     portfolioConnected: { type: Boolean, default: false },
 
     // Metadata
+    persona: {
+      type: String,
+      enum: ['COLLEGE_STUDENT', 'WORKING_PROFESSIONAL', 'RETURN_TO_WORK', 'CAREER_SWITCHER'],
+      default: 'COLLEGE_STUDENT',
+      index: true,
+    },
+    onboardingVersion: { type: Number, default: 2 },
     lastRecommendationRefresh: { type: Date },
     notificationPreferences: {
       dailyDelta: { type: Boolean, default: true },
