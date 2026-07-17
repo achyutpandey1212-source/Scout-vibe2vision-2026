@@ -207,7 +207,7 @@ export class OpportunityDetector {
       }
     });
 
-    // ── Category-Aware Filtering & Penalties (PR5.5) ──
+    // ── Category-Aware Filtering & Penalties (PR5.5/PR5.6 - Part 4) ──
     if (categories && categories.length > 0) {
       const isInternshipRun =
         categories.includes('INTERNSHIPS') || categories.includes('STARTUP_INTERNSHIPS');
@@ -236,6 +236,53 @@ export class OpportunityDetector {
         penalties.push(
           'Contains experienced hire/senior keywords in title without intern keywords',
         );
+      }
+
+      if (isInternshipRun) {
+        const highConfidenceInternKeywords = [
+          'intern',
+          'internship',
+          'student',
+          'campus',
+          'graduate program',
+          'early career',
+          'trainee',
+          'university',
+          'apprentice',
+          'learning program',
+          'summer internship',
+          'winter internship',
+          'co-op',
+          'fresher',
+        ];
+
+        const containsHighConfSignal = highConfidenceInternKeywords.some(
+          (term) => titleLower.includes(term) || urlLower.includes(term),
+        );
+        if (containsHighConfSignal) {
+          score += 35; // Boost confidence!
+          reasons.push('High confidence student/internship signal matched');
+        }
+
+        const bodyExperiencedKeywords = [
+          'senior',
+          'principal',
+          'lead',
+          'director',
+          'manager',
+          'architect',
+          '5+ years',
+          'experienced',
+          'lateral',
+          'returnship',
+        ];
+        const experiencedHits = bodyExperiencedKeywords.filter(
+          (kw) => markdownLower.includes(kw) || titleLower.includes(kw),
+        ).length;
+        if (experiencedHits > 0) {
+          score -= Math.min(experiencedHits * 10, 30); // Reduce confidence!
+          penalties.push(`Experienced hire keyword signals found: ${experiencedHits} hits`);
+        }
       }
 
       if (categories.includes('STARTUP_INTERNSHIPS')) {

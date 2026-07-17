@@ -410,6 +410,62 @@ export async function discoverOpportunities(
     .slice(0, 3)
     .map((o) => `${o.title} (${o.organization}) - Gem: ${o.hiddenGemScore || 0}`);
 
+  // ── Daily Discovery Success Metrics (PR5.6 - Part 8) ──
+  const engineeringInternships = acceptedOpps.filter(
+    (o) =>
+      o.opportunityType === 'INTERNSHIP' &&
+      (['engineer', 'developer', 'software', 'programmer', 'coder', 'sde', 'tech'].some((kw) =>
+        o.title.toLowerCase().includes(kw),
+      ) ||
+        o.skills.length > 0),
+  ).length;
+
+  const startupInternships = acceptedOpps.filter(
+    (o) =>
+      o.opportunityType === 'INTERNSHIP' &&
+      (o.sourceType === 'COMPANY' ||
+        o.sourceURL.toLowerCase().includes('yc') ||
+        o.sourceURL.toLowerCase().includes('wellfound')),
+  ).length;
+
+  const remoteInternships = acceptedOpps.filter(
+    (o) => o.opportunityType === 'INTERNSHIP' && o.remote,
+  ).length;
+
+  const studentPrograms = acceptedOpps.filter((o) =>
+    ['program', 'fellowship', 'scholarship', 'camp', 'academy'].some(
+      (t) => o.title.toLowerCase().includes(t) || (o.opportunityType as string) === t.toUpperCase(),
+    ),
+  ).length;
+
+  const portfolioBuildingOpps = acceptedOpps.filter(
+    (o) =>
+      (o.stipend !== null && o.stipend > 0) ||
+      (o.benefits && o.benefits.toLowerCase().includes('portfolio')),
+  ).length;
+
+  const internshipRelevanceSum = acceptedOpps
+    .filter((o) => o.opportunityType === 'INTERNSHIP')
+    .reduce((sum, o) => sum + (o.qualityScore || 0), 0);
+  const avgInternshipRelevance =
+    acceptedOpps.filter((o) => o.opportunityType === 'INTERNSHIP').length > 0
+      ? Math.round(
+          internshipRelevanceSum /
+            acceptedOpps.filter((o) => o.opportunityType === 'INTERNSHIP').length,
+        )
+      : 0;
+
+  const targetCategoryList = context.categories || [];
+  const matchedPurity = acceptedOpps.filter(
+    (o) =>
+      targetCategoryList.length === 0 ||
+      targetCategoryList.some((tc) =>
+        o.title.toLowerCase().includes(tc.toLowerCase().split('_')[0]),
+      ),
+  ).length;
+  const categoryPurity =
+    acceptedOpps.length > 0 ? Math.round((matchedPurity / acceptedOpps.length) * 100) : 100;
+
   console.log(`
 ========== Scout Discovery Report (V2) ==========
 Sources Crawled:          ${TRUSTED_SOURCES.length}
@@ -423,6 +479,16 @@ Archived Opportunities:   ${runResult.archived}
 Rejected (Low Quality):   ${rejectedCount}
 Average Quality Score:   ${runResult.averageQuality}
 Duration:                ${durationStr}
+
+─── Daily Discovery Success Metrics ───
+Engineering Internships Found:  ${engineeringInternships}
+Startup Internships Found:      ${startupInternships}
+Remote Internships:             ${remoteInternships}
+Student Programs:               ${studentPrograms}
+Portfolio-Building Opps:        ${portfolioBuildingOpps}
+Average Internship Relevance:   ${avgInternshipRelevance}%
+Category Purity:                ${categoryPurity}%
+False Positives (Rejected):     ${rejectedCount}
 
 ─── V2 Diversity Health Scores ───
 Search Diversity Score:       ${searchDiversityScore}%

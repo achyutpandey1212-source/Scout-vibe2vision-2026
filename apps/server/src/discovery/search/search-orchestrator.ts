@@ -62,6 +62,27 @@ const OPPORTUNITY_KEYWORDS = [
   'competition',
   'admissions',
   'hiring',
+  // Student-specific expansion (PR5.6 - Part 3)
+  'students',
+  'intern',
+  'graduates',
+  'campus',
+  'early-careers',
+  'early-career',
+  'university',
+  'research',
+  'young-professionals',
+  'new-grad',
+  'newgrad',
+  'bootcamp',
+  'academy',
+  'talent-program',
+  'learning-program',
+  'summer-internship',
+  'winter-internship',
+  'trainee',
+  'apprentice',
+  'fresher',
 ];
 
 const FRESHNESS_KEYWORDS = ['2026', 'july', 'august', 'apply now', 'last date', 'deadline'];
@@ -213,12 +234,55 @@ function calculateScore(
     if (pathSegments.length >= 2) {
       urlQuality = DISCOVERY_CONFIG.HEURISTICS.URL_QUALITY_BOOST;
     }
+
+    // ── Experienced-Hire Down-Ranking (PR5.6 - Part 2) ──
+    const hasExperiencedKeyword = [
+      'senior',
+      'lead',
+      'principal',
+      'manager',
+      'director',
+      'architect',
+      'experienced',
+      '5+ years',
+      'mba',
+      'finance',
+      'hr',
+      'sales',
+      'marketing',
+      'faculty',
+      'professor',
+      'permanent position',
+      'full-time experienced',
+    ].some(
+      (kw) =>
+        urlPath.includes(kw) || normalizedTitle.includes(kw) || normalizedSnippet.includes(kw),
+    );
+
+    const hasStudentKeyword = [
+      'intern',
+      'student',
+      'campus',
+      'graduate program',
+      'trainee',
+      'apprentice',
+      'early careers',
+      'university recruiting',
+      'fresher',
+    ].some(
+      (kw) =>
+        urlPath.includes(kw) || normalizedTitle.includes(kw) || normalizedSnippet.includes(kw),
+    );
+
+    if (hasExperiencedKeyword && !hasStudentKeyword) {
+      trust -= 60; // Pull down rank heavily
+    }
   } catch {
     // Graceful fallback if URL parsing fails during score calculation
   }
 
   return {
-    score: trust + keyword + freshness + urlQuality,
+    score: Math.max(0, trust + keyword + freshness + urlQuality),
     breakdown: { trust, keyword, freshness, urlQuality },
   };
 }

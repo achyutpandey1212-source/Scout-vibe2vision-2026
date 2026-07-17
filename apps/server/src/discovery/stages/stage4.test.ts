@@ -90,4 +90,27 @@ describe('Stage4QualityAcceptance Category Alignment', () => {
       true,
     );
   });
+
+  it('rewards student-friendly learning and stack boosts, and penalizes corporate leadership content', async () => {
+    const learningOpp = {
+      ...baseOpportunity,
+      description: 'Mentorship and github portfolio building program in react and typescript.',
+    };
+    const results = await stage4.execute([learningOpp], { categories: ['INTERNSHIPS'] });
+    expect(results[0].positiveReasons).toContain(
+      'Student-friendly learning/mentorship language detected',
+    );
+    expect(results[0].positiveReasons).toContain('Engineering stack details available');
+
+    const corporateOpp = {
+      ...baseOpportunity,
+      description: 'Corporate leadership executive hiring program.',
+    };
+    const results2 = await stage4.execute([corporateOpp], { categories: ['INTERNSHIPS'] });
+    expect(
+      results2[0].penalties.some((p) =>
+        p.includes('Corporate leadership/non-engineering domain mismatch'),
+      ),
+    ).toBe(true);
+  });
 });

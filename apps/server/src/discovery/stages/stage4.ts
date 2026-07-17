@@ -165,6 +165,69 @@ export class Stage4QualityAcceptance implements IPipelineStage<
         penaltyDistribution.noStipend++;
       }
 
+      // ── Student Opportunity Quality Adjustments (PR5.6 - Part 7) ──
+      const titleLowerForScore = opp.title.toLowerCase();
+      const descLowerForScore = (opp.description || '').toLowerCase();
+      const skillsLowerForScore = (opp.skills || []).map((s) => s.toLowerCase());
+
+      let studentBoost = 0;
+      const hasStudentKeywords = [
+        'mentorship',
+        'portfolio',
+        'learning',
+        'training',
+        'guidance',
+        'learn',
+        'student-friendly',
+        'github',
+      ].some((kw) => descLowerForScore.includes(kw));
+      if (hasStudentKeywords) {
+        studentBoost += 10;
+        positiveReasons.push('Student-friendly learning/mentorship language detected');
+      }
+
+      const hasTechStack = [
+        'github',
+        'ai',
+        'ml',
+        'backend',
+        'frontend',
+        'cloud',
+        'devops',
+        'cybersecurity',
+        'data science',
+        'typescript',
+        'node',
+        'react',
+        'python',
+        'java',
+        'golang',
+        'rust',
+      ].some((stack) => descLowerForScore.includes(stack) || skillsLowerForScore.includes(stack));
+      if (hasTechStack) {
+        studentBoost += 10;
+        positiveReasons.push('Engineering stack details available');
+      }
+      score += studentBoost;
+
+      const hasUnrelatedDomain = [
+        'executive',
+        'leadership',
+        'corporate strategy',
+        'finance director',
+        'sales representative',
+        'operations lead',
+        'human resources manager',
+        'hr manager',
+        'marketing head',
+        'professor',
+        'faculty',
+      ].some((kw) => titleLowerForScore.includes(kw) || descLowerForScore.includes(kw));
+      if (hasUnrelatedDomain) {
+        score -= 25;
+        penalties.push('Corporate leadership/non-engineering domain mismatch');
+      }
+
       // ── Category Mismatch Penalties (PR5.5) ──
       const runCategories: string[] = options?.categories || [];
       if (runCategories.length > 0) {
