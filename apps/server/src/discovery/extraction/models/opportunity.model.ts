@@ -79,8 +79,8 @@ const OpportunitySchema = new Schema<IOpportunity>(
 
     trustLevel: {
       type: String,
-      enum: ['VERIFIED', 'OFFICIAL', 'COMMUNITY', 'UNKNOWN'],
-      default: 'UNKNOWN',
+      enum: ['LOW', 'MEDIUM', 'HIGH', 'VERY_HIGH'],
+      default: 'LOW',
       index: true,
     },
     qualityScore: { type: Number, default: 0, index: true },

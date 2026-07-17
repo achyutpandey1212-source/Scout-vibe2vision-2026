@@ -9,7 +9,7 @@ import { Stage3Extraction } from '../stages/stage3';
 import { Stage4QualityAcceptance } from '../stages/stage4';
 import { Stage5Persistence } from '../stages/stage5';
 import { DashboardStateInstance } from '../utils/dashboard-state';
-import { CANONICAL_TARGET_AUDIENCE } from '@scout/shared';
+import { CANONICAL_TARGET_AUDIENCE, VERSION_CONSTANTS } from '@scout/shared';
 import crypto from 'crypto';
 
 /**
@@ -97,7 +97,8 @@ export async function discoverOpportunities(
   const runResult = await stage5.execute(evaluatedOpps, {
     startedAt,
     urlsFound: candidates.length,
-    crawledPages: crawledPages.length,
+    crawledPagesCount: crawledPages.length,
+    crawledPages: crawledPages,
     detectorSkipped: DashboardStateInstance.getState().detectorSkipped,
     aiProcessed: DashboardStateInstance.getState().aiProcessed,
     geminiCalls: 0, // Injected metrics
@@ -183,11 +184,10 @@ export async function discoverOpportunities(
       governmentOrgs.push(src?.organization || opp.organization || 'Government');
     }
 
-    // 2. Org Size
     let orgSize = 'SME';
     if (ecoType === 'STARTUP' || ecoType === 'INCUBATOR') {
       orgSize = 'Startup';
-    } else if (ecoType === 'BIG_TECH') {
+    } else if (opp.organizationType === 'MNC' || opp.organizationStage === 'ENTERPRISE') {
       orgSize = 'Large Company';
     } else if (ecoType === 'GOVERNMENT') {
       orgSize = 'Government';
@@ -553,6 +553,11 @@ Top Hidden Gems:
       engineeringDiversityScore,
       studentCoverageScore,
       highlights,
+      missionVersion: VERSION_CONSTANTS.mission,
+      categoryVersion: VERSION_CONSTANTS.category,
+      schemaVersion: VERSION_CONSTANTS.schema,
+      promptVersion: VERSION_CONSTANTS.prompt,
+      registryVersion: VERSION_CONSTANTS.registry,
     });
     runId = runDoc._id.toString();
   } catch (runErr: any) {

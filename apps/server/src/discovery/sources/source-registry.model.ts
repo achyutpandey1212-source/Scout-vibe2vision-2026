@@ -103,7 +103,6 @@ const SourceRegistrySchema = new Schema<ISourceRegistryDocument>(
         'UNIVERSITY',
         'RESEARCH',
         'GOVERNMENT',
-        'BIG_TECH',
         'COMMUNITY',
         'OPEN_SOURCE',
         'NON_PROFIT',

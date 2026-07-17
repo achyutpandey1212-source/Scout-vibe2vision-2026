@@ -8,6 +8,9 @@ export type SourceType =
 export type OrganizationType =
   'GOVERNMENT' | 'MNC' | 'STARTUP' | 'NGO' | 'UNIVERSITY' | 'FOUNDATION' | 'COMMUNITY' | 'OTHER';
 
+export type OrganizationStage =
+  'EARLY_STARTUP' | 'GROWTH_STARTUP' | 'SCALE_UP' | 'ENTERPRISE' | 'GOVERNMENT' | 'ACADEMIC';
+
 export type ExperienceRequired = 'NONE' | 'SOME' | 'EXPERIENCED';
 
 export type FundingType = 'FULLY_FUNDED' | 'PARTIALLY_FUNDED' | 'PAID' | 'UNPAID';
@@ -93,7 +96,7 @@ export interface Opportunity {
   expiresAt: string | null;
   archived?: boolean;
 
-  trustLevel?: 'VERIFIED' | 'OFFICIAL' | 'COMMUNITY' | 'UNKNOWN';
+  trustLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH';
   qualityScore?: number;
   qualityBreakdown?: {
     officialSource: boolean;
@@ -150,14 +153,7 @@ export interface Opportunity {
   warnings?: string[];
 
   commitment?: 'PART_TIME' | 'FULL_TIME' | 'FLEXIBLE' | null;
-  organizationStage?:
-    | 'EARLY_STARTUP'
-    | 'GROWTH_STARTUP'
-    | 'SCALE_UP'
-    | 'ENTERPRISE'
-    | 'GOVERNMENT'
-    | 'ACADEMIC'
-    | null;
+  organizationStage?: OrganizationStage | null;
   skillsTechnical?: string[];
   skillsSoft?: string[];
   skillsTools?: string[];

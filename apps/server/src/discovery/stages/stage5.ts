@@ -5,6 +5,7 @@ import { DISCOVERY_CONFIG } from '../config/discovery.config';
 import { DashboardStateInstance } from '../utils/dashboard-state';
 import { Types } from 'mongoose';
 import { OpportunityEnrichmentPipeline } from './enrichment-pipeline';
+import { CanonicalUrlResolver } from '../utils/canonical-url-resolver';
 
 export interface RunAnalytics {
   startedAt: Date;
@@ -36,19 +37,7 @@ export class Stage5Persistence implements IPipelineStage<
    * Safe URL normalization for duplicate matching
    */
   private normalizeUrl(urlStr: string | null | undefined): string {
-    if (!urlStr) return '';
-    try {
-      const url = new URL(urlStr);
-      url.search = '';
-      url.hash = '';
-      let pathname = url.pathname;
-      if (pathname.endsWith('/')) {
-        pathname = pathname.slice(0, -1);
-      }
-      return `${url.protocol}//${url.hostname}${pathname}`;
-    } catch {
-      return urlStr.toLowerCase().trim();
-    }
+    return CanonicalUrlResolver.clean(urlStr);
   }
 
   /**
@@ -114,10 +103,6 @@ export class Stage5Persistence implements IPipelineStage<
         let bestMatch: any = null;
         let highestConfidence = 0;
 
-        const candidateAppUrl = this.normalizeUrl(opp.applicationUrl);
-        const candidateSourceUrl = this.normalizeUrl(opp.sourceURL);
-        const candidateOrg = this.normalizeOrg(opp.organization);
-
         // ── Phase 9/11: Run Deterministic Enrichment on the opportunity profile ──
         const domain = opp.sourceURL
           ? opp.sourceURL
@@ -126,8 +111,17 @@ export class Stage5Persistence implements IPipelineStage<
               .split('/')[0]
           : '';
         const sourceDoc = sourceMap.get(domain);
+
+        const crawledPage = options?.crawledPages?.find(
+          (p: any) => p.url === opp.sourceURL || p.url === opp.applicationUrl,
+        );
+
         const enrichmentPipeline = new OpportunityEnrichmentPipeline();
-        enrichmentPipeline.enrich(opp, sourceDoc);
+        enrichmentPipeline.enrich(opp, sourceDoc, crawledPage);
+
+        const candidateAppUrl = this.normalizeUrl(opp.applicationUrl);
+        const candidateSourceUrl = this.normalizeUrl(opp.sourceURL);
+        const candidateOrg = this.normalizeOrg(opp.organization);
 
         // ── Phase 10: Relationship Graph construction ──
         const similarIds: string[] = [];
@@ -474,7 +468,7 @@ export class Stage5Persistence implements IPipelineStage<
       finishedAt,
       durationMs,
       urlsFound: options?.urlsFound || 0,
-      crawledPages: options?.crawledPages || 0,
+      crawledPages: options?.crawledPagesCount || 0,
       detectorSkipped: options?.detectorSkipped || 0,
       aiProcessed: options?.aiProcessed || 0,
       accepted: acceptedCount,

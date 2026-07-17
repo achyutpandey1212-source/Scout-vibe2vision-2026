@@ -13,6 +13,7 @@
   "scripts": {
     "dev": "concurrently \"npm run dev -w @scout/web\" \"npm run dev -w @scout/server\"",
     "build": "npm run build -w @scout/shared && npm run build -w @scout/server && npm run build -w @scout/web",
+    "scout": "ts-node scripts/reset-discovery.ts",
     "crawl": "npm run crawl -w @scout/server",
     "crawl:extract": "npm run crawl:extract -w @scout/server",
     "lint": "npm run lint --workspaces",

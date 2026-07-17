@@ -76,7 +76,6 @@ export type EcosystemType =
   | 'UNIVERSITY'
   | 'RESEARCH'
   | 'GOVERNMENT'
-  | 'BIG_TECH'
   | 'COMMUNITY'
   | 'OPEN_SOURCE'
   | 'NON_PROFIT';

@@ -1,9 +1,11 @@
+import { DeterministicEnrichmentEngine } from '../enrichment/deterministic-enrichment-engine';
+
 export class OpportunityEnrichmentPipeline {
   /**
    * Run the full multi-stage enrichment pipeline on an opportunity.
    */
-  public enrich(opp: any, sourceRegistryEntry: any): void {
-    this.stage1Normalization(opp);
+  public enrich(opp: any, sourceRegistryEntry: any, crawledPage?: any): void {
+    this.stage1Normalization(opp, sourceRegistryEntry, crawledPage);
     this.stage2SkillIntelligence(opp);
     this.stage3StudentFitIntelligence(opp);
     this.stage4CareerValueIntelligence(opp, sourceRegistryEntry);
@@ -12,7 +14,10 @@ export class OpportunityEnrichmentPipeline {
     this.stage7ReadinessAssessment(opp);
   }
 
-  private stage1Normalization(opp: any): void {
+  private stage1Normalization(opp: any, sourceRegistryEntry?: any, crawledPage?: any): void {
+    // Run deterministic enrichment logic (URL cleaning, hashing, organization resolver, trust evaluation)
+    DeterministicEnrichmentEngine.enrich(opp, sourceRegistryEntry, crawledPage);
+
     const titleLower = opp.title.toLowerCase();
     const descLower = opp.description.toLowerCase();
 
@@ -254,28 +259,27 @@ export class OpportunityEnrichmentPipeline {
   }
 
   private stage4CareerValueIntelligence(opp: any, sourceRegistryEntry: any): void {
-    const sourceEco = sourceRegistryEntry?.ecosystemType || 'BIG_TECH';
-    if (sourceEco === 'STARTUP') {
-      opp.organizationType = 'STARTUP';
-      opp.organizationStage = 'EARLY_STARTUP';
-    } else if (sourceEco === 'INCUBATOR') {
-      opp.organizationType = 'STARTUP';
-      opp.organizationStage = 'GROWTH_STARTUP';
-    } else if (sourceEco === 'BIG_TECH') {
-      opp.organizationType = 'MNC';
-      opp.organizationStage = 'ENTERPRISE';
-    } else if (sourceEco === 'GOVERNMENT') {
-      opp.organizationType = 'GOVERNMENT';
-      opp.organizationStage = 'GOVERNMENT';
-    } else if (sourceEco === 'UNIVERSITY') {
-      opp.organizationType = 'UNIVERSITY';
-      opp.organizationStage = 'ACADEMIC';
-    } else if (sourceEco === 'RESEARCH') {
-      opp.organizationType = 'OTHER';
-      opp.organizationStage = 'ACADEMIC';
-    } else {
-      opp.organizationType = 'OTHER';
-      opp.organizationStage = null;
+    const sourceEco = sourceRegistryEntry?.ecosystemType || 'UNIVERSITY';
+    if (!opp.organizationType) {
+      if (sourceEco === 'STARTUP') {
+        opp.organizationType = 'STARTUP';
+        opp.organizationStage = 'EARLY_STARTUP';
+      } else if (sourceEco === 'INCUBATOR') {
+        opp.organizationType = 'STARTUP';
+        opp.organizationStage = 'GROWTH_STARTUP';
+      } else if (sourceEco === 'GOVERNMENT') {
+        opp.organizationType = 'GOVERNMENT';
+        opp.organizationStage = 'GOVERNMENT';
+      } else if (sourceEco === 'UNIVERSITY') {
+        opp.organizationType = 'UNIVERSITY';
+        opp.organizationStage = 'ACADEMIC';
+      } else if (sourceEco === 'RESEARCH') {
+        opp.organizationType = 'OTHER';
+        opp.organizationStage = 'ACADEMIC';
+      } else {
+        opp.organizationType = 'OTHER';
+        opp.organizationStage = null;
+      }
     }
 
     if (opp.organizationType === 'MNC' || (sourceRegistryEntry?.trustScore || 0) >= 95) {
@@ -338,7 +342,7 @@ export class OpportunityEnrichmentPipeline {
 
   private stage5QualityAndHiddenGem(opp: any, sourceRegistryEntry: any): void {
     const descLower = opp.description.toLowerCase();
-    const sourceEco = sourceRegistryEntry?.ecosystemType || 'BIG_TECH';
+    const sourceEco = sourceRegistryEntry?.ecosystemType || 'UNIVERSITY';
 
     // Quality Refinement
     let qScore = 50;
@@ -411,33 +415,115 @@ export class OpportunityEnrichmentPipeline {
 
   private stage6GoldReasons(opp: any): void {
     const goldReasons: string[] = [];
-    const org = opp.organization;
-    if (
-      opp.organizationType === 'STARTUP' &&
-      (opp.domains?.includes('AI') || opp.domains?.includes('Machine Learning'))
-    ) {
+    const descLower = (opp.description || '').toLowerCase();
+
+    // 1. Remote
+    if (opp.workMode === 'REMOTE') {
+      goldReasons.push('Work remotely from anywhere.');
+    }
+    // 2. Hybrid
+    if (opp.workMode === 'HYBRID') {
+      goldReasons.push('Hybrid work schedule available.');
+    }
+    // 3. Stipend
+    if (opp.stipend && opp.stipend > 0) {
       goldReasons.push(
-        `Excellent opportunity to gain production AI/ML experience at early-stage startup ${org}.`,
+        `Provides competitive monthly stipend of ${opp.currency || 'INR'} ${opp.stipend}.`,
       );
-    } else if (opp.organizationType === 'STARTUP') {
-      goldReasons.push(`Gain high-ownership technical experience at startup ${org}.`);
-    } else if (opp.organizationType === 'MNC') {
-      goldReasons.push(`Prestigious global technology brand experience at ${org}.`);
-    } else if (opp.organizationType === 'GOVERNMENT') {
-      goldReasons.push(`Highly valued public-sector student training pathway at ${org}.`);
+    } else if (opp.salary && opp.salary > 0) {
+      goldReasons.push(
+        `Offers financial compensation (salary of ${opp.currency || 'INR'} ${opp.salary}).`,
+      );
+    } else if (opp.qualityBreakdown?.stipendPresent) {
+      goldReasons.push('Offers financial compensation.');
+    }
+    // 4. Deadline
+    if (opp.deadline && opp.deadlineStatus === 'OPEN') {
+      goldReasons.push('Applications are currently open.');
+    }
+    // 5. Open Source
+    if (
+      opp.opportunityType === 'OPEN_SOURCE_PROGRAM' ||
+      descLower.includes('open-source') ||
+      descLower.includes('open source')
+    ) {
+      goldReasons.push('Opportunity to contribute to open-source.');
+    }
+    // 6. Startup
+    if (opp.organizationType === 'STARTUP') {
+      goldReasons.push('Work closely with startup founders.');
+    }
+    // 7. MNC / Enterprise
+    if (opp.organizationType === 'MNC') {
+      goldReasons.push('Prestigious global technology brand experience.');
+    }
+    // 8. Government
+    if (opp.organizationType === 'GOVERNMENT') {
+      goldReasons.push('Government-backed training or internship pathway.');
+    }
+    // 9. Academic
+    if (opp.organizationType === 'UNIVERSITY') {
+      goldReasons.push('Research opportunity under academic mentorship.');
+    }
+    // 10. Mentorship
+    if (descLower.includes('mentor') || descLower.includes('mentorship')) {
+      goldReasons.push('Includes direct mentorship and guidance.');
+    }
+    // 11. Travel Funded
+    if (opp.travelFunded) {
+      goldReasons.push('Travel and accommodation costs funded.');
+    }
+    // 12. Visa Sponsored
+    if (opp.visaSponsored) {
+      goldReasons.push('Visa sponsorship is available.');
+    }
+    // 13. Certificate
+    if (descLower.includes('certificate') || descLower.includes('certification')) {
+      goldReasons.push('Offers official certificate upon completion.');
+    }
+    // 14. Placement
+    if (
+      descLower.includes('placement') ||
+      descLower.includes('ppo') ||
+      descLower.includes('full-time offer')
+    ) {
+      goldReasons.push('Potential pathway to a full-time return offer (PPO).');
+    }
+    // 15. Flexible Hours
+    if (
+      opp.commitment === 'FLEXIBLE' ||
+      descLower.includes('flexible hours') ||
+      descLower.includes('flexible schedule')
+    ) {
+      goldReasons.push('Flexible working hours.');
+    }
+    // 16. AI/ML Focus
+    if (opp.domains?.includes('AI') || opp.domains?.includes('Machine Learning')) {
+      goldReasons.push('Gain hands-on experience with modern AI/ML technologies.');
+    }
+    // 17. Hackathon
+    if (opp.opportunityType === 'HACKATHON') {
+      goldReasons.push('Hands-on project building opportunity.');
+    }
+    // 18. Beginner Friendly
+    if (opp.suitableFirstYear) {
+      goldReasons.push('Highly beginner friendly, open to early-year students.');
+    }
+    // 19. Structured Duration
+    if (opp.duration) {
+      goldReasons.push(`Includes a structured ${opp.duration} engagement period.`);
+    }
+    // 20. Skill Development
+    if (opp.skills && opp.skills.length > 0) {
+      goldReasons.push(`Build skills in ${opp.skills.slice(0, 3).join(', ')}.`);
     }
 
-    if (opp.suitableSecondYear && !opp.suitableFirstYear) {
-      goldReasons.push(`Strong fit for second and third-year student developers.`);
-    } else if (opp.suitableFirstYear) {
-      goldReasons.push(`Extremely beginner friendly, open to early-stage undergrad students.`);
+    // Default fallbacks if list is too small
+    if (goldReasons.length < 3) {
+      goldReasons.push('Excellent opportunity to build resumes and portfolios.');
     }
 
-    if (opp.qualityBreakdown?.stipendPresent) {
-      goldReasons.push(`Provides competitive financial compensation (stipend/salary).`);
-    }
-
-    opp.goldReasons = goldReasons.slice(0, 3);
+    opp.goldReasons = goldReasons.slice(0, 5);
   }
 
   private stage7ReadinessAssessment(opp: any): void {

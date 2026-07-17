@@ -33,6 +33,11 @@ export interface IDiscoveryRun extends Document {
     topUniversities: string[];
     topGovernmentOrganizations: string[];
   };
+  missionVersion: string;
+  categoryVersion: string;
+  schemaVersion: string;
+  promptVersion: string;
+  registryVersion: string;
 }
 
 const DiscoveryRunSchema = new Schema<IDiscoveryRun>(
@@ -82,6 +87,11 @@ const DiscoveryRunSchema = new Schema<IDiscoveryRun>(
       topUniversities: [{ type: String }],
       topGovernmentOrganizations: [{ type: String }],
     },
+    missionVersion: { type: String, required: true },
+    categoryVersion: { type: String, required: true },
+    schemaVersion: { type: String, required: true },
+    promptVersion: { type: String, required: true },
+    registryVersion: { type: String, required: true },
   },
   {
     timestamps: true,

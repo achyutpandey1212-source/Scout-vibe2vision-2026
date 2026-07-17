@@ -64,7 +64,7 @@ function deriveV2Metadata(
 
   // Initialize defaults
   let sourceTier: SourceTier = 'B';
-  let ecosystemType: EcosystemType = 'BIG_TECH';
+  let ecosystemType: EcosystemType = 'UNIVERSITY';
   let discoveryValue = 50;
   let studentRelevance = 50;
   let freshnessScore = 50;
@@ -218,8 +218,8 @@ function deriveV2Metadata(
       studentRelevance = 85;
       sourceReason = 'Non-profit organization/foundation supporting tech diversity';
     } else {
-      ecosystemType = 'BIG_TECH';
-      sourceReason = 'Established technology company career board';
+      ecosystemType = 'UNIVERSITY';
+      sourceReason = 'Established company offering student pathways';
     }
   }
 
