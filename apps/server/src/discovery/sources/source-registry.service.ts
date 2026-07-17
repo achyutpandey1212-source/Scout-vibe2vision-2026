@@ -64,22 +64,28 @@ class SourceRegistryService {
    * Ordered by: priority (critical → low), then trustScore DESC, then nextCrawlAt ASC.
    */
   async getDueSources(limit = 50): Promise<ISourceRegistryEntry[]> {
-    const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
-
     const sources = await SourceRegistryModel.find({
       isActive: true,
       nextCrawlAt: { $lte: new Date() },
-    })
-      .sort({ trustScore: -1, nextCrawlAt: 1 })
-      .limit(limit)
-      .lean();
+    }).lean();
 
-    // Sort by priority in memory (MongoDB doesn't natively sort by custom enum order)
-    return sources.sort(
-      (a, b) =>
-        (priorityOrder[a.priority as SourcePriority] ?? 3) -
-          (priorityOrder[b.priority as SourcePriority] ?? 3) || b.trustScore - a.trustScore,
-    ) as unknown as ISourceRegistryEntry[];
+    const getCompositeScore = (s: any) =>
+      (s.trustScore || 0) +
+      (s.discoveryValue || 50) +
+      (s.freshnessScore || 50) +
+      (s.studentRelevance || 50);
+
+    // Sort by composite score DESC, then nextCrawlAt ASC
+    return sources
+      .sort((a, b) => {
+        const scoreA = getCompositeScore(a);
+        const scoreB = getCompositeScore(b);
+        if (scoreB !== scoreA) {
+          return scoreB - scoreA;
+        }
+        return new Date(a.nextCrawlAt).getTime() - new Date(b.nextCrawlAt).getTime();
+      })
+      .slice(0, limit) as unknown as ISourceRegistryEntry[];
   }
 
   /**
@@ -302,6 +308,15 @@ class SourceRegistryService {
       bySourceTypeRaw,
       topSources,
       densityResult,
+      tierACount,
+      tierBCount,
+      tierCCount,
+      governmentSources,
+      startupSources,
+      researchSources,
+      communitySources,
+      inactiveSources,
+      averagesResult,
     ] = await Promise.all([
       SourceRegistryModel.countDocuments(),
       SourceRegistryModel.countDocuments({ isActive: true }),
@@ -317,10 +332,31 @@ class SourceRegistryService {
         { $match: { isActive: true } },
         { $group: { _id: null, avg: { $avg: '$opportunityDensity' } } },
       ]),
+      SourceRegistryModel.countDocuments({ sourceTier: 'A' }),
+      SourceRegistryModel.countDocuments({ sourceTier: 'B' }),
+      SourceRegistryModel.countDocuments({ sourceTier: 'C' }),
+      SourceRegistryModel.countDocuments({ ecosystemType: 'GOVERNMENT' }),
+      SourceRegistryModel.countDocuments({ ecosystemType: 'STARTUP' }),
+      SourceRegistryModel.countDocuments({ ecosystemType: 'RESEARCH' }),
+      SourceRegistryModel.countDocuments({ ecosystemType: 'COMMUNITY' }),
+      SourceRegistryModel.countDocuments({ isActive: false }),
+      SourceRegistryModel.aggregate([
+        {
+          $group: {
+            _id: null,
+            avgTrust: { $avg: '$trustScore' },
+            avgDV: { $avg: '$discoveryValue' },
+            avgSR: { $avg: '$studentRelevance' },
+            avgFreshness: { $avg: '$freshnessScore' },
+          },
+        },
+      ]),
     ]);
 
     const toRecord = (arr: { _id: string; count: number }[]) =>
       Object.fromEntries(arr.map((e) => [e._id, e.count]));
+
+    const averages = averagesResult[0] || { avgTrust: 0, avgDV: 0, avgSR: 0, avgFreshness: 0 };
 
     return {
       total,
@@ -331,6 +367,18 @@ class SourceRegistryService {
       avgOpportunityDensity:
         densityResult.length > 0 ? Math.round((densityResult[0].avg ?? 0) * 1000) / 1000 : 0,
       topSources: topSources as any,
+      tierACount,
+      tierBCount,
+      tierCCount,
+      governmentSources,
+      startupSources,
+      researchSources,
+      communitySources,
+      avgTrustScore: Math.round(averages.avgTrust || 0),
+      avgDiscoveryValue: Math.round(averages.avgDV || 0),
+      avgStudentRelevance: Math.round(averages.avgSR || 0),
+      avgFreshness: Math.round(averages.avgFreshness || 0),
+      inactiveSources,
     };
   }
 

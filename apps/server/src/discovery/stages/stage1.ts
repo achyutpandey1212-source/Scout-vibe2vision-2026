@@ -69,15 +69,22 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
       defaultTags: s.defaultTags,
       trustScore: s.trustScore,
       priority: s.priority,
+      // Temporarily store composite score for sorting
+      compositeScore:
+        (s.trustScore || 0) +
+        (s.discoveryValue || 50) +
+        (s.freshnessScore || 50) +
+        (s.studentRelevance || 50),
+      nextCrawlAt: s.nextCrawlAt,
     }));
 
-    // Sort by priority critical -> low
-    targets = mappedTargets.sort(
-      (a: any, b: any) =>
-        (priorityOrder[a.priority as keyof typeof priorityOrder] ?? 3) -
-          (priorityOrder[b.priority as keyof typeof priorityOrder] ?? 3) ||
-        b.trustScore - a.trustScore,
-    );
+    // Sort by composite score DESC, then nextCrawlAt ASC
+    targets = mappedTargets.sort((a: any, b: any) => {
+      if (b.compositeScore !== a.compositeScore) {
+        return b.compositeScore - a.compositeScore;
+      }
+      return new Date(a.nextCrawlAt).getTime() - new Date(b.nextCrawlAt).getTime();
+    });
 
     if (targets.length === 0) {
       console.warn(`[Stage 1] No sources found matching filter criteria (Mode: ${runMode}).`);

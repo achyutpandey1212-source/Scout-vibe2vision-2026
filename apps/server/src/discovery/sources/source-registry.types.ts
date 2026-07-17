@@ -62,7 +62,37 @@ export interface ISourceRegistryEntry {
   // opportunityDensity = totalOpportunitiesFound / totalPagesCrawled
   // Stored for efficient MongoDB range queries on auto-optimization
   opportunityDensity: number; // opportunities per page (0.0–1.0+)
+
+  // Source Intelligence V2 Metadata
+  sourceTier: SourceTier;
+  discoveryValue: number; // 0-100
+  studentRelevance: number; // 0-100
+  freshnessScore: number; // 0-100
+  ecosystemType: EcosystemType;
+  ecosystemName?: string | null;
+  startupStage?: string | null;
+  region?: string | null;
+  engineeringFocus?: string[] | null;
+  remoteFriendly: boolean;
+  internshipFriendly: boolean;
+  averageOpportunityQuality?: number | null;
+  averageHiddenGemScore?: number | null;
+  sourceReason?: string | null;
 }
+
+export type SourceTier = 'A' | 'B' | 'C';
+export type EcosystemType =
+  | 'STARTUP'
+  | 'INCUBATOR'
+  | 'UNIVERSITY'
+  | 'RESEARCH'
+  | 'GOVERNMENT'
+  | 'BIG_TECH'
+  | 'VC_PORTFOLIO'
+  | 'COMMUNITY'
+  | 'OPEN_SOURCE'
+  | 'AGGREGATOR'
+  | 'NON_PROFIT';
 
 // ─── Supporting Types ─────────────────────────────────────────────────────────
 
@@ -87,6 +117,20 @@ export interface RegistryStats {
     ISourceRegistryEntry,
     'domain' | 'organization' | 'trustScore' | 'opportunityDensity' | 'totalOpportunitiesFound'
   >[];
+
+  // V2 Registry health metrics
+  tierACount: number;
+  tierBCount: number;
+  tierCCount: number;
+  governmentSources: number;
+  startupSources: number;
+  researchSources: number;
+  communitySources: number;
+  avgTrustScore: number;
+  avgDiscoveryValue: number;
+  avgStudentRelevance: number;
+  avgFreshness: number;
+  inactiveSources: number;
 }
 
 export interface AIDomainEvaluation {

@@ -8,6 +8,8 @@ import {
   CrawlFrequency,
   SourcePriority,
   CrawlStrategy,
+  SourceTier,
+  EcosystemType,
 } from '../sources/source-registry.types';
 import { SourceCategory, CATEGORY_REGISTRY } from '@scout/shared';
 
@@ -41,10 +43,215 @@ function inferCategoryFromTags(tags: string[]): SourceCategory {
   return 'INTERNSHIPS';
 }
 
-function derivePriorityFromTrustScore(score: number): SourcePriority {
-  if (score >= 90) return 'critical';
-  if (score >= 80) return 'high';
-  if (score >= 60) return 'medium';
+interface SourceV2Metadata {
+  sourceTier: SourceTier;
+  ecosystemType: EcosystemType;
+  discoveryValue: number;
+  studentRelevance: number;
+  freshnessScore: number;
+  sourceReason: string;
+}
+
+function deriveV2Metadata(
+  org: string,
+  domain: string,
+  defaultTags: string[],
+  crawlFrequency: string,
+): SourceV2Metadata {
+  const orgLower = org.toLowerCase();
+  const domainLower = domain.toLowerCase();
+  const tagsStr = defaultTags.join(' ').toLowerCase();
+
+  // Initialize defaults
+  let sourceTier: SourceTier = 'B';
+  let ecosystemType: EcosystemType = 'BIG_TECH';
+  let discoveryValue = 50;
+  let studentRelevance = 50;
+  let freshnessScore = 50;
+  let sourceReason = 'Official tech organization offering student pathways';
+
+  // 1. Tier and Ecosystem Type Classification
+  // Tier A: Ecosystems
+  if (
+    orgLower.includes('startup india') ||
+    orgLower.includes('t-hub') ||
+    orgLower.includes('nsrcel') ||
+    orgLower.includes('ciie') ||
+    orgLower.includes('kerala startup mission') ||
+    orgLower.includes('y combinator') ||
+    orgLower.includes('peak xv') ||
+    orgLower.includes('accel') ||
+    orgLower.includes('blume') ||
+    orgLower.includes('antler') ||
+    orgLower.includes('nexus') ||
+    orgLower.includes('elevation') ||
+    orgLower.includes('100x') ||
+    domainLower.includes('yc') ||
+    domainLower.includes('devfolio') ||
+    domainLower.includes('unstop') ||
+    domainLower.includes('wellfound') ||
+    tagsStr.includes('incubator') ||
+    tagsStr.includes('accelerator') ||
+    tagsStr.includes('vc-portfolio')
+  ) {
+    sourceTier = 'A';
+    discoveryValue = 95;
+    studentRelevance = 90;
+
+    if (
+      orgLower.includes('incubator') ||
+      orgLower.includes('t-hub') ||
+      orgLower.includes('nsrcel') ||
+      orgLower.includes('kerala startup mission') ||
+      orgLower.includes('startup india')
+    ) {
+      ecosystemType = 'INCUBATOR';
+      sourceReason = 'IIT/IIIT or national startup incubator ecosystem';
+    } else if (
+      orgLower.includes('y combinator') ||
+      orgLower.includes('peak xv') ||
+      orgLower.includes('accel') ||
+      orgLower.includes('blume') ||
+      orgLower.includes('antler') ||
+      orgLower.includes('venture') ||
+      orgLower.includes('capital')
+    ) {
+      ecosystemType = 'VC_PORTFOLIO';
+      sourceReason = 'Top-tier startup VC portfolio ecosystem';
+    } else if (
+      domainLower.includes('devfolio') ||
+      domainLower.includes('unstop') ||
+      domainLower.includes('wellfound')
+    ) {
+      ecosystemType = 'STARTUP';
+      sourceReason = 'Premier startup and hackathon ecosystem platform';
+    } else {
+      ecosystemType = 'STARTUP';
+      sourceReason = 'High-potential startup hiring ecosystem';
+    }
+  }
+  // Tier C: Aggregators
+  else if (
+    domainLower.includes('indeed') ||
+    domainLower.includes('linkedin') ||
+    domainLower.includes('internshala') ||
+    domainLower.includes('naukri') ||
+    domainLower.includes('glassdoor') ||
+    domainLower.includes('monster')
+  ) {
+    sourceTier = 'C';
+    ecosystemType = 'AGGREGATOR';
+    discoveryValue = 25;
+    studentRelevance = 70;
+    sourceReason = 'General recruitment aggregator for discovery phase';
+  }
+  // Tier B: Direct Organizations (default)
+  else {
+    sourceTier = 'B';
+    discoveryValue = 60;
+    studentRelevance = 80;
+
+    if (
+      tagsStr.includes('government') ||
+      tagsStr.includes('gov') ||
+      domainLower.includes('.gov') ||
+      domainLower.includes('.nic.in')
+    ) {
+      ecosystemType = 'GOVERNMENT';
+      discoveryValue = 85;
+      studentRelevance = 90;
+      sourceReason = 'Official government body with student training and internships';
+    } else if (
+      tagsStr.includes('research') ||
+      tagsStr.includes('scientific') ||
+      orgLower.includes('cern') ||
+      orgLower.includes('barc') ||
+      orgLower.includes('csir') ||
+      orgLower.includes('dst')
+    ) {
+      ecosystemType = 'RESEARCH';
+      discoveryValue = 90;
+      studentRelevance = 90;
+      sourceReason = 'Academic research institution with recurring student projects';
+    } else if (
+      tagsStr.includes('university') ||
+      domainLower.includes('.edu') ||
+      domainLower.includes('.ac.in') ||
+      orgLower.includes('iisc') ||
+      orgLower.includes('iit') ||
+      orgLower.includes('nit') ||
+      orgLower.includes('iiit')
+    ) {
+      ecosystemType = 'UNIVERSITY';
+      discoveryValue = 85;
+      studentRelevance = 90;
+      sourceReason = 'Premier engineering university/placement hub';
+    } else if (
+      tagsStr.includes('community') ||
+      orgLower.includes('ieee') ||
+      orgLower.includes('acm') ||
+      orgLower.includes('gdg') ||
+      orgLower.includes('gdsc') ||
+      orgLower.includes('mozilla') ||
+      orgLower.includes('linux foundation')
+    ) {
+      ecosystemType = 'COMMUNITY';
+      discoveryValue = 80;
+      studentRelevance = 90;
+      sourceReason = 'Global developer community offering student pathways';
+    } else if (
+      tagsStr.includes('open-source') ||
+      orgLower.includes('outreachy') ||
+      orgLower.includes('kde')
+    ) {
+      ecosystemType = 'OPEN_SOURCE';
+      discoveryValue = 85;
+      studentRelevance = 95;
+      sourceReason = 'Structured open-source mentorship program';
+    } else if (
+      tagsStr.includes('ngo') ||
+      orgLower.includes('anitab') ||
+      orgLower.includes('foundation')
+    ) {
+      ecosystemType = 'NON_PROFIT';
+      discoveryValue = 75;
+      studentRelevance = 85;
+      sourceReason = 'Non-profit organization/foundation supporting tech diversity';
+    } else {
+      ecosystemType = 'BIG_TECH';
+      sourceReason = 'Established technology company career board';
+    }
+  }
+
+  // 2. Freshness Score calculation (based on crawl frequency)
+  if (crawlFrequency === 'daily') {
+    freshnessScore = 80;
+  } else if (crawlFrequency === 'weekly') {
+    freshnessScore = 60;
+  } else {
+    freshnessScore = 40;
+  }
+
+  return {
+    sourceTier,
+    ecosystemType,
+    discoveryValue,
+    studentRelevance,
+    freshnessScore,
+    sourceReason,
+  };
+}
+
+function derivePriority(
+  trustScore: number,
+  discoveryValue: number,
+  freshnessScore: number,
+  studentRelevance: number,
+): SourcePriority {
+  const composite = trustScore + discoveryValue + freshnessScore + studentRelevance;
+  if (composite >= 320) return 'critical';
+  if (composite >= 260) return 'high';
+  if (composite >= 180) return 'medium';
   return 'low';
 }
 
@@ -100,14 +307,26 @@ async function run() {
 
   for (const source of TRUSTED_SOURCES) {
     const domain = extractDomain(source.homepage);
-    const priority = derivePriorityFromTrustScore(source.trustScore);
-    const category = inferCategoryFromTags(source.defaultTags);
     const crawlFrequency =
       source.refreshFrequency === 'low'
         ? 'monthly'
         : source.refreshFrequency === 'medium'
           ? 'weekly'
           : 'daily';
+
+    const category = inferCategoryFromTags(source.defaultTags);
+    const v2Meta = deriveV2Metadata(
+      source.organization,
+      domain,
+      source.defaultTags,
+      crawlFrequency,
+    );
+    const priority = derivePriority(
+      source.trustScore,
+      v2Meta.discoveryValue,
+      v2Meta.freshnessScore,
+      v2Meta.studentRelevance,
+    );
 
     const existing = await SourceRegistryModel.findOne({ domain });
     if (!existing) {
@@ -136,6 +355,21 @@ async function run() {
         verifiedByAIAt: null,
         lastVerifiedAt: null,
         lastCrawledAt: null,
+        // Source Intelligence V2 Metadata
+        sourceTier: v2Meta.sourceTier,
+        discoveryValue: v2Meta.discoveryValue,
+        studentRelevance: v2Meta.studentRelevance,
+        freshnessScore: v2Meta.freshnessScore,
+        ecosystemType: v2Meta.ecosystemType,
+        ecosystemName: null,
+        startupStage: null,
+        region: null,
+        engineeringFocus: [],
+        remoteFriendly: false,
+        internshipFriendly: true,
+        averageOpportunityQuality: null,
+        averageHiddenGemScore: null,
+        sourceReason: v2Meta.sourceReason,
       });
       inserted++;
     } else {
@@ -147,6 +381,15 @@ async function run() {
       existing.defaultTags = Array.from(new Set([...existing.defaultTags, ...source.defaultTags]));
       existing.category = category;
       existing.isActive = true; // Ensure active
+
+      // Update Source Intelligence V2 Metadata
+      existing.sourceTier = v2Meta.sourceTier;
+      existing.discoveryValue = v2Meta.discoveryValue;
+      existing.studentRelevance = v2Meta.studentRelevance;
+      existing.freshnessScore = v2Meta.freshnessScore;
+      existing.ecosystemType = v2Meta.ecosystemType;
+      existing.sourceReason = v2Meta.sourceReason;
+
       await existing.save();
       updated++;
     }
