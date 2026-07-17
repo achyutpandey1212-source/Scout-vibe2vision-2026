@@ -207,14 +207,14 @@ function buildSiteQueries(domain: string, context: DiscoveryContext): string[] {
   const country = context.country || 'India';
   const queries: string[] = [];
 
-  // Primary: opportunity-focused site search
-  queries.push(`site:${domain} scholarship fellowship internship apply 2026`);
+  // Primary: opportunity-focused site search including new candidate keywords (Phase 8)
+  queries.push(`site:${domain} intern student program fellowship scholarship 2026`);
 
-  // Secondary: program/recruitment search
-  queries.push(`site:${domain} program recruitment opportunity women ${country}`);
+  // Secondary: program/recruitment search targeting innovation, research, challenges, and portals
+  queries.push(`site:${domain} challenge innovation research project careers portal`);
 
-  // Tertiary: deadline-focused search (surfaces active listings)
-  queries.push(`site:${domain} deadline apply now 2026`);
+  // Tertiary: campus hiring / graduate programs
+  queries.push(`site:${domain} campus hiring graduate program recruitment ${country}`);
 
   return queries;
 }

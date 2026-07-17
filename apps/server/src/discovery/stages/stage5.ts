@@ -326,6 +326,92 @@ export class Stage5Persistence implements IPipelineStage<
       console.error(`[Stage 5] [Archive Engine] Failed:`, archiveErr.message);
     }
 
+    // ─── Phase 9: Source Feedback Loop ───────────────────────────────────
+    try {
+      const { SourceRegistryModel } = await import('../sources/source-registry.model');
+      const feedbackByDomain: Record<
+        string,
+        {
+          totalFound: number;
+          acceptedCount: number;
+          qualityScores: number[];
+          hiddenGemScores: number[];
+        }
+      > = {};
+
+      for (const opp of opportunities) {
+        if (!opp.sourceURL) continue;
+        const domain = opp.sourceURL
+          .toLowerCase()
+          .replace(/^https?:\/\/(www\.)?/, '')
+          .split('/')[0];
+        if (!domain) continue;
+
+        if (!feedbackByDomain[domain]) {
+          feedbackByDomain[domain] = {
+            totalFound: 0,
+            acceptedCount: 0,
+            qualityScores: [],
+            hiddenGemScores: [],
+          };
+        }
+
+        const fb = feedbackByDomain[domain];
+        fb.totalFound++;
+        if (opp.decision === 'ACCEPT' || opp.decision === 'REVIEW') {
+          fb.acceptedCount++;
+          fb.qualityScores.push(opp.qualityScore || 0);
+          const hgScore =
+            (opp as any).hiddenGemScore || (opp as any).intelligence?.hiddenGemScore || 0;
+          fb.hiddenGemScores.push(hgScore);
+        }
+      }
+
+      for (const [domain, fb] of Object.entries(feedbackByDomain)) {
+        const source = await SourceRegistryModel.findOne({ domain });
+        if (!source) continue;
+
+        const prevTotal = source.totalOpportunitiesFound || 0;
+        const newTotal = prevTotal + fb.acceptedCount;
+
+        const updateData: any = {
+          totalOpportunitiesFound: newTotal,
+        };
+
+        if (fb.qualityScores.length > 0) {
+          const avgQual = fb.qualityScores.reduce((a, b) => a + b, 0) / fb.qualityScores.length;
+          const currentAvgQual = source.averageOpportunityQuality || 0;
+          updateData.averageOpportunityQuality =
+            currentAvgQual > 0 ? Math.round((currentAvgQual + avgQual) / 2) : Math.round(avgQual);
+        }
+
+        if (fb.hiddenGemScores.length > 0) {
+          const avgHG = fb.hiddenGemScores.reduce((a, b) => a + b, 0) / fb.hiddenGemScores.length;
+          const currentAvgHG = source.averageHiddenGemScore || 0;
+          updateData.averageHiddenGemScore =
+            currentAvgHG > 0 ? Math.round((currentAvgHG + avgHG) / 2) : Math.round(avgHG);
+        }
+
+        if (fb.acceptedCount > 0) {
+          updateData.freshnessScore = Math.min(100, (source.freshnessScore || 50) + 10);
+          if ((updateData.averageOpportunityQuality || 0) >= 80) {
+            updateData.discoveryValue = Math.min(100, (source.discoveryValue || 50) + 5);
+          }
+        } else {
+          updateData.freshnessScore = Math.max(0, (source.freshnessScore || 50) - 5);
+          updateData.discoveryValue = Math.max(0, (source.discoveryValue || 50) - 2);
+        }
+
+        if (updateData.discoveryValue < 30 || updateData.freshnessScore < 20) {
+          updateData.priority = 'low';
+        }
+
+        await SourceRegistryModel.updateOne({ domain }, { $set: updateData });
+      }
+    } catch (feedbackErr: any) {
+      console.error(`[Stage 5] Source Feedback Loop failed:`, feedbackErr.message);
+    }
+
     const finishedAt = new Date();
     const durationMs = finishedAt.getTime() - startedAt.getTime();
 

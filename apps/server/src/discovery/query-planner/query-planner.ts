@@ -1,129 +1,4 @@
 import { DiscoveryContext, QueryPlannerResponse } from '../types/query.types';
-import { CATEGORY_REGISTRY, SourceCategory } from '@scout/shared';
-
-// Deterministic query banks mapped to target categories.
-// Formulated strictly for SEO space-separated keyword searches for early-career students.
-const DETERMINISTIC_QUERIES: Record<string, string[]> = {
-  INTERNSHIPS: [
-    'software engineering internship',
-    'frontend internship',
-    'backend internship',
-    'full stack internship',
-    'ai internship',
-    'ml internship',
-    'data science internship',
-    'cybersecurity internship',
-    'cloud internship',
-    'devops internship',
-    'embedded systems internship',
-    'electronics internship',
-    'iot internship',
-    'mobile development internship',
-    'startup internship',
-    'remote internship',
-    'bangalore startup internship',
-    'gurgaon startup internship',
-    'hyderabad startup internship',
-    'pune startup internship',
-    'chennai startup internship',
-    'noida startup internship',
-    'student internship program',
-    'graduate internship',
-    'engineering internship',
-    'sde internship',
-    'summer internship',
-    'winter internship',
-    'off-cycle internship',
-    'research internship',
-    'bangalore startups hiring interns',
-    'gurgaon startups hiring interns',
-    'hyderabad startups hiring interns',
-    'pune startups hiring interns',
-    'chennai startups hiring interns',
-    'noida startups hiring interns',
-  ],
-  HACKATHONS: [
-    'student hackathon coding competition development',
-    'devfolio student hackathon registration',
-    'mlh major league hacking student events hackathons',
-    'unstop student competition quiz challenge',
-    'hackerearth hackerrank coding challenges students',
-  ],
-  SCHOLARSHIPS: [
-    'engineering college scholarship female student',
-    'bca bsc computer applications girls scholarship',
-    'university computer science student fellowship grant',
-    'merit based scholarship engineering students',
-    'national scholarship portal nsp engineering application',
-  ],
-  GOVERNMENT_INTERNSHIP: [
-    'isro student internship application',
-    'drdo internship program application',
-    'barc research student internship training',
-    'aicte national internship portal student',
-    'nic government internship computer science students',
-    'cdac project associate internship training program',
-    'meity student internship digital india learning',
-    'rbi summer internship student application',
-    'sebi student internship technology',
-    'bel bhel ntpc gail ongc psu student internship',
-    'smart india hackathon sih student registration',
-    'toycathon student registration innovation challenge',
-    'government innovation challenge student',
-    'ministry student research program government',
-  ],
-  RESEARCH_INTERNSHIP: [
-    'iisc research internship student summer program',
-    'cern summer student programme physics computer science',
-    'csir national lab student internship training',
-    'dst research project internship fellowship engineering',
-    'daad working internships science engineering research',
-    'academic research ecosystem lab student internship',
-  ],
-  CAMPUS_AMBASSADOR: [
-    'student campus representative program advocate',
-    'github campus expert ambassador student program',
-    'campus ambassador student internship recruit',
-  ],
-  OPEN_SOURCE_PROGRAM: [
-    'gsoc google summer of code student project',
-    'outreachy internship open source software',
-    'lfx mentorship linux foundation program',
-    'season of kde open source student program',
-  ],
-  WOMEN_IN_TECH: [
-    'women techmakers scholar program',
-    'outreachy internship open source women',
-    'adobe women in technology scholarship',
-    'grace hopper celebration student scholarship',
-    'microsoft women engineers program mentorship',
-    'women hackathon coding challenge',
-    'girls in ai ml bootcamp mentorship',
-    'anitab org student leadership program',
-    'women engineers mentoring program',
-  ],
-  STUDENT_COMPETITION: [
-    'student technology innovation challenge competition',
-    'national college tech competition team registration',
-    'global student coding challenge hack',
-  ],
-  SUMMER_SCHOOL: [
-    'academic research summer school student',
-    'scientific summer school program application',
-    'cern summer student programme computer science',
-  ],
-  BOOTCAMP: [
-    'free coding bootcamp web development student',
-    'ai developer workshop machine learning certification',
-    'student development bootcamp training program',
-  ],
-  FELLOWSHIPS: [
-    'student fellowship technology leadership program',
-    'early career researcher fellowship engineering',
-    'open source fellowship program github mozilla',
-    'social impact tech fellowship program',
-  ],
-};
 
 /**
  * Generates deterministic search queries to guarantee category distribution
@@ -133,38 +8,196 @@ export async function generateSearchQueries(
   context: DiscoveryContext,
 ): Promise<QueryPlannerResponse> {
   const targetCountry = context.country || 'India';
-  const queries: string[] = [];
+  const limit = context.maxQueries || 50;
 
-  // Determine active categories and sort them by priority descending
-  const sortedActiveCategories = CATEGORY_REGISTRY.filter((c) => c.isActive)
-    .sort((a, b) => b.priority - a.priority)
-    .map((c) => c.id as string);
+  // ─── Dimensions Setup ──────────────────────────────────────────────────
+  const locations = [
+    'Bangalore',
+    'Bengaluru',
+    'Gurugram',
+    'Gurgaon',
+    'Hyderabad',
+    'Pune',
+    'Noida',
+    'Delhi NCR',
+    'Chennai',
+    'Mumbai',
+    'Ahmedabad',
+    'Coimbatore',
+    'Kochi',
+    'Remote',
+  ];
 
-  // If specific categories are requested, filter them to active ones, else use sortedActiveCategories
-  const targetCategories =
-    context.categories && context.categories.length > 0
-      ? context.categories.filter((cat) => sortedActiveCategories.includes(cat))
-      : sortedActiveCategories;
+  const startupDomains = [
+    'AI',
+    'SaaS',
+    'Developer Tools',
+    'Cybersecurity',
+    'Cloud',
+    'Fintech',
+    'HealthTech',
+    'EdTech',
+    'ClimateTech',
+    'Robotics',
+    'Semiconductor',
+    'IoT',
+    'DeepTech',
+    'Embedded Systems',
+    'Frontend',
+    'Backend',
+  ];
 
-  for (const cat of targetCategories) {
-    const templates = DETERMINISTIC_QUERIES[cat] || [];
-    templates.forEach((q) => {
-      const lowerQ = q.toLowerCase();
-      if (!lowerQ.includes(targetCountry.toLowerCase())) {
-        queries.push(`${q} ${targetCountry}`.toLowerCase());
-      } else {
-        queries.push(lowerQ);
-      }
-    });
+  const generalDomains = [
+    'Software Engineering',
+    'Frontend',
+    'Backend',
+    'Full Stack',
+    'Cloud',
+    'DevOps',
+    'Mobile Development',
+    'Data Science',
+    'SDE',
+  ];
+
+  const startupEcosystems = [
+    'Startup India',
+    'T-Hub',
+    'NSRCEL',
+    'Y Combinator',
+    'Peak XV',
+    'Accel',
+    'Blume',
+    'Antler',
+    'IIT Incubator',
+    'IIIT Incubator',
+  ];
+
+  const govAgencies = ['ISRO', 'DRDO', 'AICTE', 'MeitY', 'NIC', 'C-DAC', 'RBI', 'SEBI'];
+
+  const researchInstitutions = ['IISc', 'CSIR', 'DST', 'CERN', 'Research Lab'];
+
+  const hackathonPlatforms = ['Devfolio', 'MLH', 'Unstop', 'HackerEarth', 'HackerRank', 'Kaggle'];
+
+  const openSourcePrograms = [
+    'Google Summer of Code',
+    'Outreachy',
+    'LFX Mentorship',
+    'Season of KDE',
+  ];
+
+  // Helper to pick a random item deterministically for variety
+  const pickRandom = <T>(arr: T[], index: number): T => arr[index % arr.length];
+
+  const queryBuckets: Record<string, string[]> = {
+    STARTUP_INTERNSHIPS: [],
+    GENERAL_INTERNSHIPS: [],
+    GOVERNMENT: [],
+    RESEARCH: [],
+    HACKATHONS: [],
+    OPEN_SOURCE: [],
+    CAMPUS_AMBASSADOR: [],
+    WOMEN_PROGRAMS: [],
+  };
+
+  // 1. Startup Internships (30%)
+  for (let i = 0; i < 40; i++) {
+    const loc = pickRandom(locations, i);
+    const domain = pickRandom(startupDomains, i + 1);
+    const eco = pickRandom(startupEcosystems, i + 2);
+    queryBuckets.STARTUP_INTERNSHIPS.push(`${domain} startup internship ${loc}`.toLowerCase());
+    queryBuckets.STARTUP_INTERNSHIPS.push(`${domain} intern ${eco}`.toLowerCase());
+    queryBuckets.STARTUP_INTERNSHIPS.push(`founding engineer intern ${loc}`.toLowerCase());
+    queryBuckets.STARTUP_INTERNSHIPS.push(
+      `early stage startup ${domain} intern ${targetCountry}`.toLowerCase(),
+    );
   }
 
-  // Deduplicate and slice to context limits or default budget limit
-  const limit = context.maxQueries || 25;
+  // 2. General Internships (20%)
+  for (let i = 0; i < 30; i++) {
+    const loc = pickRandom(locations, i);
+    const domain = pickRandom(generalDomains, i + 1);
+    queryBuckets.GENERAL_INTERNSHIPS.push(`${domain} internship ${loc}`.toLowerCase());
+    queryBuckets.GENERAL_INTERNSHIPS.push(
+      `${domain} developer intern ${targetCountry}`.toLowerCase(),
+    );
+    queryBuckets.GENERAL_INTERNSHIPS.push(
+      `software engineering student internship ${loc}`.toLowerCase(),
+    );
+  }
+
+  // 3. Government (15%)
+  for (let i = 0; i < 20; i++) {
+    const agency = pickRandom(govAgencies, i);
+    queryBuckets.GOVERNMENT.push(`${agency} student internship`.toLowerCase());
+    queryBuckets.GOVERNMENT.push(`${agency} technology training internship program`.toLowerCase());
+    queryBuckets.GOVERNMENT.push(`government student internship ${agency}`.toLowerCase());
+  }
+
+  // 4. Research (10%)
+  for (let i = 0; i < 20; i++) {
+    const inst = pickRandom(researchInstitutions, i);
+    queryBuckets.RESEARCH.push(`research internship ${inst}`.toLowerCase());
+    queryBuckets.RESEARCH.push(`summer research fellowship ${inst}`.toLowerCase());
+    queryBuckets.RESEARCH.push(`scientific student internship program ${inst}`.toLowerCase());
+  }
+
+  // 5. Hackathons (10%)
+  for (let i = 0; i < 20; i++) {
+    const plat = pickRandom(hackathonPlatforms, i);
+    queryBuckets.HACKATHONS.push(`student coding hackathon ${plat}`.toLowerCase());
+    queryBuckets.HACKATHONS.push(`national technology competition ${plat}`.toLowerCase());
+    queryBuckets.HACKATHONS.push(`developer challenge registration ${plat}`.toLowerCase());
+  }
+
+  // 6. Open Source (5%)
+  for (let i = 0; i < 15; i++) {
+    const prog = pickRandom(openSourcePrograms, i);
+    queryBuckets.OPEN_SOURCE.push(`${prog} student projects application`.toLowerCase());
+    queryBuckets.OPEN_SOURCE.push(`open source student internship program ${prog}`.toLowerCase());
+  }
+
+  // 7. Campus Ambassador (5%)
+  queryBuckets.CAMPUS_AMBASSADOR.push('campus ambassador student program');
+  queryBuckets.CAMPUS_AMBASSADOR.push('github campus expert student representative');
+  queryBuckets.CAMPUS_AMBASSADOR.push('student advocate ambassador internship');
+
+  // 8. Women Programs (5%)
+  queryBuckets.WOMEN_PROGRAMS.push('women techmakers scholar program');
+  queryBuckets.WOMEN_PROGRAMS.push('outreachy internship open source women');
+  queryBuckets.WOMEN_PROGRAMS.push('adobe women in technology scholarship');
+  queryBuckets.WOMEN_PROGRAMS.push('grace hopper celebration student scholarship');
+  queryBuckets.WOMEN_PROGRAMS.push('microsoft women engineers program mentorship');
+
+  // Deduplicate buckets
+  Object.keys(queryBuckets).forEach((k) => {
+    queryBuckets[k] = Array.from(new Set(queryBuckets[k]));
+  });
+
+  // Calculate budget allocation ratios
+  const budgetRatio = {
+    STARTUP_INTERNSHIPS: 0.3,
+    GENERAL_INTERNSHIPS: 0.2,
+    GOVERNMENT: 0.15,
+    RESEARCH: 0.1,
+    HACKATHONS: 0.1,
+    OPEN_SOURCE: 0.05,
+    CAMPUS_AMBASSADOR: 0.05,
+    WOMEN_PROGRAMS: 0.05,
+  };
+
+  const queries: string[] = [];
+  Object.entries(budgetRatio).forEach(([bucketName, ratio]) => {
+    const slotCount = Math.max(1, Math.round(limit * ratio));
+    const bucketQueries = queryBuckets[bucketName] || [];
+    queries.push(...bucketQueries.slice(0, slotCount));
+  });
+
   const deduplicated = Array.from(new Set(queries)).slice(0, limit);
 
   console.log(
-    `[Query Planner] Generated ${deduplicated.length} deterministic query terms for ${targetCountry} across categories: ${targetCategories.join(', ')}.`,
+    `[Query Planner V2] Generated ${deduplicated.length} multidimensional queries across startup, government, research, and hackathon verticals.`,
   );
+
   return {
     queries: deduplicated,
   };
