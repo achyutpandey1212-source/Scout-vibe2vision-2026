@@ -51,7 +51,12 @@ export class OpportunityDetector {
    * Evaluates a crawled page's content deterministically to score opportunity likelihood.
    * Hardened weights in Stage 4.1 to reduce informational article crawls.
    */
-  static detect(url: string, title: string, markdown: string): DetectionResult {
+  static detect(
+    url: string,
+    title: string,
+    markdown: string,
+    categories?: string[],
+  ): DetectionResult {
     const reasons: string[] = [];
     const penalties: string[] = [];
     let score = 0;
@@ -201,6 +206,84 @@ export class OpportunityDetector {
         penalties.push(`Boilerplate body keyword matched: "${term}"`);
       }
     });
+
+    // ── Category-Aware Filtering & Penalties (PR5.5) ──
+    if (categories && categories.length > 0) {
+      const isInternshipRun =
+        categories.includes('INTERNSHIPS') || categories.includes('STARTUP_INTERNSHIPS');
+      const hasExperiencedTerm =
+        titleLower.includes('senior') ||
+        titleLower.includes('staff') ||
+        titleLower.includes('principal') ||
+        titleLower.includes('lead') ||
+        titleLower.includes('architect') ||
+        titleLower.includes('director') ||
+        titleLower.includes('manager') ||
+        titleLower.includes('vp') ||
+        titleLower.includes('experienced') ||
+        titleLower.includes('mid-career') ||
+        titleLower.includes('lateral') ||
+        titleLower.includes('returnship') ||
+        titleLower.includes('return-to-work');
+      const hasInternTerm =
+        titleLower.includes('intern') ||
+        titleLower.includes('internship') ||
+        titleLower.includes('co-op') ||
+        titleLower.includes('trainee');
+
+      if (isInternshipRun && hasExperiencedTerm && !hasInternTerm) {
+        score -= 60;
+        penalties.push(
+          'Contains experienced hire/senior keywords in title without intern keywords',
+        );
+      }
+
+      if (categories.includes('STARTUP_INTERNSHIPS')) {
+        const isNonStartupDomain =
+          urlLower.includes('.gov.in') ||
+          urlLower.includes('.nic.in') ||
+          urlLower.includes('.edu') ||
+          urlLower.includes('.ac.in') ||
+          urlLower.includes('google.com') ||
+          urlLower.includes('microsoft.com') ||
+          urlLower.includes('amazon.in') ||
+          urlLower.includes('amazon.com') ||
+          urlLower.includes('oracle.com');
+        if (isNonStartupDomain) {
+          score -= 40;
+          penalties.push(
+            'Non-startup government/university/corporate domain for Startup Internship run',
+          );
+        }
+      }
+
+      if (categories.includes('GOVERNMENT_INTERNSHIP')) {
+        const isGov =
+          urlLower.includes('.gov.in') ||
+          urlLower.includes('.nic.in') ||
+          titleLower.includes('government') ||
+          titleLower.includes('ministry') ||
+          titleLower.includes('national');
+        if (!isGov) {
+          score -= 40;
+          penalties.push('Non-government domain/title for Government Internship run');
+        }
+      }
+
+      if (categories.includes('RESEARCH_INTERNSHIP')) {
+        const isResearch =
+          urlLower.includes('.edu') ||
+          urlLower.includes('.ac.in') ||
+          urlLower.includes('research') ||
+          titleLower.includes('research') ||
+          titleLower.includes('lab') ||
+          titleLower.includes('scientific');
+        if (!isResearch) {
+          score -= 40;
+          penalties.push('Non-academic/non-research domain for Research Internship run');
+        }
+      }
+    }
 
     // Normalize confidence bounds between 0 and 100
     const confidence = Math.max(0, Math.min(100, score));

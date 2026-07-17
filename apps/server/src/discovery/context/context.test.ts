@@ -467,3 +467,19 @@ describe('getPageBudgets', () => {
     expect(budgets.HUGE).toBe(9000);
   });
 });
+
+describe('Large chunk splitting', () => {
+  it('splits large flat document into multiple smaller chunks by paragraphs', () => {
+    // 5 paragraphs of 500 characters each (~2500 characters flat text)
+    const longPara = 'a'.repeat(500);
+    const flatDocContent = Array(5).fill(longPara).join('\n\n');
+    const doc = makeDoc(flatDocContent);
+
+    const chunks = chunkDocument(doc as any);
+    // Should split into at least 2 chunks since total is 2500 (> 1500 limit)
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) {
+      expect(chunk.content.length).toBeLessThanOrEqual(1500);
+    }
+  });
+});

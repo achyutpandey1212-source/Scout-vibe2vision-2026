@@ -96,6 +96,56 @@ function classifyPriority(heading: string): ChunkPriority {
   return 'NORMAL';
 }
 
+function splitLargeChunk(chunk: Chunk, maxChunkSize = 1500): Chunk[] {
+  if (chunk.content.length <= maxChunkSize) {
+    return [chunk];
+  }
+
+  const subChunks: Chunk[] = [];
+  const paragraphs = chunk.content.split(/\n\n+/);
+  let currentSubContent = '';
+  let currentStartLine = chunk.startLine;
+  let subIndex = 1;
+
+  for (let i = 0; i < paragraphs.length; i++) {
+    const para = paragraphs[i];
+    if (currentSubContent.length + para.length + 2 > maxChunkSize && currentSubContent.length > 0) {
+      const linesInSub = currentSubContent.split('\n').length;
+      subChunks.push({
+        heading: chunk.heading ? `${chunk.heading} (Part ${subIndex++})` : '',
+        content: currentSubContent.trim(),
+        score: 0,
+        startLine: currentStartLine,
+        endLine: currentStartLine + linesInSub - 1,
+        priority: chunk.priority,
+      });
+      currentStartLine = currentStartLine + linesInSub;
+      currentSubContent = para;
+    } else {
+      if (currentSubContent.length > 0) {
+        currentSubContent += '\n\n' + para;
+      } else {
+        currentSubContent = para;
+      }
+    }
+  }
+
+  if (currentSubContent.trim().length > 0) {
+    const linesInSub = currentSubContent.split('\n').length;
+    subChunks.push({
+      heading:
+        chunk.heading && subIndex > 1 ? `${chunk.heading} (Part ${subIndex})` : chunk.heading,
+      content: currentSubContent.trim(),
+      score: 0,
+      startLine: currentStartLine,
+      endLine: currentStartLine + linesInSub - 1,
+      priority: chunk.priority,
+    });
+  }
+
+  return subChunks;
+}
+
 // ─── Chunker ─────────────────────────────────────────────────────────────────
 
 /**
@@ -154,5 +204,9 @@ export function chunkDocument(doc: Document): Chunk[] {
     });
   }
 
-  return chunks;
+  const finalChunks: Chunk[] = [];
+  for (const chunk of chunks) {
+    finalChunks.push(...splitLargeChunk(chunk, 1500));
+  }
+  return finalChunks;
 }

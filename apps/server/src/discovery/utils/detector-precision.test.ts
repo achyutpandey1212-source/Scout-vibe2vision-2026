@@ -31,4 +31,28 @@ describe('Task 4: Opportunity Detector Precision tests', () => {
     expect(res.shouldExtract).toBe(false);
     expect(res.penalties.some((p) => p.includes('Noise path query pattern matched'))).toBe(true);
   });
+
+  it('should penalize experienced hire positions in Internship runs', () => {
+    const res = OpportunityDetector.detect(
+      'https://example.com/careers/senior-backend-engineer',
+      'Senior Backend Engineer',
+      'Apply to join our team as a senior software engineer.',
+      ['INTERNSHIPS'],
+    );
+    expect(res.penalties).toContain(
+      'Contains experienced hire/senior keywords in title without intern keywords',
+    );
+  });
+
+  it('should penalize corporate non-startup domains in Startup Internship runs', () => {
+    const res = OpportunityDetector.detect(
+      'https://google.com/careers/internship',
+      'Google Software Engineering Intern 2026',
+      'Apply now for student internship.',
+      ['STARTUP_INTERNSHIPS'],
+    );
+    expect(res.penalties).toContain(
+      'Non-startup government/university/corporate domain for Startup Internship run',
+    );
+  });
 });

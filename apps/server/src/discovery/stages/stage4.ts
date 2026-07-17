@@ -165,6 +165,74 @@ export class Stage4QualityAcceptance implements IPipelineStage<
         penaltyDistribution.noStipend++;
       }
 
+      // ── Category Mismatch Penalties (PR5.5) ──
+      const runCategories: string[] = options?.categories || [];
+      if (runCategories.length > 0) {
+        const titleLower = opp.title.toLowerCase();
+        const descLower = (opp.description || '').toLowerCase();
+
+        const hasExperiencedTerm =
+          titleLower.includes('senior') ||
+          titleLower.includes('staff') ||
+          titleLower.includes('principal') ||
+          titleLower.includes('lead') ||
+          titleLower.includes('architect') ||
+          titleLower.includes('director') ||
+          titleLower.includes('manager') ||
+          titleLower.includes('vp') ||
+          titleLower.includes('head') ||
+          titleLower.includes('executive') ||
+          titleLower.includes('experienced') ||
+          titleLower.includes('3+ years') ||
+          titleLower.includes('5+ years') ||
+          titleLower.includes('lateral') ||
+          titleLower.includes('returnship') ||
+          titleLower.includes('return-to-work');
+        const hasInternTerm =
+          titleLower.includes('intern') ||
+          titleLower.includes('internship') ||
+          titleLower.includes('co-op') ||
+          titleLower.includes('trainee');
+
+        // Rule A: Internship category mismatch checks
+        if (
+          (runCategories.includes('INTERNSHIPS') ||
+            runCategories.includes('STARTUP_INTERNSHIPS')) &&
+          hasExperiencedTerm &&
+          !hasInternTerm
+        ) {
+          score -= 50; // Heavy penalty
+          isDataValid = false; // Force REJECT
+          penalties.push(`Experienced-hire title mismatch for Internship run: "${opp.title}"`);
+        }
+
+        // Rule B: Research Internship mismatch checks
+        if (runCategories.includes('RESEARCH_INTERNSHIP')) {
+          const isAcademicOrResearch =
+            titleLower.includes('research') ||
+            titleLower.includes('fellow') ||
+            titleLower.includes('lab') ||
+            descLower.includes('research') ||
+            descLower.includes('scientific');
+          if (!isAcademicOrResearch) {
+            score -= 30; // Moderate penalty
+            penalties.push('Non-research opportunity mismatch for Research Internship run');
+          }
+        }
+
+        // Rule C: Startup Internship mismatch checks
+        if (runCategories.includes('STARTUP_INTERNSHIPS')) {
+          const isGovOrCorp =
+            opp.sourceType === 'GOVERNMENT' ||
+            opp.sourceDomain?.toLowerCase().includes('.gov.in') ||
+            opp.sourceDomain?.toLowerCase().includes('.nic.in');
+          if (isGovOrCorp) {
+            score -= 30; // Moderate penalty
+            penalties.push('Government/public sector mismatch for Startup Internship run');
+          }
+        }
+      }
+
       const finalScore = Math.min(100, Math.max(0, score));
 
       // 3. Decision Engine Track

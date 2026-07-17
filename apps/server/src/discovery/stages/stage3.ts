@@ -173,7 +173,12 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
       }
 
       // 1. Inexpensive Deterministic Opportunity Detection pre-filter
-      const detection = OpportunityDetector.detect(page.url, page.title, page.markdown);
+      const detection = OpportunityDetector.detect(
+        page.url,
+        page.title,
+        page.markdown,
+        options?.categories,
+      );
 
       if (!detection.shouldExtract) {
         pagesSkippedDetector++;
