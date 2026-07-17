@@ -1,30 +1,28 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import { SourceCategory, TargetAudience, ACTIVE_SOURCE_CATEGORIES } from '@scout/shared';
 
 export interface IDiscoveryRun extends Document {
   startedAt: Date;
   finishedAt: Date;
-  targetAudience: string;
-  categories: string[];
+  targetAudience: TargetAudience;
+  categories: SourceCategory[];
   totalQueries: number;
   inserted: number;
   updated: number;
   failures: number;
-  duration: number; // in seconds
-  // V2 Expanded Metrics
+  duration: number;
   metricsByEcosystem?: Map<string, number>;
   metricsByOrgSize?: Map<string, number>;
   metricsByLocation?: Map<string, number>;
   metricsByDomain?: Map<string, number>;
   metricsByHiddenGem?: Map<string, number>;
   metricsBySuitability?: Map<string, number>;
-  // V2 Health Indicators
   searchDiversityScore?: number;
   sourceDiversityScore?: number;
   opportunityDiversityScore?: number;
   locationDiversityScore?: number;
   engineeringDiversityScore?: number;
   studentCoverageScore?: number;
-  // V2 Logging highlights
   highlights?: {
     topEcosystems: string[];
     topCities: string[];
@@ -41,8 +39,19 @@ const DiscoveryRunSchema = new Schema<IDiscoveryRun>(
   {
     startedAt: { type: Date, required: true },
     finishedAt: { type: Date, required: true },
-    targetAudience: { type: String, required: true },
-    categories: [{ type: String }],
+    targetAudience: {
+      type: String,
+      required: true,
+      enum: ['UNDERGRAD_ENGINEERING_STUDENTS'],
+      default: 'UNDERGRAD_ENGINEERING_STUDENTS',
+    },
+    categories: [
+      {
+        type: String,
+        enum: ACTIVE_SOURCE_CATEGORIES,
+        required: true,
+      },
+    ],
     totalQueries: { type: Number, required: true },
     inserted: { type: Number, required: true },
     updated: { type: Number, required: true },

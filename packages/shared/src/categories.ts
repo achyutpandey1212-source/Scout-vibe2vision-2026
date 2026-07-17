@@ -11,19 +11,13 @@ export type SourceCategory =
   | 'OPEN_SOURCE_PROGRAM'
   | 'SUMMER_SCHOOL'
   | 'BOOTCAMP'
-  | 'WOMEN_IN_TECH'
-  | 'GENERAL'
-  | 'TECH_CAREERS'
-  | 'ENTREPRENEURSHIP'
-  | 'SKILL_DEVELOPMENT'
-  | 'GOVERNMENT'
-  | 'RESEARCH';
+  | 'WOMEN_IN_TECH';
 
 export interface CategoryMetadata {
-  id: SourceCategory;
+  id: string;
   name: string;
   isActive: boolean;
-  priority: number; // For search planning priority & crawl budget allocation
+  priority: number;
   description: string;
 }
 
@@ -166,3 +160,11 @@ export const CATEGORY_REGISTRY: CategoryMetadata[] = [
       'Academic research ecosystem, including labs, summer schools, fellowships, and research internships (inactive).',
   },
 ];
+
+export const ACTIVE_SOURCE_CATEGORIES: SourceCategory[] = CATEGORY_REGISTRY.filter(
+  (c) => c.isActive,
+).map((c) => c.id as SourceCategory);
+
+export const INACTIVE_SOURCE_CATEGORIES: SourceCategory[] = CATEGORY_REGISTRY.filter(
+  (c) => !c.isActive,
+).map((c) => c.id as SourceCategory);

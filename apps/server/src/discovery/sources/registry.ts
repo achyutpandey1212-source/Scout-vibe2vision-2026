@@ -29,7 +29,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'search',
     refreshFrequency: 'daily',
     trustScore: 95,
-    defaultTags: ['technology', 'software engineering', 'tech'],
+    defaultTags: ['technology', 'software engineering', 'tech', 'internship'],
   },
   {
     organization: 'Microsoft',
@@ -37,7 +37,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'search',
     refreshFrequency: 'daily',
     trustScore: 95,
-    defaultTags: ['technology', 'software engineering', 'tech'],
+    defaultTags: ['technology', 'software engineering', 'tech', 'internship'],
   },
   {
     organization: 'Amazon',
@@ -45,7 +45,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'search',
     refreshFrequency: 'daily',
     trustScore: 95,
-    defaultTags: ['technology', 'tech'],
+    defaultTags: ['technology', 'tech', 'internship'],
   },
   {
     organization: 'NVIDIA',
@@ -53,7 +53,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'search',
     refreshFrequency: 'medium',
     trustScore: 95,
-    defaultTags: ['technology', 'hardware', 'graphics'],
+    defaultTags: ['technology', 'hardware', 'graphics', 'internship'],
   },
 
   // ━━ WOMEN IN TECH ━━
@@ -63,7 +63,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'direct',
     refreshFrequency: 'daily',
     trustScore: 100,
-    defaultTags: ['women-focused', 'women-in-tech', 'community'],
+    defaultTags: ['women-focused', 'women-in-tech', 'community', 'internship'],
   },
   {
     organization: 'AnitaB.org',
@@ -71,7 +71,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'direct',
     refreshFrequency: 'daily',
     trustScore: 100,
-    defaultTags: ['women-focused', 'women-in-tech', 'career-advancement'],
+    defaultTags: ['women-focused', 'women-in-tech', 'career-advancement', 'internship'],
   },
   {
     organization: 'Grace Hopper Celebration',
@@ -79,7 +79,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'search',
     refreshFrequency: 'medium',
     trustScore: 100,
-    defaultTags: ['women-focused', 'conference', 'career-fair'],
+    defaultTags: ['women-focused', 'conference', 'career-fair', 'scholarship'],
   },
   {
     organization: 'Women Who Code',
@@ -87,7 +87,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'rss',
     refreshFrequency: 'daily',
     trustScore: 100,
-    defaultTags: ['women-focused', 'women-in-tech', 'mentorship'],
+    defaultTags: ['women-focused', 'women-in-tech', 'mentorship', 'community'],
   },
 
   // ━━ HACKATHONS ━━
@@ -97,7 +97,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'sitemap',
     refreshFrequency: 'daily',
     trustScore: 90,
-    defaultTags: ['hackathon', 'competition', 'development'],
+    defaultTags: ['hackathon', 'competition', 'development', 'student'],
   },
   {
     organization: 'MLH',
@@ -105,7 +105,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'sitemap',
     refreshFrequency: 'daily',
     trustScore: 90,
-    defaultTags: ['hackathon', 'students', 'coding'],
+    defaultTags: ['hackathon', 'students', 'coding', 'student'],
   },
   {
     organization: 'Unstop',
@@ -113,7 +113,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'search',
     refreshFrequency: 'daily',
     trustScore: 85,
-    defaultTags: ['competition', 'quiz', 'hackathon'],
+    defaultTags: ['competition', 'quiz', 'hackathon', 'student'],
   },
 
   // ━━ RESEARCH ━━
@@ -123,7 +123,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'search',
     refreshFrequency: 'medium',
     trustScore: 95,
-    defaultTags: ['research', 'fellowship', 'physics', 'scientific'],
+    defaultTags: ['research', 'fellowship', 'physics', 'scientific', 'internship'],
   },
   {
     organization: 'ISRO',
@@ -131,43 +131,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'direct',
     refreshFrequency: 'medium',
     trustScore: 95,
-    defaultTags: ['government', 'research', 'space', 'scientific'],
-  },
-
-  // ━━ SCHOLARSHIPS ━━
-  {
-    organization: 'DAAD',
-    homepage: 'https://www.daad.de',
-    strategy: 'search',
-    refreshFrequency: 'medium',
-    trustScore: 95,
-    defaultTags: ['scholarship', 'education', 'germany'],
-  },
-  {
-    organization: 'Erasmus+',
-    homepage: 'https://erasmus-plus.ec.europa.eu',
-    strategy: 'search',
-    refreshFrequency: 'medium',
-    trustScore: 95,
-    defaultTags: ['scholarship', 'fellowship', 'europe'],
-  },
-
-  // ━━ FELLOWSHIPS ━━
-  {
-    organization: 'Obama Foundation',
-    homepage: 'https://www.obamaorg/fellowship',
-    strategy: 'direct',
-    refreshFrequency: 'low',
-    trustScore: 95,
-    defaultTags: ['fellowship', 'leadership', 'social-impact'],
-  },
-  {
-    organization: 'Mozilla Foundation',
-    homepage: 'https://foundation.mozilla.org',
-    strategy: 'search',
-    refreshFrequency: 'medium',
-    trustScore: 95,
-    defaultTags: ['fellowship', 'open-source', 'tech-policy'],
+    defaultTags: ['government', 'research', 'space', 'scientific', 'internship'],
   },
 
   // ━━ NEW GOVERNMENT V2 SOURCES ━━
@@ -275,7 +239,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'search',
     refreshFrequency: 'medium',
     trustScore: 95,
-    defaultTags: ['community', 'tech', 'engineering'],
+    defaultTags: ['community', 'tech', 'engineering', 'student'],
   },
   {
     organization: 'ACM',
@@ -283,7 +247,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'search',
     refreshFrequency: 'medium',
     trustScore: 95,
-    defaultTags: ['community', 'tech', 'computer-science'],
+    defaultTags: ['community', 'tech', 'computer-science', 'student'],
   },
   {
     organization: 'GDG',
@@ -291,7 +255,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'search',
     refreshFrequency: 'medium',
     trustScore: 95,
-    defaultTags: ['community', 'tech', 'google'],
+    defaultTags: ['community', 'tech', 'google', 'student'],
   },
   {
     organization: 'GDSC',
@@ -299,7 +263,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'search',
     refreshFrequency: 'medium',
     trustScore: 95,
-    defaultTags: ['community', 'tech', 'students'],
+    defaultTags: ['community', 'tech', 'students', 'internship'],
   },
   {
     organization: 'Linux Foundation',
@@ -317,7 +281,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'search',
     refreshFrequency: 'daily',
     trustScore: 90,
-    defaultTags: ['hackathon', 'competition', 'coding'],
+    defaultTags: ['hackathon', 'competition', 'coding', 'student'],
   },
   {
     organization: 'HackerRank',
@@ -325,7 +289,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'search',
     refreshFrequency: 'daily',
     trustScore: 90,
-    defaultTags: ['hackathon', 'competition', 'coding'],
+    defaultTags: ['hackathon', 'competition', 'coding', 'student'],
   },
   {
     organization: 'Kaggle',
@@ -333,7 +297,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'search',
     refreshFrequency: 'daily',
     trustScore: 90,
-    defaultTags: ['competition', 'data-science', 'ai'],
+    defaultTags: ['competition', 'data-science', 'ai', 'student'],
   },
 
   // ━━ NEW RESEARCH V2 SOURCES ━━
@@ -377,7 +341,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'search',
     refreshFrequency: 'medium',
     trustScore: 95,
-    defaultTags: ['incubator', 'startup', 'tech'],
+    defaultTags: ['incubator', 'startup', 'tech', 'internship'],
   },
   {
     organization: 'NSRCEL',
@@ -385,7 +349,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'search',
     refreshFrequency: 'medium',
     trustScore: 95,
-    defaultTags: ['incubator', 'startup', 'university'],
+    defaultTags: ['incubator', 'startup', 'university', 'internship'],
   },
   {
     organization: 'CIIE IIMA',
@@ -393,7 +357,7 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'search',
     refreshFrequency: 'medium',
     trustScore: 95,
-    defaultTags: ['incubator', 'startup', 'university'],
+    defaultTags: ['incubator', 'startup', 'university', 'internship'],
   },
   {
     organization: 'Kerala Startup Mission',
@@ -401,70 +365,6 @@ export const TRUSTED_SOURCES: SourceRegistryEntry[] = [
     strategy: 'search',
     refreshFrequency: 'medium',
     trustScore: 95,
-    defaultTags: ['incubator', 'startup', 'government'],
-  },
-  {
-    organization: 'Y Combinator',
-    homepage: 'https://www.ycombinator.com',
-    strategy: 'search',
-    refreshFrequency: 'daily',
-    trustScore: 95,
-    defaultTags: ['vc-portfolio', 'startup', 'accelerator'],
-  },
-  {
-    organization: 'Peak XV Partners',
-    homepage: 'https://www.peakxv.com',
-    strategy: 'search',
-    refreshFrequency: 'medium',
-    trustScore: 95,
-    defaultTags: ['vc-portfolio', 'startup'],
-  },
-  {
-    organization: 'Accel India',
-    homepage: 'https://www.accel.com',
-    strategy: 'search',
-    refreshFrequency: 'medium',
-    trustScore: 95,
-    defaultTags: ['vc-portfolio', 'startup'],
-  },
-  {
-    organization: 'Blume Ventures',
-    homepage: 'https://blume.vc',
-    strategy: 'search',
-    refreshFrequency: 'medium',
-    trustScore: 95,
-    defaultTags: ['vc-portfolio', 'startup'],
-  },
-  {
-    organization: 'Antler India',
-    homepage: 'https://www.antler.co/india',
-    strategy: 'search',
-    refreshFrequency: 'medium',
-    trustScore: 95,
-    defaultTags: ['vc-portfolio', 'startup', 'accelerator'],
-  },
-  {
-    organization: '100X.VC',
-    homepage: 'https://www.100x.vc',
-    strategy: 'search',
-    refreshFrequency: 'medium',
-    trustScore: 90,
-    defaultTags: ['vc-portfolio', 'startup', 'accelerator'],
-  },
-  {
-    organization: 'Nexus Venture Partners',
-    homepage: 'https://nexusvp.com',
-    strategy: 'search',
-    refreshFrequency: 'medium',
-    trustScore: 95,
-    defaultTags: ['vc-portfolio', 'startup'],
-  },
-  {
-    organization: 'Elevation Capital',
-    homepage: 'https://elevationcapital.com',
-    strategy: 'search',
-    refreshFrequency: 'medium',
-    trustScore: 95,
-    defaultTags: ['vc-portfolio', 'startup'],
+    defaultTags: ['incubator', 'startup', 'government', 'internship'],
   },
 ];

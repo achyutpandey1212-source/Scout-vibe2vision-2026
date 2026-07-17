@@ -1,11 +1,12 @@
 import { generateSearchQueries } from '../../discovery';
+import { CANONICAL_TARGET_AUDIENCE, ACTIVE_SOURCE_CATEGORIES } from '@scout/shared';
 
 async function runPlayground() {
   console.log('🏁 Starting Query Planner Playground test...\n');
 
   const context = {
-    categories: ['Jobs', 'Scholarships', 'Grants', 'Fellowships', 'Freelance', 'Internships'],
-    targetAudience: 'Women',
+    categories: ACTIVE_SOURCE_CATEGORIES,
+    targetAudience: CANONICAL_TARGET_AUDIENCE,
     country: 'India',
     maxQueries: 25,
   };

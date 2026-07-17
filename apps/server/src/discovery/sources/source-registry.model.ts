@@ -4,16 +4,16 @@ import {
   CrawlFrequency,
   CrawlStrategy,
   DiscoveredBy,
-  SourceCategory,
   SourcePriority,
   SourceType,
+  EcosystemType,
 } from './source-registry.types';
+import { ACTIVE_SOURCE_CATEGORIES } from '@scout/shared';
 
 export interface ISourceRegistryDocument extends ISourceRegistryEntry, Document {}
 
 const SourceRegistrySchema = new Schema<ISourceRegistryDocument>(
   {
-    // ─── Identity ──────────────────────────────────────────────────────────
     domain: {
       type: String,
       required: true,
@@ -34,37 +34,15 @@ const SourceRegistrySchema = new Schema<ISourceRegistryDocument>(
         'NGO',
         'Community',
         'Platform',
-        'Job Board',
         'Hackathon',
-        'Conference',
-        'Research Lab',
+        'Open Source',
         'Other',
       ] satisfies SourceType[],
       default: 'Organization',
     },
     category: {
       type: String,
-      enum: [
-        'INTERNSHIPS',
-        'STARTUP_INTERNSHIPS',
-        'TECH_CAREERS',
-        'WOMEN_IN_TECH',
-        'SCHOLARSHIPS',
-        'FELLOWSHIPS',
-        'GOVERNMENT',
-        'HACKATHONS',
-        'ENTREPRENEURSHIP',
-        'RESEARCH',
-        'SKILL_DEVELOPMENT',
-        'GENERAL',
-        'GOVERNMENT_INTERNSHIP',
-        'RESEARCH_INTERNSHIP',
-        'CAMPUS_AMBASSADOR',
-        'STUDENT_COMPETITION',
-        'SUMMER_SCHOOL',
-        'BOOTCAMP',
-        'OPEN_SOURCE_PROGRAM',
-      ] satisfies SourceCategory[],
+      enum: ACTIVE_SOURCE_CATEGORIES,
       required: true,
     },
     strategy: {
@@ -80,7 +58,6 @@ const SourceRegistrySchema = new Schema<ISourceRegistryDocument>(
     defaultTags: [{ type: String }],
     isActive: { type: Boolean, default: true, index: true },
 
-    // ─── Trust & Priority ──────────────────────────────────────────────────
     trustScore: { type: Number, required: true, min: 0, max: 100 },
     priority: {
       type: String,
@@ -88,13 +65,11 @@ const SourceRegistrySchema = new Schema<ISourceRegistryDocument>(
       default: 'medium',
     },
 
-    // ─── AI Verification ───────────────────────────────────────────────────
     confidence: { type: Number, default: 0, min: 0, max: 100 },
     reason: { type: String, default: '' },
     verifiedByAIAt: { type: Date, default: null },
     lastVerifiedAt: { type: Date, default: null },
 
-    // ─── Discovery Provenance ──────────────────────────────────────────────
     discoveredBy: {
       type: String,
       enum: ['seed', 'weekly-discovery', 'affiliate-extraction', 'manual'] satisfies DiscoveredBy[],
@@ -104,16 +79,13 @@ const SourceRegistrySchema = new Schema<ISourceRegistryDocument>(
     lastCrawledAt: { type: Date, default: null },
     nextCrawlAt: { type: Date, default: Date.now },
 
-    // ─── Health ────────────────────────────────────────────────────────────
     consecutiveFailures: { type: Number, default: 0 },
 
-    // ─── Analytics ─────────────────────────────────────────────────────────
     totalRuns: { type: Number, default: 0 },
     totalPagesCrawled: { type: Number, default: 0 },
     totalOpportunitiesFound: { type: Number, default: 0 },
     opportunityDensity: { type: Number, default: 0 },
 
-    // ─── Source Intelligence V2 ────────────────────────────────────────────
     sourceTier: {
       type: String,
       enum: ['A', 'B', 'C'],
@@ -132,13 +104,11 @@ const SourceRegistrySchema = new Schema<ISourceRegistryDocument>(
         'RESEARCH',
         'GOVERNMENT',
         'BIG_TECH',
-        'VC_PORTFOLIO',
         'COMMUNITY',
         'OPEN_SOURCE',
-        'AGGREGATOR',
         'NON_PROFIT',
-      ],
-      default: 'BIG_TECH',
+      ] satisfies EcosystemType[],
+      default: null,
       required: true,
     },
     ecosystemName: { type: String, default: null },
@@ -156,19 +126,10 @@ const SourceRegistrySchema = new Schema<ISourceRegistryDocument>(
   },
 );
 
-// ─── Indexes ──────────────────────────────────────────────────────────────────
-
-// Primary query path: Crawl Scheduler daily run
 SourceRegistrySchema.index({ isActive: 1, nextCrawlAt: 1, trustScore: -1 });
-
-// Admin and analytics queries
 SourceRegistrySchema.index({ category: 1, priority: 1 });
 SourceRegistrySchema.index({ discoveredBy: 1 });
-
-// Future: auto-frequency optimization queries
 SourceRegistrySchema.index({ opportunityDensity: -1 });
-
-// ─── Model ────────────────────────────────────────────────────────────────────
 
 export const SourceRegistryModel =
   mongoose.models.SourceRegistry ||

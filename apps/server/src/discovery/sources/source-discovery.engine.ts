@@ -14,6 +14,7 @@ import {
   CrawlFrequency,
   CrawlStrategy,
 } from './source-registry.types';
+import { ACTIVE_SOURCE_CATEGORIES } from '@scout/shared';
 
 // ─── Zod Schemas for AI Outputs ───────────────────────────────────────────────
 
@@ -33,33 +34,11 @@ const DomainEvaluationSchema = z.object({
     'NGO',
     'Community',
     'Platform',
-    'Job Board',
     'Hackathon',
-    'Conference',
-    'Research Lab',
+    'Open Source',
     'Other',
   ]),
-  suggestedCategory: z.enum([
-    'INTERNSHIPS',
-    'STARTUP_INTERNSHIPS',
-    'TECH_CAREERS',
-    'WOMEN_IN_TECH',
-    'SCHOLARSHIPS',
-    'FELLOWSHIPS',
-    'GOVERNMENT',
-    'HACKATHONS',
-    'ENTREPRENEURSHIP',
-    'RESEARCH',
-    'SKILL_DEVELOPMENT',
-    'GENERAL',
-    'GOVERNMENT_INTERNSHIP',
-    'RESEARCH_INTERNSHIP',
-    'CAMPUS_AMBASSADOR',
-    'STUDENT_COMPETITION',
-    'SUMMER_SCHOOL',
-    'BOOTCAMP',
-    'OPEN_SOURCE_PROGRAM',
-  ]),
+  suggestedCategory: z.enum(ACTIVE_SOURCE_CATEGORIES as [SourceCategory, ...SourceCategory[]]),
   suggestedTrustScore: z.number().min(0).max(100),
   suggestedPriority: z.enum(['critical', 'high', 'medium', 'low']),
   suggestedCrawlFrequency: z.enum(['daily', 'weekly', 'monthly']),

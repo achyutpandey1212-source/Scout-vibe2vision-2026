@@ -258,7 +258,7 @@ export class OpportunityEnrichmentPipeline {
     if (sourceEco === 'STARTUP') {
       opp.organizationType = 'STARTUP';
       opp.organizationStage = 'EARLY_STARTUP';
-    } else if (sourceEco === 'VC_PORTFOLIO' || sourceEco === 'INCUBATOR') {
+    } else if (sourceEco === 'INCUBATOR') {
       opp.organizationType = 'STARTUP';
       opp.organizationStage = 'GROWTH_STARTUP';
     } else if (sourceEco === 'BIG_TECH') {

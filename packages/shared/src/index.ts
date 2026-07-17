@@ -7,3 +7,8 @@ export * from './skills';
 export * from './resume/keywords';
 export * from './education/branches';
 export * from './categories';
+export * from './personas';
+export * from './opportunity-types';
+export * from './engineering-domains';
+export * from './target-audience';
+export * from './constants';

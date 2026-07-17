@@ -51,7 +51,7 @@ async function runEnrichmentPlayground() {
       if (enrichedOpp.intelligence?.normalizedDeadline) {
         deadlinesParsedCount++;
       }
-      if (enrichedOpp.category && enrichedOpp.category !== 'General') {
+      if (enrichedOpp.category && enrichedOpp.category !== 'INTERNSHIPS') {
         categoriesAssignedCount++;
       }
       if (enrichedOpp.intelligence?.metadata) {

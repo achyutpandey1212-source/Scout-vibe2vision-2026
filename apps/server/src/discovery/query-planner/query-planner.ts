@@ -1,21 +1,8 @@
 import { DiscoveryContext, QueryPlannerResponse } from '../types/query.types';
+import { ACTIVE_SOURCE_CATEGORIES } from '@scout/shared';
 
-/**
- * Generates deterministic search queries to guarantee category distribution
- * and prevent AI drift.
- */
 function getCategoriesQueryPlannerBuckets(requestedCategories: string[]): string[] {
-  const mapping: Record<string, string> = {
-    INTERNSHIPS: 'GENERAL_INTERNSHIPS',
-    STARTUP_INTERNSHIPS: 'STARTUP_INTERNSHIPS',
-    GOVERNMENT_INTERNSHIP: 'GOVERNMENT',
-    RESEARCH_INTERNSHIP: 'RESEARCH',
-    HACKATHONS: 'HACKATHONS',
-    OPEN_SOURCE_PROGRAM: 'OPEN_SOURCE',
-    CAMPUS_AMBASSADOR: 'CAMPUS_AMBASSADOR',
-    WOMEN_IN_TECH: 'WOMEN_PROGRAMS',
-  };
-  return requestedCategories.map((c) => mapping[c]).filter(Boolean);
+  return requestedCategories.filter((c) => ACTIVE_SOURCE_CATEGORIES.includes(c as any));
 }
 
 /**
@@ -108,13 +95,13 @@ export async function generateSearchQueries(
 
   const queryBuckets: Record<string, string[]> = {
     STARTUP_INTERNSHIPS: [],
-    GENERAL_INTERNSHIPS: [],
-    GOVERNMENT: [],
-    RESEARCH: [],
+    INTERNSHIPS: [],
+    GOVERNMENT_INTERNSHIP: [],
+    RESEARCH_INTERNSHIP: [],
     HACKATHONS: [],
-    OPEN_SOURCE: [],
+    OPEN_SOURCE_PROGRAM: [],
     CAMPUS_AMBASSADOR: [],
-    WOMEN_PROGRAMS: [],
+    WOMEN_IN_TECH: [],
   };
 
   // 1. Startup Internships (30%)
@@ -134,29 +121,31 @@ export async function generateSearchQueries(
   for (let i = 0; i < 30; i++) {
     const loc = pickRandom(locations, i);
     const domain = pickRandom(generalDomains, i + 1);
-    queryBuckets.GENERAL_INTERNSHIPS.push(`${domain} internship ${loc}`.toLowerCase());
-    queryBuckets.GENERAL_INTERNSHIPS.push(
-      `${domain} developer intern ${targetCountry}`.toLowerCase(),
-    );
-    queryBuckets.GENERAL_INTERNSHIPS.push(
-      `software engineering student internship ${loc}`.toLowerCase(),
-    );
+    queryBuckets.INTERNSHIPS.push(`${domain} internship ${loc}`.toLowerCase());
+    queryBuckets.INTERNSHIPS.push(`${domain} developer intern ${targetCountry}`.toLowerCase());
+    queryBuckets.INTERNSHIPS.push(`software engineering student internship ${loc}`.toLowerCase());
   }
 
   // 3. Government (15%)
   for (let i = 0; i < 20; i++) {
     const agency = pickRandom(govAgencies, i);
-    queryBuckets.GOVERNMENT.push(`${agency} student internship`.toLowerCase());
-    queryBuckets.GOVERNMENT.push(`${agency} technology training internship program`.toLowerCase());
-    queryBuckets.GOVERNMENT.push(`government student internship ${agency}`.toLowerCase());
+    queryBuckets.GOVERNMENT_INTERNSHIP.push(`${agency} student internship`.toLowerCase());
+    queryBuckets.GOVERNMENT_INTERNSHIP.push(
+      `${agency} technology training internship program`.toLowerCase(),
+    );
+    queryBuckets.GOVERNMENT_INTERNSHIP.push(
+      `government student internship ${agency}`.toLowerCase(),
+    );
   }
 
   // 4. Research (10%)
   for (let i = 0; i < 20; i++) {
     const inst = pickRandom(researchInstitutions, i);
-    queryBuckets.RESEARCH.push(`research internship ${inst}`.toLowerCase());
-    queryBuckets.RESEARCH.push(`summer research fellowship ${inst}`.toLowerCase());
-    queryBuckets.RESEARCH.push(`scientific student internship program ${inst}`.toLowerCase());
+    queryBuckets.RESEARCH_INTERNSHIP.push(`research internship ${inst}`.toLowerCase());
+    queryBuckets.RESEARCH_INTERNSHIP.push(`summer research fellowship ${inst}`.toLowerCase());
+    queryBuckets.RESEARCH_INTERNSHIP.push(
+      `scientific student internship program ${inst}`.toLowerCase(),
+    );
   }
 
   // 5. Hackathons (10%)
@@ -170,8 +159,10 @@ export async function generateSearchQueries(
   // 6. Open Source (5%)
   for (let i = 0; i < 15; i++) {
     const prog = pickRandom(openSourcePrograms, i);
-    queryBuckets.OPEN_SOURCE.push(`${prog} student projects application`.toLowerCase());
-    queryBuckets.OPEN_SOURCE.push(`open source student internship program ${prog}`.toLowerCase());
+    queryBuckets.OPEN_SOURCE_PROGRAM.push(`${prog} student projects application`.toLowerCase());
+    queryBuckets.OPEN_SOURCE_PROGRAM.push(
+      `open source student internship program ${prog}`.toLowerCase(),
+    );
   }
 
   // 7. Campus Ambassador (5%)
@@ -180,11 +171,11 @@ export async function generateSearchQueries(
   queryBuckets.CAMPUS_AMBASSADOR.push('student advocate ambassador internship');
 
   // 8. Women Programs (5%)
-  queryBuckets.WOMEN_PROGRAMS.push('women techmakers scholar program');
-  queryBuckets.WOMEN_PROGRAMS.push('outreachy internship open source women');
-  queryBuckets.WOMEN_PROGRAMS.push('adobe women in technology scholarship');
-  queryBuckets.WOMEN_PROGRAMS.push('grace hopper celebration student scholarship');
-  queryBuckets.WOMEN_PROGRAMS.push('microsoft women engineers program mentorship');
+  queryBuckets.WOMEN_IN_TECH.push('women techmakers scholar program');
+  queryBuckets.WOMEN_IN_TECH.push('outreachy internship open source women');
+  queryBuckets.WOMEN_IN_TECH.push('adobe women in technology scholarship');
+  queryBuckets.WOMEN_IN_TECH.push('grace hopper celebration student scholarship');
+  queryBuckets.WOMEN_IN_TECH.push('microsoft women engineers program mentorship');
 
   // Deduplicate buckets
   Object.keys(queryBuckets).forEach((k) => {
@@ -193,13 +184,13 @@ export async function generateSearchQueries(
 
   const defaultBudgetRatio: Record<string, number> = {
     STARTUP_INTERNSHIPS: 0.3,
-    GENERAL_INTERNSHIPS: 0.2,
-    GOVERNMENT: 0.15,
-    RESEARCH: 0.1,
+    INTERNSHIPS: 0.2,
+    GOVERNMENT_INTERNSHIP: 0.15,
+    RESEARCH_INTERNSHIP: 0.1,
     HACKATHONS: 0.1,
-    OPEN_SOURCE: 0.05,
+    OPEN_SOURCE_PROGRAM: 0.05,
     CAMPUS_AMBASSADOR: 0.05,
-    WOMEN_PROGRAMS: 0.05,
+    WOMEN_IN_TECH: 0.05,
   };
 
   const activeBuckets =

@@ -116,7 +116,7 @@ function deriveV2Metadata(
       orgLower.includes('venture') ||
       orgLower.includes('capital')
     ) {
-      ecosystemType = 'VC_PORTFOLIO';
+      ecosystemType = 'STARTUP';
       sourceReason = 'Top-tier startup VC portfolio ecosystem';
     } else if (
       domainLower.includes('devfolio') ||
@@ -140,7 +140,7 @@ function deriveV2Metadata(
     domainLower.includes('monster')
   ) {
     sourceTier = 'C';
-    ecosystemType = 'AGGREGATOR';
+    ecosystemType = 'COMMUNITY';
     discoveryValue = 25;
     studentRelevance = 70;
     sourceReason = 'General recruitment aggregator for discovery phase';

@@ -5,14 +5,18 @@ import {
 
 const EMOJI_TYPE_MAP: Record<string, OpportunityType> = {
   '🌱 Internship': 'INTERNSHIP',
-  '💼 Job': 'JOB',
+  '🚀 Startup Internship': 'STARTUP_INTERNSHIP',
+  '🏛️ Government Internship': 'GOVERNMENT_INTERNSHIP',
+  '🔬 Research Internship': 'RESEARCH_INTERNSHIP',
+  '💻 Hackathon': 'HACKATHON',
+  '🏆 Competition': 'COMPETITION',
+  '🌐 Open Source': 'OPEN_SOURCE_PROGRAM',
+  '📢 Campus Ambassador': 'CAMPUS_AMBASSADOR',
   '🎓 Scholarship': 'SCHOLARSHIP',
-  '💻 Freelancing': 'FREELANCE',
-  '❤️ Volunteering': 'VOLUNTEER',
-  '✨ Competitions': 'COMPETITION',
-  '📚 Courses': 'COURSE',
-  '💰 Grants': 'GRANT',
-  '🏆 Fellowships': 'FELLOWSHIP',
+  '🏕️ Summer School': 'SUMMER_SCHOOL',
+  '🔥 Bootcamp': 'BOOTCAMP',
+  '💎 Fellowship': 'FELLOWSHIP',
+  '👩‍💻 Women in Tech': 'WOMEN_IN_TECH',
 };
 
 export function matchOpportunityType(userExcitedTypes: string[], opportunity: Opportunity) {

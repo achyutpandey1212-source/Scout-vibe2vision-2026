@@ -61,9 +61,9 @@ describe('Sprint 1 — Extraction & Cleanup Normalization tests', () => {
 
   describe('4. Enum Value Normalization', () => {
     it('should match direct uppercase string formats', () => {
-      const allowed = ['JOB', 'INTERNSHIP', 'SCHOLARSHIP'];
-      expect(normalizeEnum('internship', allowed, 'JOB')).toBe('INTERNSHIP');
-      expect(normalizeEnum('SCHOLARSHIPS', allowed, 'JOB')).toBe('SCHOLARSHIP'); // singularizes automatically
+      const allowed = ['INTERNSHIP', 'STARTUP_INTERNSHIP', 'SCHOLARSHIP'];
+      expect(normalizeEnum('internship', allowed, 'INTERNSHIP')).toBe('INTERNSHIP');
+      expect(normalizeEnum('SCHOLARSHIPS', allowed, 'INTERNSHIP')).toBe('SCHOLARSHIP'); // singularizes automatically
     });
 
     it('should fallback to default value when string does not map to enum', () => {

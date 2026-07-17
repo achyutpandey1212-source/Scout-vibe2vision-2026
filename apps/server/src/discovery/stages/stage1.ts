@@ -56,7 +56,7 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
           { category: 'STARTUP_INTERNSHIPS' },
           {
             category: 'INTERNSHIPS',
-            ecosystemType: { $in: ['STARTUP', 'INCUBATOR', 'VC_PORTFOLIO'] },
+            ecosystemType: { $in: ['STARTUP', 'INCUBATOR'] },
           },
         ];
       } else {

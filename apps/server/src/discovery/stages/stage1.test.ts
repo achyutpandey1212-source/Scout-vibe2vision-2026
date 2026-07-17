@@ -54,7 +54,7 @@ describe('Stage1Discovery category routing', () => {
           { category: 'STARTUP_INTERNSHIPS' },
           {
             category: 'INTERNSHIPS',
-            ecosystemType: { $in: ['STARTUP', 'INCUBATOR', 'VC_PORTFOLIO'] },
+            ecosystemType: { $in: ['STARTUP', 'INCUBATOR'] },
           },
         ],
       }),

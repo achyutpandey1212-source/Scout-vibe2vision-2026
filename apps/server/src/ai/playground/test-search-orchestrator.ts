@@ -1,17 +1,17 @@
 import { generateSearchQueries, searchOpportunities } from '../../discovery';
 import { redis } from '../../config/redis';
+import { CANONICAL_TARGET_AUDIENCE, ACTIVE_SOURCE_CATEGORIES } from '@scout/shared';
 
 async function runSearchPlayground() {
   console.log('🏁 Starting E2E Query Planner + Search Orchestrator Playground test...\n');
 
-  // Initialize Redis connection
   redis.connect();
 
   const context = {
-    categories: ['Jobs', 'Scholarships', 'Grants', 'Fellowships', 'Freelance', 'Internships'],
-    targetAudience: 'Women',
+    categories: ACTIVE_SOURCE_CATEGORIES,
+    targetAudience: CANONICAL_TARGET_AUDIENCE,
     country: 'India',
-    maxQueries: 5, // Keep queries count small to save credits during testing
+    maxQueries: 5,
   };
 
   console.log('📥 Discovery Context:');

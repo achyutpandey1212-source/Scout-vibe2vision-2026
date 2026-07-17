@@ -57,34 +57,26 @@ const OpportunitySchema = new Schema<IOpportunity>(
     },
     hash: { type: String, required: true },
 
-    // ── Audience Intelligence ───────────────────────────────────────────────
     audiencePersonas: { type: [String], default: [], index: true },
     educationEligibility: [{ type: String }],
     professionalDomains: [{ type: String }],
-    experienceRequired: { type: String, default: null, index: true },
+    experienceRequired: { type: String, default: 'NONE', index: true },
     fundingType: { type: String, default: null, index: true },
-    searchCategory: { type: String, default: null, index: true },
     estimatedCompetition: { type: String, default: null, index: true },
     organizationType: { type: String, default: null, index: true },
 
-    // ── Product Verticals & Friction (New persistent fields) ────────────────
-    opportunityVertical: { type: String, default: null, index: true },
     applicationDifficulty: { type: String, default: null, index: true },
 
-    // ── Gold Opportunity System ──────────────────────────────────────────────
     goldReasons: { type: [String], default: [] },
 
-    // ── Trust Scoring ────────────────────────────────────────────────────────
     trustScore: { type: Number, default: 0, index: true },
 
-    // Freshness & Archiving
     discoveredAt: { type: Date, default: Date.now },
     firstSeenAt: { type: Date, default: Date.now },
     lastCheckedAt: { type: Date, default: Date.now },
     expiresAt: { type: Date, default: null, index: true },
     archived: { type: Boolean, default: false, index: true },
 
-    // Trust & Quality Metrics
     trustLevel: {
       type: String,
       enum: ['VERIFIED', 'OFFICIAL', 'COMMUNITY', 'UNKNOWN'],
@@ -101,7 +93,6 @@ const OpportunitySchema = new Schema<IOpportunity>(
       stipendPresent: { type: Boolean, default: false },
     },
 
-    // Enriched Metadata
     workMode: {
       type: String,
       enum: ['REMOTE', 'HYBRID', 'ONSITE', null],
@@ -154,7 +145,6 @@ const OpportunitySchema = new Schema<IOpportunity>(
       default: null,
     },
 
-    // ── V2 Core Fields ──────────────────────────────────────────────────────────
     canonicalId: { type: String, default: null },
     slug: { type: String, default: null },
     type: { type: String, index: true, default: null },
@@ -194,16 +184,6 @@ const OpportunitySchema = new Schema<IOpportunity>(
       index: true,
     },
 
-    // ── V2 Deferred Fields (TODO) ────────────────────────────────────────────────
-    // TODO: Add when Discovery V2 starts producing these
-    // competitionEstimate: { type: String },
-    // categoryPrediction: { type: String },
-    // eligibilitySummary: { type: String },
-    // trustSignals: { type: [String] },
-    // qualitySignals: { type: [String] },
-    // warnings: { type: [String] },
-
-    // ── V2 Intelligence (PR5.3) ────────────────────────────────────────────────
     commitment: {
       type: String,
       enum: ['PART_TIME', 'FULL_TIME', 'FLEXIBLE', null],
@@ -265,42 +245,36 @@ const OpportunitySchema = new Schema<IOpportunity>(
 
 // Pre-save hook for backward compatibility syncing
 OpportunitySchema.pre('save', function (this: any, next: any) {
-  // Sync type <-> opportunityType
   if (this.opportunityType && !this.type) {
     this.type = this.opportunityType;
   } else if (this.type && !this.opportunityType) {
     this.opportunityType = this.type as any;
   }
 
-  // Sync sourceUrl <-> sourceURL
   if (this.sourceURL && !this.sourceUrl) {
     this.sourceUrl = this.sourceURL;
   } else if (this.sourceUrl && !this.sourceURL) {
     this.sourceURL = this.sourceUrl;
   }
 
-  // Sync discoveredAt <-> publishedAt
   if (this.discoveredAt && !this.publishedAt) {
     this.publishedAt = this.discoveredAt;
   } else if (this.publishedAt && !this.discoveredAt) {
     this.discoveredAt = this.publishedAt;
   }
 
-  // Sync officialWebsite <-> officialPage
   if (this.officialWebsite && !this.officialPage) {
     this.officialPage = this.officialWebsite;
   } else if (this.officialPage && !this.officialWebsite) {
     this.officialWebsite = this.officialPage;
   }
 
-  // Sync applicationDifficulty <-> difficulty
   if (this.applicationDifficulty && !this.difficulty) {
     this.difficulty = this.applicationDifficulty;
   } else if (this.difficulty && !this.applicationDifficulty) {
     this.applicationDifficulty = this.difficulty as any;
   }
 
-  // Sync hash <-> contentHash
   if (this.hash && !this.contentHash) {
     this.contentHash = this.hash;
   } else if (this.contentHash && !this.hash) {

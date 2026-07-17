@@ -5,6 +5,7 @@ import { sourceRegistryService } from '../sources/source-registry.service';
 import { AffiliateExtractor } from '../sources/affiliate-extractor';
 import { SourceDiscoveryEngine } from '../sources/source-discovery.engine';
 import { SourceRegistryModel } from '../sources/source-registry.model';
+import { ACTIVE_SOURCE_CATEGORIES, CANONICAL_TARGET_AUDIENCE } from '@scout/shared';
 import mongoose from 'mongoose';
 
 const router = Router();
@@ -99,8 +100,8 @@ router.post('/run-daily', (req, res: Response) => {
   });
 
   const context: any = {
-    targetAudience: 'Women Tech Professionals & Students',
-    categories: ['Engineering', 'Scholarships', 'Tech Workshops'],
+    targetAudience: CANONICAL_TARGET_AUDIENCE,
+    categories: ACTIVE_SOURCE_CATEGORIES,
     country: 'India',
     // Custom execution mode options passed to Stage 1
     runMode,

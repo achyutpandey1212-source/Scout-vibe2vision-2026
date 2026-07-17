@@ -36,7 +36,7 @@ export function calculateHiddenScore(
   const category = opp.category || '';
   const title = opp.title || '';
   const isWomenFocused =
-    category === 'Women Empowerment' ||
+    category === 'WOMEN_IN_TECH' ||
     opp.womenFocused === true ||
     cleanText(title).includes('women') ||
     cleanText(title).includes('female') ||

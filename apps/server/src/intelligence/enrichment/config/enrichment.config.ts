@@ -55,7 +55,7 @@ export const ENRICHMENT_CONFIG: EnrichmentConfig = {
         'unstop.com',
         'ycombinator.com/jobs',
       ],
-      sourceType: 'AGGREGATOR',
+      sourceType: 'COMMUNITY',
     },
     {
       suffixes: ['github.com', 'devpost.com', 'discord.gg', 'meetup.com'],

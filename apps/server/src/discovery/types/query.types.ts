@@ -1,14 +1,16 @@
+import { SourceCategory, TargetAudience } from '@scout/shared';
+
 export interface DiscoveryContext {
-  categories: string[];
-  targetAudience: string;
+  categories: SourceCategory[];
+  targetAudience: TargetAudience;
   country: string;
-  maxQueries?: number; // Enforces the query budget constraint (default 25)
+  maxQueries?: number;
 }
 
 export interface PlannedQuery {
   query: string;
   priority: 'high' | 'medium' | 'low';
-  category: string;
+  category: SourceCategory;
   tags: string[];
   expectedOpportunityType: string;
 }

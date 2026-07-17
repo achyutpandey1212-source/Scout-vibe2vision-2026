@@ -1,4 +1,4 @@
-import { OpportunityType, SourceType } from '../types/opportunity.types';
+import { ExperienceRequired } from '../types/opportunity.types';
 
 // Deterministic organization mapping for known domain blocks
 const KNOWN_ORGANIZATIONS: Record<string, string> = {
@@ -317,41 +317,32 @@ export function normalizeOpportunity(opp: any): any {
   const opportunityType = normalizeEnum(
     opp.opportunityType,
     [
-      'JOB',
       'INTERNSHIP',
-      'SCHOLARSHIP',
-      'FELLOWSHIP',
-      'GRANT',
-      'FREELANCE',
+      'STARTUP_INTERNSHIP',
+      'GOVERNMENT_INTERNSHIP',
+      'RESEARCH_INTERNSHIP',
+      'HACKATHON',
       'COMPETITION',
+      'OPEN_SOURCE_PROGRAM',
+      'CAMPUS_AMBASSADOR',
+      'SCHOLARSHIP',
+      'SUMMER_SCHOOL',
       'BOOTCAMP',
-      'COURSE',
-      'VOLUNTEER',
-      'EVENT',
-      'PROGRAM',
-      'OTHER',
+      'FELLOWSHIP',
+      'WOMEN_IN_TECH',
     ],
-    'OTHER',
+    'INTERNSHIP',
   );
 
   const sourceType = normalizeEnum(
     opp.sourceType,
-    [
-      'GOVERNMENT',
-      'COMPANY',
-      'UNIVERSITY',
-      'NGO',
-      'FOUNDATION',
-      'AGGREGATOR',
-      'COMMUNITY',
-      'OTHER',
-    ],
+    ['GOVERNMENT', 'COMPANY', 'UNIVERSITY', 'NGO', 'FOUNDATION', 'COMMUNITY', 'OTHER'],
     'OTHER',
   );
 
   const experienceRequired = opp.experienceRequired
-    ? normalizeEnum(opp.experienceRequired, ['NONE', 'SOME', 'EXPERIENCED'], 'SOME')
-    : null;
+    ? normalizeEnum(opp.experienceRequired, ['NONE', 'SOME', 'EXPERIENCED'], 'NONE')
+    : 'NONE';
 
   const fundingType = opp.fundingType
     ? normalizeEnum(opp.fundingType, ['FULLY_FUNDED', 'PARTIALLY_FUNDED', 'PAID', 'UNPAID'], 'PAID')
@@ -369,26 +360,6 @@ export function normalizeOpportunity(opp: any): any {
       )
     : null;
 
-  const opportunityVertical = opp.opportunityVertical
-    ? normalizeEnum(
-        opp.opportunityVertical,
-        [
-          'CAREERS',
-          'SCHOLARSHIPS',
-          'FELLOWSHIPS',
-          'GOVERNMENT_SCHEMES',
-          'COMPETITIONS',
-          'COURSES',
-          'TRAINING',
-          'ENTREPRENEURSHIP',
-          'FINANCIAL_AID',
-          'EVENTS',
-          'OTHER',
-        ],
-        'OTHER',
-      )
-    : null;
-
   const applicationDifficulty = opp.applicationDifficulty
     ? normalizeEnum(
         opp.applicationDifficulty,
@@ -398,20 +369,19 @@ export function normalizeOpportunity(opp: any): any {
     : null;
 
   const genderEligibility = opp.genderEligibility
-    ? normalizeEnum(opp.genderEligibility, ['FEMALE', 'ALL', 'OTHER'], 'ALL')
+    ? normalizeEnum(opp.genderEligibility, ['FEMALE', 'ALL', 'OTHER'], null as any)
     : null;
 
-  // Normalize list elements
-  const audiencePersonas = normalizeArray(opp.audiencePersonas).map((item) =>
-    item.toLowerCase().trim(),
-  ) as any[];
+  const audiencePersonas = normalizeArray(opp.audiencePersonas)
+    .map((item) => item.toLowerCase().trim())
+    .filter((item: string) =>
+      ['college-student', 'postgraduate', 'fresher'].includes(item),
+    ) as any[];
 
   const educationEligibility = normalizeArray(opp.educationEligibility);
   const professionalDomains = normalizeArray(opp.professionalDomains).map((item) =>
     item.toLowerCase().trim(),
   );
-
-  const searchCategory = normalizeString(opp.searchCategory);
 
   return {
     ...opp,
@@ -420,7 +390,7 @@ export function normalizeOpportunity(opp: any): any {
     summary: normalizeString(opp.summary) || '',
     organization,
     opportunityType,
-    category: normalizeString(opp.category) || 'General',
+    category: normalizeString(opp.category) || 'INTERNSHIPS',
     country: normalizeCountry(opp.country),
     state: normalizeString(opp.state),
     city: normalizeString(opp.city),
@@ -464,7 +434,6 @@ export function normalizeOpportunity(opp: any): any {
     sourceType,
     confidence: typeof opp.confidence === 'number' ? opp.confidence : 0.5,
 
-    // Normalized classifications
     audiencePersonas,
     educationEligibility,
     professionalDomains,
@@ -472,8 +441,6 @@ export function normalizeOpportunity(opp: any): any {
     fundingType,
     estimatedCompetition,
     organizationType,
-    searchCategory,
-    opportunityVertical,
     applicationDifficulty,
   };
 }

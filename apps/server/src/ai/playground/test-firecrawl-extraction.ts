@@ -1,21 +1,21 @@
 import { generateSearchQueries, searchOpportunities, extractCandidatePages } from '../../discovery';
 import { db } from '../../config/db';
 import { redis } from '../../config/redis';
+import { CANONICAL_TARGET_AUDIENCE, ACTIVE_SOURCE_CATEGORIES } from '@scout/shared';
 
 async function runExtractionPlayground() {
   console.log(
     '🏁 Starting E2E Scraper Playground (Query Planner + Search Orchestrator + Firecrawl Extractor)...\n',
   );
 
-  // Initialize DB and Cache connections
   await db.connect();
   redis.connect();
 
   const context = {
-    categories: ['Scholarships', 'Grants', 'Internships'],
-    targetAudience: 'Women',
+    categories: ACTIVE_SOURCE_CATEGORIES,
+    targetAudience: CANONICAL_TARGET_AUDIENCE,
     country: 'India',
-    maxQueries: 3, // Keep queries count small to conserve API limits
+    maxQueries: 3,
   };
 
   try {

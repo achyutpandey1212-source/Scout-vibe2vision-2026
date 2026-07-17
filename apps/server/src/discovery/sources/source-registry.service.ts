@@ -405,12 +405,13 @@ function inferCategoryFromTags(tags: string[]): SourceCategory {
   if (tagStr.includes('hackathon') || tagStr.includes('competition')) return 'HACKATHONS';
   if (tagStr.includes('scholarship')) return 'SCHOLARSHIPS';
   if (tagStr.includes('fellowship')) return 'FELLOWSHIPS';
-  if (tagStr.includes('government') || tagStr.includes('gov')) return 'GOVERNMENT';
-  if (tagStr.includes('research') || tagStr.includes('scientific')) return 'RESEARCH';
-  if (tagStr.includes('entrepreneurship') || tagStr.includes('startup')) return 'ENTREPRENEURSHIP';
-  if (tagStr.includes('skill') || tagStr.includes('training')) return 'SKILL_DEVELOPMENT';
-  if (tagStr.includes('technology') || tagStr.includes('tech')) return 'TECH_CAREERS';
-  return 'GENERAL';
+  if (tagStr.includes('government') || tagStr.includes('gov')) return 'GOVERNMENT_INTERNSHIP';
+  if (tagStr.includes('research') || tagStr.includes('scientific')) return 'RESEARCH_INTERNSHIP';
+  if (tagStr.includes('entrepreneurship') || tagStr.includes('startup'))
+    return 'STARTUP_INTERNSHIPS';
+  if (tagStr.includes('skill') || tagStr.includes('training')) return 'BOOTCAMP';
+  if (tagStr.includes('technology') || tagStr.includes('tech')) return 'INTERNSHIPS';
+  return 'INTERNSHIPS';
 }
 
 // ─── Singleton Export ─────────────────────────────────────────────────────────

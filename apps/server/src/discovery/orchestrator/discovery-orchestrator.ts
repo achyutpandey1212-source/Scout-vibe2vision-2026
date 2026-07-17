@@ -1,17 +1,15 @@
 import { DiscoveryRunModel } from '../persistence/discovery-run.model';
-import { OpportunityRepository } from '../persistence/opportunity.repository';
 import { RawPageModel } from '../firecrawl/raw-page.model';
 import { DiscoveryContext } from '../types/query.types';
 import { DiscoveryOptions, DiscoveryOrchestratorResponse, PipelineMetrics } from './pipeline.types';
-import { Opportunity } from '../extraction/types/opportunity.types';
 import { TRUSTED_SOURCES } from '../sources/registry';
-import { OpportunityArchiver } from '../utils/archiver';
 import { Stage1Discovery } from '../stages/stage1';
 import { Stage2Crawling, CrawledPage } from '../stages/stage2';
 import { Stage3Extraction } from '../stages/stage3';
-import { Stage4QualityAcceptance, QualityEvaluatedOpportunity } from '../stages/stage4';
+import { Stage4QualityAcceptance } from '../stages/stage4';
 import { Stage5Persistence } from '../stages/stage5';
 import { DashboardStateInstance } from '../utils/dashboard-state';
+import { CANONICAL_TARGET_AUDIENCE } from '@scout/shared';
 import crypto from 'crypto';
 
 /**
@@ -171,11 +169,11 @@ export async function discoverOpportunities(
           .split('/')[0]
       : '';
     const src = sourceByDomain.get(domain);
-    const ecoType = src?.ecosystemType || 'BIG_TECH';
+    const ecoType = src?.ecosystemType || 'UNIVERSITY';
     ecosystemCounts[ecoType] = (ecosystemCounts[ecoType] || 0) + 1;
     domainsList.push(opp.organization || 'Unknown');
 
-    if (ecoType === 'STARTUP' || ecoType === 'VC_PORTFOLIO' || ecoType === 'INCUBATOR') {
+    if (ecoType === 'STARTUP' || ecoType === 'INCUBATOR') {
       startupEcosystems.push(src?.organization || opp.organization || 'Startup');
     }
     if (ecoType === 'UNIVERSITY') {
@@ -187,7 +185,7 @@ export async function discoverOpportunities(
 
     // 2. Org Size
     let orgSize = 'SME';
-    if (ecoType === 'STARTUP' || ecoType === 'VC_PORTFOLIO' || ecoType === 'INCUBATOR') {
+    if (ecoType === 'STARTUP' || ecoType === 'INCUBATOR') {
       orgSize = 'Startup';
     } else if (ecoType === 'BIG_TECH') {
       orgSize = 'Large Company';
@@ -344,15 +342,15 @@ export async function discoverOpportunities(
   };
   const searchDiversityScore =
     context.categories && context.categories.length > 0
-      ? getUniqueRatio(Object.fromEntries(context.categories.map((c) => [c, 1])), 12)
+      ? getUniqueRatio(Object.fromEntries(context.categories.map((c) => [c, 1])), 13)
       : 100;
   const sourceDiversityScore = getUniqueRatio(ecosystemCounts, 9);
   const opportunityDiversityScore = getUniqueRatio(
     Object.fromEntries(opportunityTypes.map((t) => [t, 1])),
-    12,
+    13,
   );
   const locationDiversityScore = getUniqueRatio(locationCounts, 8);
-  const engineeringDiversityScore = getUniqueRatio(domainCounts, 10);
+  const engineeringDiversityScore = getUniqueRatio(domainCounts, 16);
   const studentCoverageScore = getUniqueRatio(suitabilityCounts, 5);
 
   const getTopKeys = (counts: Record<string, number>, limit = 3): string[] => {
@@ -535,7 +533,7 @@ Top Hidden Gems:
     const runDoc = await DiscoveryRunModel.create({
       startedAt,
       finishedAt: runResult.finishedAt,
-      targetAudience: context.targetAudience,
+      targetAudience: CANONICAL_TARGET_AUDIENCE,
       categories: context.categories,
       totalQueries: TRUSTED_SOURCES.length,
       inserted: runResult.inserted,

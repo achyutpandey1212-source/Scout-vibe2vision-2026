@@ -13,10 +13,8 @@ export type SourceType =
   | 'NGO'
   | 'Community'
   | 'Platform'
-  | 'Job Board'
   | 'Hackathon'
-  | 'Conference'
-  | 'Research Lab'
+  | 'Open Source'
   | 'Other';
 
 import { SourceCategory } from '@scout/shared';
@@ -25,8 +23,7 @@ export type { SourceCategory };
 // ─── Core Interface ───────────────────────────────────────────────────────────
 
 export interface ISourceRegistryEntry {
-  // Identity
-  domain: string; // e.g. "anitab.org" — unique indexed key
+  domain: string;
   organization: string;
   homepage: string;
   sourceType: SourceType;
@@ -36,38 +33,30 @@ export interface ISourceRegistryEntry {
   defaultTags: string[];
   isActive: boolean;
 
-  // Trust & priority
-  trustScore: number; // 0–100
-  priority: SourcePriority; // critical / high / medium / low
+  trustScore: number;
+  priority: SourcePriority;
 
-  // AI verification
-  confidence: number; // 0–100; AI's confidence this is a valid source
-  reason: string; // AI's rationale for approving this source
-  verifiedByAIAt: Date | null; // Timestamp of first AI verification
-  lastVerifiedAt: Date | null; // Timestamp of most recent AI re-verification
+  confidence: number;
+  reason: string;
+  verifiedByAIAt: Date | null;
+  lastVerifiedAt: Date | null;
 
-  // Discovery provenance
   discoveredBy: DiscoveredBy;
   discoveredAt: Date;
   lastCrawledAt: Date | null;
   nextCrawlAt: Date;
 
-  // Health
   consecutiveFailures: number;
 
-  // Analytics (powers future auto-frequency optimization)
-  totalRuns: number; // how many times this source has been crawled
-  totalPagesCrawled: number; // cumulative pages fetched from this source
-  totalOpportunitiesFound: number; // cumulative opportunities extracted
-  // opportunityDensity = totalOpportunitiesFound / totalPagesCrawled
-  // Stored for efficient MongoDB range queries on auto-optimization
-  opportunityDensity: number; // opportunities per page (0.0–1.0+)
+  totalRuns: number;
+  totalPagesCrawled: number;
+  totalOpportunitiesFound: number;
+  opportunityDensity: number;
 
-  // Source Intelligence V2 Metadata
   sourceTier: SourceTier;
-  discoveryValue: number; // 0-100
-  studentRelevance: number; // 0-100
-  freshnessScore: number; // 0-100
+  discoveryValue: number;
+  studentRelevance: number;
+  freshnessScore: number;
   ecosystemType: EcosystemType;
   ecosystemName?: string | null;
   startupStage?: string | null;
@@ -88,10 +77,8 @@ export type EcosystemType =
   | 'RESEARCH'
   | 'GOVERNMENT'
   | 'BIG_TECH'
-  | 'VC_PORTFOLIO'
   | 'COMMUNITY'
   | 'OPEN_SOURCE'
-  | 'AGGREGATOR'
   | 'NON_PROFIT';
 
 // ─── Supporting Types ─────────────────────────────────────────────────────────

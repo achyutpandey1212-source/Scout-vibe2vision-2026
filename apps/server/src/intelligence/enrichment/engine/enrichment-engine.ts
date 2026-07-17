@@ -1,4 +1,5 @@
 import { Opportunity } from '../../../discovery/extraction/types/opportunity.types';
+import { EngineeringDomain } from '@scout/shared';
 import { normalizeOrganizationName } from '../utils/organization';
 import { normalizeSourceType } from '../utils/source-normalizer';
 import { categorizeOpportunity } from '../utils/categorizer';
@@ -28,12 +29,36 @@ export function enrichOpportunity(
     opportunity.sourceType,
   );
 
-  // 3. Categorize Opportunity
-  const category = categorizeOpportunity(
+  // 3. Categorize Opportunity (maps to professionalDomains)
+  const categorizedDomain = categorizeOpportunity(
     opportunity.title,
     opportunity.description,
     opportunity.tags,
   );
+
+  // Map enrichment category keywords to engineering domains
+  const domainMap: Record<string, string> = {
+    'Artificial Intelligence & Machine Learning': 'ai-ml',
+    'Backend Development': 'backend',
+    'Frontend Development': 'frontend',
+    'Software Development': 'fullstack',
+    'Cyber Security': 'cybersecurity',
+    'Cloud & DevOps': 'cloud',
+    'Data Science & Analytics': 'data-science',
+    'Mobile Development': 'mobile',
+    'Embedded Systems & IoT': 'embedded',
+    Robotics: 'robotics',
+    'Blockchain & Web3': 'blockchain',
+    'Game Development': 'game-dev',
+    'QA & Testing': 'qa-testing',
+    'UI/UX Design': 'ui-ux',
+    'General Software': 'fullstack',
+  };
+
+  const mappedDomain = domainMap[categorizedDomain] || 'fullstack';
+  const professionalDomains: EngineeringDomain[] = [
+    ...new Set([...(opportunity.professionalDomains || []), mappedDomain as EngineeringDomain]),
+  ];
 
   // 4. Parse Deadline and compute daysRemaining / expired
   const { normalizedDeadline, daysRemaining, expired } = computeDeadlineStatus(
@@ -48,7 +73,7 @@ export function enrichOpportunity(
   return {
     ...opportunity,
     sourceType,
-    category,
+    professionalDomains,
     intelligence: {
       normalizedOrganization,
       normalizedDeadline,

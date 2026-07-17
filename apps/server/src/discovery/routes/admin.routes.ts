@@ -6,6 +6,7 @@ import { redis } from '../../config/redis';
 import { DiscoveryRunModel } from '../persistence/discovery-run.model';
 import { discoverOpportunities } from '../orchestrator/discovery-orchestrator';
 import { ProviderKeyPool } from '../../lib/providers/provider-key-pool';
+import { CANONICAL_TARGET_AUDIENCE, ACTIVE_SOURCE_CATEGORIES } from '@scout/shared';
 
 const router = Router();
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin';
@@ -136,8 +137,8 @@ router.post('/jobs/trigger', verifyAdminSession, (req, res: Response) => {
 
   if (jobName === 'discovery') {
     const context = {
-      targetAudience: 'Women Tech Professionals & Students',
-      categories: ['Engineering', 'Scholarships', 'Tech Workshops'],
+      targetAudience: CANONICAL_TARGET_AUDIENCE,
+      categories: ACTIVE_SOURCE_CATEGORIES,
       country: 'India',
     };
     discoverOpportunities(context, { maxExtractions: 10 } as any)
