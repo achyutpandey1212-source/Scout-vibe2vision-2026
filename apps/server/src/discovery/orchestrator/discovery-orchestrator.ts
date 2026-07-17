@@ -380,6 +380,36 @@ export async function discoverOpportunities(
     topGovernmentOrganizations: getTopRawList(governmentOrgs, 3),
   };
 
+  // Averages for V2 Opportunity Intelligence Audit
+  const totalHiddenGem = acceptedOpps.reduce((sum, o) => sum + (o.hiddenGemScore || 0), 0);
+  const avgHiddenGem =
+    acceptedOpps.length > 0 ? Math.round(totalHiddenGem / acceptedOpps.length) : 0;
+
+  const totalReadiness = acceptedOpps.reduce((sum, o) => sum + (o.readinessScore || 0), 0);
+  const avgReadiness =
+    acceptedOpps.length > 0 ? Math.round(totalReadiness / acceptedOpps.length) : 0;
+
+  const diffCounts: Record<string, number> = {};
+  acceptedOpps.forEach((o) => {
+    const diff = o.difficulty || 'MEDIUM';
+    diffCounts[diff] = (diffCounts[diff] || 0) + 1;
+  });
+  const avgDifficulty = getTopKeys(diffCounts, 1)[0] || 'MEDIUM';
+
+  const skillCounts: Record<string, number> = {};
+  acceptedOpps.forEach((o) => {
+    const sList = o.skills || [];
+    sList.forEach((sk: string) => {
+      skillCounts[sk] = (skillCounts[sk] || 0) + 1;
+    });
+  });
+  const topSkills = getTopKeys(skillCounts, 5);
+
+  const topGemsList = acceptedOpps
+    .sort((a, b) => (b.hiddenGemScore || 0) - (a.hiddenGemScore || 0))
+    .slice(0, 3)
+    .map((o) => `${o.title} (${o.organization}) - Gem: ${o.hiddenGemScore || 0}`);
+
   console.log(`
 ========== Scout Discovery Report (V2) ==========
 Sources Crawled:          ${TRUSTED_SOURCES.length}
@@ -411,6 +441,26 @@ Top Opportunity Types:   ${highlights.topOpportunityTypes.join(', ') || 'N/A'}
 Top Startup Ecosystems:  ${highlights.topStartupEcosystems.join(', ') || 'N/A'}
 Top Universities:        ${highlights.topUniversities.join(', ') || 'N/A'}
 Top Government Orgs:     ${highlights.topGovernmentOrganizations.join(', ') || 'N/A'}
+
+─── V2 Opportunity Intelligence Audit ───
+Average Difficulty:            ${avgDifficulty}
+Average Hidden Gem Score:      ${avgHiddenGem}/100
+Average Rec Readiness:         ${avgReadiness}/100
+Most Common Domains:           ${highlights.topEngineeringFields.join(', ') || 'N/A'}
+Most Common Skills:            ${topSkills.join(', ') || 'N/A'}
+Most Common Locations:         ${highlights.topCities.join(', ') || 'N/A'}
+Student Suitability Spread:    ${
+    Object.entries(suitabilityCounts)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(', ') || 'N/A'
+  }
+Organization Types Spread:     ${
+    Object.entries(orgSizeCounts)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(', ') || 'N/A'
+  }
+Top Hidden Gems:
+  ${topGemsList.join('\n  ') || 'None'}
 ================================================`);
 
   // Log summary metrics details to DB

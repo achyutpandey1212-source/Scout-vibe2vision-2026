@@ -264,14 +264,46 @@ export interface Opportunity {
   status?: 'ACTIVE' | 'EXPIRED' | 'ARCHIVED';
   visibility?: 'PUBLIC' | 'PRIVATE' | 'HIDDEN';
 
-  // ── V2 Deferred Fields (TODO) ────────────────────────────────────────────────
-  // TODO: Add when Discovery V2 starts producing these
   competitionEstimate?: string;
   categoryPrediction?: string;
   eligibilitySummary?: string;
   trustSignals?: string[];
   qualitySignals?: string[];
   warnings?: string[];
+
+  // ── V2 Intelligence (PR5.3) ────────────────────────────────────────────────
+  commitment?: 'PART_TIME' | 'FULL_TIME' | 'FLEXIBLE' | null;
+  organizationStage?:
+    | 'EARLY_STARTUP'
+    | 'GROWTH_STARTUP'
+    | 'SCALE_UP'
+    | 'ENTERPRISE'
+    | 'GOVERNMENT'
+    | 'ACADEMIC'
+    | null;
+  skillsTechnical?: string[];
+  skillsSoft?: string[];
+  skillsTools?: string[];
+  suitableFirstYear?: boolean;
+  suitableSecondYear?: boolean;
+  suitableThirdYear?: boolean;
+  suitableFourthYear?: boolean;
+  suitableGraduate?: boolean;
+  suitabilityReason?: string | null;
+  careerValResume?: number;
+  careerValLearning?: number;
+  careerValNetworking?: number;
+  careerValExposure?: number;
+  careerValPortfolio?: number;
+  careerValResearch?: number;
+  careerValInterview?: number;
+  deadlineStatus?: 'OPEN' | 'CLOSING_SOON' | 'ROLLING' | 'UNKNOWN' | 'EXPIRED';
+  relatedSimilar?: string[];
+  relatedSameOrg?: string[];
+  relatedSameDomain?: string[];
+  relatedSameSkills?: string[];
+  readinessScore?: number;
+  readinessStatus?: 'READY' | 'NEEDS_REVIEW';
 }
 
 export interface OpportunityIntelligence {

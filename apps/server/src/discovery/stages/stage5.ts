@@ -4,6 +4,7 @@ import { OpportunityModel } from '../extraction/models/opportunity.model';
 import { DISCOVERY_CONFIG } from '../config/discovery.config';
 import { DashboardStateInstance } from '../utils/dashboard-state';
 import { Types } from 'mongoose';
+import { OpportunityEnrichmentPipeline } from './enrichment-pipeline';
 
 export interface RunAnalytics {
   startedAt: Date;
@@ -73,9 +74,6 @@ export class Stage5Persistence implements IPipelineStage<
     return union.size > 0 ? intersection.size / union.size : 0;
   }
 
-  /**
-   * Execute Stage 5 database persistence, deduplication, and expiration archiver.
-   */
   async execute(
     opportunities: QualityEvaluatedOpportunity[],
     options?: any,
@@ -100,6 +98,11 @@ export class Stage5Persistence implements IPipelineStage<
     let duplicatesMerged = 0;
     let failures = 0;
 
+    // Fetch SourceRegistry docs cache to resolve metadata easily
+    const { SourceRegistryModel } = await import('../sources/source-registry.model');
+    const sourceDocs = await SourceRegistryModel.find().lean();
+    const sourceMap = new Map(sourceDocs.map((s: any) => [s.domain, s]));
+
     // Fetch existing records from MongoDB for in-memory deduplication comparison
     const existingRecords = await OpportunityModel.find({ archived: { $ne: true } });
     console.log(`[Stage 5] Fetched ${existingRecords.length} existing records from database.`);
@@ -114,6 +117,52 @@ export class Stage5Persistence implements IPipelineStage<
         const candidateAppUrl = this.normalizeUrl(opp.applicationUrl);
         const candidateSourceUrl = this.normalizeUrl(opp.sourceURL);
         const candidateOrg = this.normalizeOrg(opp.organization);
+
+        // ── Phase 9/11: Run Deterministic Enrichment on the opportunity profile ──
+        const domain = opp.sourceURL
+          ? opp.sourceURL
+              .toLowerCase()
+              .replace(/^https?:\/\/(www\.)?/, '')
+              .split('/')[0]
+          : '';
+        const sourceDoc = sourceMap.get(domain);
+        const enrichmentPipeline = new OpportunityEnrichmentPipeline();
+        enrichmentPipeline.enrich(opp, sourceDoc);
+
+        // ── Phase 10: Relationship Graph construction ──
+        const similarIds: string[] = [];
+        const sameOrgIds: string[] = [];
+        const sameDomainIds: string[] = [];
+        const sameSkillsIds: string[] = [];
+
+        for (const existing of existingRecords) {
+          const existingId = existing._id.toString();
+          const existingOrg = this.normalizeOrg(existing.organization);
+          if (existingOrg === candidateOrg) {
+            sameOrgIds.push(existingId);
+          }
+          if (this.titleSimilarity(opp.title, existing.title) > 0.4) {
+            similarIds.push(existingId);
+          }
+          if (
+            opp.domains &&
+            existing.domains &&
+            opp.domains.some((d: string) => existing.domains.includes(d))
+          ) {
+            sameDomainIds.push(existingId);
+          }
+          if (
+            opp.skills &&
+            existing.skills &&
+            opp.skills.some((s: string) => existing.skills.includes(s))
+          ) {
+            sameSkillsIds.push(existingId);
+          }
+        }
+        opp.relatedSimilar = similarIds.slice(0, 5);
+        opp.relatedSameOrg = sameOrgIds.slice(0, 5);
+        opp.relatedSameDomain = sameDomainIds.slice(0, 5);
+        opp.relatedSameSkills = sameSkillsIds.slice(0, 5);
 
         for (const existing of existingRecords) {
           let confidence = 0;
