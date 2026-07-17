@@ -1,5 +1,32 @@
 import { DiscoveryMission, MissionConfiguration } from '../types/query.types';
 
+export const ENGINEERING_DOMAINS = [
+  'Backend',
+  'Frontend',
+  'Full Stack',
+  'AI',
+  'ML',
+  'Cloud',
+  'DevOps',
+  'Cybersecurity',
+  'Data',
+  'Mobile',
+  'Embedded',
+  'SRE',
+  'Platform',
+  'Systems',
+  'Robotics',
+  'Game Development',
+];
+
+export const EXPLANATION_TEMPLATES = {
+  ats: 'Official ATS search with historically high internship yield.',
+  company: 'Direct career page discovery for high-priority employer.',
+  ecosystem: 'Discover portfolio companies before crawling career pages.',
+  location: 'High-density startup ecosystem in priority geography.',
+  intent: 'Core mission-aligned search intent for maximum coverage.',
+};
+
 export const ENGINEERING_INTERNSHIPS_CONFIG: MissionConfiguration = {
   mission: 'ENGINEERING_INTERNSHIPS',
   searchIntents: [
@@ -66,6 +93,8 @@ export const ENGINEERING_INTERNSHIPS_CONFIG: MissionConfiguration = {
   maxSearchDepth: 3,
   companyDiscoveryEnabled: true,
   multiHopEnabled: true,
+  engineeringDomains: ENGINEERING_DOMAINS,
+  explanationTemplates: EXPLANATION_TEMPLATES,
 };
 
 export const STARTUP_INTERNSHIPS_CONFIG: MissionConfiguration = {
@@ -146,6 +175,8 @@ export const STARTUP_INTERNSHIPS_CONFIG: MissionConfiguration = {
   maxSearchDepth: 3,
   companyDiscoveryEnabled: true,
   multiHopEnabled: true,
+  engineeringDomains: ENGINEERING_DOMAINS,
+  explanationTemplates: EXPLANATION_TEMPLATES,
 };
 
 export const GOVERNMENT_TECH_INTERNSHIPS_CONFIG: MissionConfiguration = {
@@ -190,6 +221,8 @@ export const GOVERNMENT_TECH_INTERNSHIPS_CONFIG: MissionConfiguration = {
   maxSearchDepth: 2,
   companyDiscoveryEnabled: false,
   multiHopEnabled: false,
+  engineeringDomains: ENGINEERING_DOMAINS,
+  explanationTemplates: EXPLANATION_TEMPLATES,
 };
 
 export const RESEARCH_INTERNSHIPS_CONFIG: MissionConfiguration = {
@@ -246,6 +279,8 @@ export const RESEARCH_INTERNSHIPS_CONFIG: MissionConfiguration = {
   maxSearchDepth: 2,
   companyDiscoveryEnabled: false,
   multiHopEnabled: false,
+  engineeringDomains: ENGINEERING_DOMAINS,
+  explanationTemplates: EXPLANATION_TEMPLATES,
 };
 
 export const HACKATHONS_CONFIG: MissionConfiguration = {
@@ -298,6 +333,8 @@ export const HACKATHONS_CONFIG: MissionConfiguration = {
   maxSearchDepth: 2,
   companyDiscoveryEnabled: false,
   multiHopEnabled: false,
+  engineeringDomains: ENGINEERING_DOMAINS,
+  explanationTemplates: EXPLANATION_TEMPLATES,
 };
 
 export const MISSION_CONFIGS: Record<DiscoveryMission, MissionConfiguration> = {

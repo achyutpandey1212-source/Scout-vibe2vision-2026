@@ -62,12 +62,17 @@ export class CompanyPlanner {
         queries.push({
           query: `${company} careers internship`.toLowerCase(),
           priority: 'high',
+          priorityScore: 0,
           category: 'INTERNSHIPS',
           tags: ['company', company.toLowerCase(), 'careers'],
           expectedOpportunityType: 'INTERNSHIP',
           strategy: 'COMPANY',
+          purpose: 'DISCOVER_CAREERS',
           expectedSourceType: 'COMPANY',
           reason: `Direct career page discovery for ${company}`,
+          explanation:
+            config.explanationTemplates?.company ||
+            'Direct career page discovery for high-priority employer.',
           budget: budgetRatio,
           depth: 1,
         });
@@ -75,12 +80,17 @@ export class CompanyPlanner {
         queries.push({
           query: `${company} engineering intern hiring`.toLowerCase(),
           priority: 'high',
+          priorityScore: 0,
           category: 'INTERNSHIPS',
           tags: ['company', company.toLowerCase(), 'engineering'],
           expectedOpportunityType: 'INTERNSHIP',
           strategy: 'COMPANY',
+          purpose: 'DISCOVER_CAREERS',
           expectedSourceType: 'COMPANY',
           reason: `Engineering intern search for ${company}`,
+          explanation:
+            config.explanationTemplates?.company ||
+            'Direct career page discovery for high-priority employer.',
           budget: budgetRatio,
           depth: 2,
         });
@@ -96,13 +106,18 @@ export class CompanyPlanner {
           queries.push({
             query: `${company} careers internship startup`.toLowerCase(),
             priority: 'high',
+            priorityScore: 0,
             category: 'STARTUP_INTERNSHIPS',
             tags: ['company', 'startup', company.toLowerCase(), ecosystem.toLowerCase()],
             expectedOpportunityType: 'INTERNSHIP',
             strategy: 'COMPANY',
+            purpose: 'DISCOVER_CAREERS',
             expectedSourceType: 'COMPANY',
             expectedEcosystem: ecosystem,
             reason: `${company} career page via ${ecosystem} ecosystem`,
+            explanation:
+              config.explanationTemplates?.company ||
+              'Direct career page discovery for high-priority employer.',
             budget: budgetRatio,
             depth: 2,
           });
@@ -127,6 +142,7 @@ export class CompanyPlanner {
             queries.push({
               query: `${genericDomains[i]} startup ${cities[j]} internship`.toLowerCase(),
               priority: 'medium',
+              priorityScore: 0,
               category: 'STARTUP_INTERNSHIPS',
               tags: [
                 'company',
@@ -136,9 +152,13 @@ export class CompanyPlanner {
               ],
               expectedOpportunityType: 'INTERNSHIP',
               strategy: 'COMPANY',
+              purpose: 'DISCOVER_CAREERS',
               expectedSourceType: 'COMPANY',
               expectedLocation: cities[j],
               reason: `Discover ${genericDomains[i]} startups hiring interns in ${cities[j]}`,
+              explanation:
+                config.explanationTemplates?.company ||
+                'Direct career page discovery for high-priority employer.',
               budget: budgetRatio,
               depth: 2,
             });

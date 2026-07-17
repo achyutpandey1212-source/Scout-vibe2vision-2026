@@ -23,6 +23,7 @@ export class LocationPlanner {
       queries.push({
         query: `${intent.intent} ${city}`.toLowerCase(),
         priority: 'medium',
+        priorityScore: 0,
         category: intent.category,
         tags: [
           'location',
@@ -31,9 +32,13 @@ export class LocationPlanner {
         ],
         expectedOpportunityType: mission === 'HACKATHONS' ? 'HACKATHON' : 'INTERNSHIP',
         strategy: 'LOCATION',
+        purpose: 'DISCOVER_INTERNSHIPS',
         expectedSourceType: 'SEARCH_API',
         expectedLocation: city,
         reason: `Location-aware search for ${intent.intent} in ${city}`,
+        explanation:
+          config.explanationTemplates?.location ||
+          'High-density startup ecosystem in priority geography.',
         budget: budgetRatio,
         depth: 1,
       });
@@ -42,13 +47,18 @@ export class LocationPlanner {
         queries.push({
           query: `${intent.intent} ${city} startup`.toLowerCase(),
           priority: 'medium',
+          priorityScore: 0,
           category: intent.category,
           tags: ['location', 'startup', city.toLowerCase()],
           expectedOpportunityType: 'INTERNSHIP',
           strategy: 'LOCATION',
+          purpose: 'DISCOVER_INTERNSHIPS',
           expectedSourceType: 'SEARCH_API',
           expectedLocation: city,
           reason: `Startup-focused search for ${intent.intent} in ${city}`,
+          explanation:
+            config.explanationTemplates?.location ||
+            'High-density startup ecosystem in priority geography.',
           budget: budgetRatio,
           depth: 1,
         });
@@ -61,13 +71,18 @@ export class LocationPlanner {
       queries.push({
         query: `remote startup internship india`.toLowerCase(),
         priority: 'medium',
+        priorityScore: 0,
         category: 'STARTUP_INTERNSHIPS',
         tags: ['remote', 'startup', 'india'],
         expectedOpportunityType: 'INTERNSHIP',
         strategy: 'LOCATION',
+        purpose: 'DISCOVER_INTERNSHIPS',
         expectedSourceType: 'SEARCH_API',
         expectedLocation: 'Remote',
         reason: 'Remote startup internship discovery across India',
+        explanation:
+          config.explanationTemplates?.location ||
+          'High-density startup ecosystem in priority geography.',
         budget: budgetRatio,
         depth: 1,
       });

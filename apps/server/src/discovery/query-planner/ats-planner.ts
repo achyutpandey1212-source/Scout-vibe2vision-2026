@@ -58,13 +58,18 @@ export class ATSPlanner {
       queries.push({
         query: `site:${domain} ${keyword}`.toLowerCase(),
         priority: 'high',
+        priorityScore: 0,
         category: category as SourceCategory,
         tags: ['ats', ats.toLowerCase(), keyword.replace(/\s+/g, '-')],
         expectedOpportunityType: opportunityType,
         strategy: 'ATS',
+        purpose: 'DISCOVER_ATS',
         expectedSourceType: 'ATS',
         expectedATS: ats,
         reason: `Direct ATS search on ${ats} for ${keyword}`,
+        explanation:
+          config.explanationTemplates?.ats ||
+          'Official ATS search with historically high internship yield.',
         budget: budgetRatio,
         depth: 1,
       });

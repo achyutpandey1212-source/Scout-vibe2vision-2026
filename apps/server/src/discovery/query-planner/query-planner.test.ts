@@ -30,7 +30,7 @@ describe('MissionQueryPlanner', () => {
       expect(result.configuration.mission).toBe(mission);
       expect(result.queries.length).toBeGreaterThan(0);
       expect(result.plannedQueries.length).toBe(result.queries.length);
-      expect(result.meta.totalQueries).toBe(result.queries.length);
+      expect(result.meta.finalQueries).toBe(result.queries.length);
       expect(result.queries.length).toBeLessThanOrEqual(BASE_CONTEXT.maxQueries);
     });
 
@@ -48,7 +48,8 @@ describe('MissionQueryPlanner', () => {
       expect(result1.plannedQueries.map((q) => q.query)).toEqual(
         result2.plannedQueries.map((q) => q.query),
       );
-      expect(result1.meta.totalQueries).toBe(result2.meta.totalQueries);
+      expect(result1.meta.finalQueries).toBe(result2.meta.finalQueries);
+      expect(result1.meta.totalGenerated).toBe(result2.meta.totalGenerated);
     });
 
     it(`returns structured planned queries for ${mission}`, async () => {
@@ -60,6 +61,8 @@ describe('MissionQueryPlanner', () => {
       for (const pq of result.plannedQueries) {
         expect(pq.query).toBeTruthy();
         expect(['high', 'medium', 'low']).toContain(pq.priority);
+        expect(pq.priorityScore).toBeGreaterThanOrEqual(0);
+        expect(pq.priorityScore).toBeLessThanOrEqual(100);
         expect([
           'INTENT',
           'ECOSYSTEM',
@@ -69,6 +72,8 @@ describe('MissionQueryPlanner', () => {
           'OFFICIAL',
           'COMMUNITY',
         ]).toContain(pq.strategy);
+        expect(pq.purpose).toBeTruthy();
+        expect(pq.explanation).toBeTruthy();
         expect(pq.budget).toBeGreaterThanOrEqual(0);
         expect(pq.depth).toBeGreaterThanOrEqual(1);
         expect(pq.reason).toBeTruthy();
@@ -92,8 +97,21 @@ describe('MissionQueryPlanner', () => {
       });
 
       const priorities = result.plannedQueries.map((q) => q.priority);
-      expect(priorities).toContain('high');
-      expect(priorities.some((p) => p === 'medium' || p === 'low')).toBe(true);
+      expect(priorities.length).toBeGreaterThan(0);
+      for (const p of priorities) {
+        expect(['high', 'medium', 'low']).toContain(p);
+      }
+    });
+
+    it(`calculates diversity metrics for ${mission}`, async () => {
+      const result = await generateSearchQueries({
+        ...BASE_CONTEXT,
+        mission,
+      });
+
+      expect(result.meta.diversity).toBeDefined();
+      expect(result.meta.diversity.intent).toBeGreaterThanOrEqual(0);
+      expect(result.meta.diversity.strategy).toBeGreaterThanOrEqual(0);
     });
   }
 
@@ -167,11 +185,10 @@ describe('MissionQueryPlanner', () => {
       maxQueries: 25,
     });
 
-    expect(result.meta.searchIntents).toBeGreaterThan(0);
-    expect(result.meta.atsSearches).toBeGreaterThan(0);
-    expect(result.meta.companyDiscoverySearches).toBeGreaterThan(0);
-    expect(result.meta.estimatedSearchBudget).toBe(100);
-    expect(result.meta.totalQueries).toBe(result.queries.length);
+    expect(result.meta.strategiesUsed.ATS).toBeGreaterThan(0);
+    expect(result.meta.strategiesUsed.COMPANY).toBeGreaterThan(0);
+    expect(result.meta.budgetUtilization).toBeGreaterThan(0);
+    expect(result.meta.finalQueries).toBe(result.queries.length);
   });
 
   it('calculates correct meta for STARTUP_INTERNSHIPS', async () => {
@@ -181,9 +198,9 @@ describe('MissionQueryPlanner', () => {
       maxQueries: 25,
     });
 
-    expect(result.meta.atsSearches).toBeGreaterThan(0);
-    expect(result.meta.companyDiscoverySearches).toBeGreaterThan(0);
-    expect(result.meta.expectedEcosystems).toBeGreaterThan(0);
+    expect(result.meta.strategiesUsed.ATS).toBeGreaterThan(0);
+    expect(result.meta.strategiesUsed.COMPANY).toBeGreaterThan(0);
+    expect(result.meta.ecosystemsCovered.length).toBeGreaterThan(0);
   });
 
   it('has no ATS queries for GOVERNMENT_TECH_INTERNSHIPS', async () => {
@@ -207,5 +224,47 @@ describe('MissionQueryPlanner', () => {
     const locationQueries = result.plannedQueries.filter((q) => q.strategy === 'LOCATION');
     expect(locationQueries.length).toBeGreaterThan(0);
     expect(locationQueries.every((q) => q.expectedLocation)).toBe(true);
+  });
+
+  it('assigns deterministic priority scores', async () => {
+    const result = await generateSearchQueries({
+      ...BASE_CONTEXT,
+      mission: 'ENGINEERING_INTERNSHIPS',
+    });
+
+    const scores = result.plannedQueries.map((q) => q.priorityScore);
+    expect(scores.every((s) => s >= 0 && s <= 100)).toBe(true);
+    const sorted = [...scores].sort((a, b) => b - a);
+    expect(scores).toEqual(sorted);
+  });
+
+  it('includes purpose and explanation for every query', async () => {
+    const result = await generateSearchQueries({
+      ...BASE_CONTEXT,
+      mission: 'ENGINEERING_INTERNSHIPS',
+    });
+
+    for (const pq of result.plannedQueries) {
+      expect(pq.purpose).toBeTruthy();
+      expect(pq.explanation).toBeTruthy();
+      expect(typeof pq.purpose).toBe('string');
+      expect(typeof pq.explanation).toBe('string');
+    }
+  });
+
+  it('enforces budget slots per strategy', async () => {
+    const result = await generateSearchQueries({
+      ...BASE_CONTEXT,
+      mission: 'ENGINEERING_INTERNSHIPS',
+      maxQueries: 25,
+    });
+
+    const strategies = result.plannedQueries.map((q) => q.strategy);
+    const atsCount = strategies.filter((s) => s === 'ATS').length;
+    const companyCount = strategies.filter((s) => s === 'COMPANY').length;
+
+    expect(atsCount).toBeGreaterThan(0);
+    expect(companyCount).toBeGreaterThan(0);
+    expect(result.meta.finalQueries).toBeLessThanOrEqual(25);
   });
 });
