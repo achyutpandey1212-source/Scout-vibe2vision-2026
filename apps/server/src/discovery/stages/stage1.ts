@@ -51,7 +51,17 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
     } else if (runMode === 'high-priority') {
       query.priority = { $in: ['critical', 'high'] };
     } else if (runMode === 'category' && runCategory) {
-      query.category = runCategory;
+      if (runCategory === 'STARTUP_INTERNSHIPS') {
+        query.$or = [
+          { category: 'STARTUP_INTERNSHIPS' },
+          {
+            category: 'INTERNSHIPS',
+            ecosystemType: { $in: ['STARTUP', 'INCUBATOR', 'VC_PORTFOLIO'] },
+          },
+        ];
+      } else {
+        query.category = runCategory;
+      }
     } else if (runMode === 'custom' && runCustomDomains.length > 0) {
       const cleanDomains = runCustomDomains.map((d: string) => d.toLowerCase().trim());
       query.domain = { $in: cleanDomains };
@@ -206,15 +216,22 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
 function buildSiteQueries(domain: string, context: DiscoveryContext): string[] {
   const country = context.country || 'India';
   const queries: string[] = [];
+  const categories = context.categories || [];
 
-  // Primary: opportunity-focused site search including new candidate keywords (Phase 8)
-  queries.push(`site:${domain} intern student program fellowship scholarship 2026`);
+  if (categories.includes('STARTUP_INTERNSHIPS')) {
+    queries.push(`site:${domain} intern startup careers 2026`);
+    queries.push(`site:${domain} "founding engineer" intern software`);
+    queries.push(`site:${domain} engineering internship frontend backend`);
+  } else {
+    // Primary: opportunity-focused site search including new candidate keywords (Phase 8)
+    queries.push(`site:${domain} intern student program fellowship scholarship 2026`);
 
-  // Secondary: program/recruitment search targeting innovation, research, challenges, and portals
-  queries.push(`site:${domain} challenge innovation research project careers portal`);
+    // Secondary: program/recruitment search targeting innovation, research, challenges, and portals
+    queries.push(`site:${domain} challenge innovation research project careers portal`);
 
-  // Tertiary: campus hiring / graduate programs
-  queries.push(`site:${domain} campus hiring graduate program recruitment ${country}`);
+    // Tertiary: campus hiring / graduate programs
+    queries.push(`site:${domain} campus hiring graduate program recruitment ${country}`);
+  }
 
   return queries;
 }

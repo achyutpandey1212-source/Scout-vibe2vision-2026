@@ -41,6 +41,7 @@ const DomainEvaluationSchema = z.object({
   ]),
   suggestedCategory: z.enum([
     'INTERNSHIPS',
+    'STARTUP_INTERNSHIPS',
     'TECH_CAREERS',
     'WOMEN_IN_TECH',
     'SCHOLARSHIPS',

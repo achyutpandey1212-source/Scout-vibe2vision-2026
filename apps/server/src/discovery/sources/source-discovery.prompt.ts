@@ -67,7 +67,7 @@ Classification criteria:
 
 If approved, also classify:
 - sourceType: Organization | Company | University | Government | NGO | Community | Platform | Job Board | Hackathon | Conference | Research Lab | Other
-- category: INTERNSHIPS | TECH_CAREERS | WOMEN_IN_TECH | SCHOLARSHIPS | FELLOWSHIPS | GOVERNMENT | HACKATHONS | ENTREPRENEURSHIP | RESEARCH | SKILL_DEVELOPMENT | GENERAL | GOVERNMENT_INTERNSHIP | RESEARCH_INTERNSHIP | CAMPUS_AMBASSADOR | STUDENT_COMPETITION | SUMMER_SCHOOL | BOOTCAMP | OPEN_SOURCE_PROGRAM
+- category: INTERNSHIPS | STARTUP_INTERNSHIPS | TECH_CAREERS | WOMEN_IN_TECH | SCHOLARSHIPS | FELLOWSHIPS | GOVERNMENT | HACKATHONS | ENTREPRENEURSHIP | RESEARCH | SKILL_DEVELOPMENT | GENERAL | GOVERNMENT_INTERNSHIP | RESEARCH_INTERNSHIP | CAMPUS_AMBASSADOR | STUDENT_COMPETITION | SUMMER_SCHOOL | BOOTCAMP | OPEN_SOURCE_PROGRAM
 - trustScore: 0–100 (government/academic = 80–95, established NGO = 70–85, new platform = 50–70)
 - priority: critical (flagship, high-volume source) | high (reliable, consistent source) | medium (occasional, niche source) | low (rare, uncertain source)
 - crawlFrequency: daily (new listings very frequently) | weekly (listings update weekly) | monthly (updates monthly or less)

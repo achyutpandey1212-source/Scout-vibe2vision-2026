@@ -46,6 +46,7 @@ const SourceRegistrySchema = new Schema<ISourceRegistryDocument>(
       type: String,
       enum: [
         'INTERNSHIPS',
+        'STARTUP_INTERNSHIPS',
         'TECH_CAREERS',
         'WOMEN_IN_TECH',
         'SCHOLARSHIPS',
