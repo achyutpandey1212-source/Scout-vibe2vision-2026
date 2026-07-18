@@ -59,6 +59,11 @@ async function main() {
     console.log(`      Why   : ${q.explanation}`);
   });
 
+  console.log(`\n📁 Saved Files`);
+  const date = new Date().toISOString().split('T')[0];
+  console.log(`  planner-logs/${date}_${plan.mission}.json`);
+  console.log(`  planner-logs/${date}_${plan.mission}.txt`);
+
   console.log(`\n✅ Dry run complete. No APIs called.\n`);
 }
 

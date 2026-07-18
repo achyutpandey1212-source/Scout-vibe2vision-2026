@@ -16,6 +16,8 @@ import { DISCOVERY_CONFIG } from '../config/discovery.config';
 import { QueryDeduplicator } from './query-deduplicator';
 import { DiversityValidator, DiversityReport } from './diversity-validator';
 import { PriorityScorer } from './priority-scorer';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const STRATEGY_BUDGET_RATIOS: Record<string, number> = {
   ats: 0.35,
@@ -94,6 +96,138 @@ function enforceBudget(
   return accepted;
 }
 
+function formatQueryLog(query: PlannedQuery, usedBudget: number, totalBudget: number): string {
+  const separator = '--------------------------------------------------------';
+  const lines = [
+    separator,
+    'Priority:',
+    query.priorityScore.toString(),
+    'Strategy:',
+    query.strategy,
+    'Purpose:',
+    query.purpose,
+    'Budget:',
+    `${query.strategy} (${usedBudget}/${totalBudget})`,
+    'Expected:',
+    query.expectedSourceType || 'SEARCH_API',
+    'Query:',
+    query.query,
+    'Reason:',
+    query.explanation,
+    separator,
+  ];
+  return lines.join('\n');
+}
+
+function formatPlannerSummary(plan: PrioritizedSearchPlan, diversity: DiversityReport): string {
+  const strategyCounts = plan.meta.strategiesUsed;
+  const priorityScores = plan.plannedQueries.map((q) => q.priorityScore);
+  const priorityDistribution: Record<string, number> = {
+    '95-100': 0,
+    '90-94': 0,
+    '82-89': 0,
+    '70-81': 0,
+    '55-69': 0,
+    '0-54': 0,
+  };
+  for (const score of priorityScores) {
+    if (score >= 95) priorityDistribution['95-100']++;
+    else if (score >= 90) priorityDistribution['90-94']++;
+    else if (score >= 82) priorityDistribution['82-89']++;
+    else if (score >= 70) priorityDistribution['70-81']++;
+    else if (score >= 55) priorityDistribution['55-69']++;
+    else priorityDistribution['0-54']++;
+  }
+
+  const lines: string[] = [];
+
+  lines.push('');
+  lines.push('=================================================');
+  lines.push('Mission Query Planner Summary');
+  lines.push('=================================================');
+  lines.push(`Mission              : ${plan.mission}`);
+  lines.push(`Generated            : ${plan.meta.totalGenerated}`);
+  lines.push(`Duplicates Removed   : ${plan.meta.duplicatesRemoved}`);
+  lines.push(`Final Queries        : ${plan.meta.finalQueries}`);
+  lines.push('-----------------------------------------------');
+  lines.push('Priority');
+  lines.push(`  Average            : ${plan.meta.averagePriority}`);
+  lines.push(`  Highest            : ${plan.plannedQueries[0]?.priorityScore || 0}`);
+  lines.push(
+    `  Lowest             : ${plan.plannedQueries[plan.plannedQueries.length - 1]?.priorityScore || 0}`,
+  );
+  lines.push('  Distribution       :');
+  for (const [band, count] of Object.entries(priorityDistribution)) {
+    if (count > 0) {
+      lines.push(`    ${band.padEnd(10)}: ${count}`);
+    }
+  }
+  lines.push('-----------------------------------------------');
+  lines.push('Strategies');
+  for (const [strategy, count] of Object.entries(strategyCounts)) {
+    if (count > 0) lines.push(`  ${strategy.padEnd(20)}: ${count}`);
+  }
+  lines.push('-----------------------------------------------');
+  lines.push('Cities');
+  for (const city of plan.meta.citiesCovered.slice(0, 8)) {
+    lines.push(`  ${city}`);
+  }
+  lines.push('-----------------------------------------------');
+  lines.push('Engineering Domains');
+  for (const domain of plan.meta.engineeringDomainsCovered.slice(0, 8)) {
+    lines.push(`  ${domain}`);
+  }
+  lines.push('-----------------------------------------------');
+  lines.push('ATS Providers');
+  for (const ats of plan.meta.atsProviders) {
+    lines.push(`  ${ats}`);
+  }
+  lines.push('-----------------------------------------------');
+  lines.push('Companies');
+  lines.push(`  Expected            : ${plan.meta.companiesExpected}`);
+  lines.push('-----------------------------------------------');
+  lines.push(`Budget Utilization   : ${plan.meta.budgetUtilization}%`);
+  lines.push(`Mission Coverage     : ${plan.meta.missionCoverage}%`);
+  lines.push('=================================================');
+  lines.push('');
+  lines.push(DiversityValidator.formatReport(diversity));
+
+  return lines.join('\n');
+}
+
+function savePlannerOutput(
+  plan: PrioritizedSearchPlan,
+  summary: string,
+  diversity: DiversityReport,
+): string {
+  const logsDir = path.join(process.cwd(), 'planner-logs');
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
+
+  const date = new Date().toISOString().split('T')[0];
+  const mission = plan.mission;
+  const jsonPath = path.join(logsDir, `${date}_${mission}.json`);
+  const txtPath = path.join(logsDir, `${date}_${mission}.txt`);
+
+  const jsonOutput = {
+    ...plan,
+    meta: {
+      ...plan.meta,
+      diversity: {
+        ...plan.meta.diversity,
+        fullReport: diversity,
+      },
+    },
+    savedAt: new Date().toISOString(),
+  };
+
+  fs.writeFileSync(jsonPath, JSON.stringify(jsonOutput, null, 2));
+  fs.writeFileSync(txtPath, summary);
+
+  return jsonPath;
+}
+
 export async function generateSearchQueries(
   context: DiscoveryContext,
 ): Promise<PrioritizedSearchPlan> {
@@ -125,6 +259,7 @@ export async function generateSearchQueries(
   for (const [key, ratio] of Object.entries(normalizedBudget)) {
     budgetSlots[key] = Math.max(1, Math.round(limit * ratio));
   }
+  budgetSlots['intent'] = budgetSlots['official'] || 0;
 
   const atsQueries = ATSPlanner.generate(mission, config, normalizedBudget.ats, budgetSlots.ats);
 
@@ -158,6 +293,7 @@ export async function generateSearchQueries(
       priority: index < 10 ? 'high' : index < 20 ? 'medium' : 'low',
       priorityScore: 0,
       category: item.category,
+      engineeringDomain: item.engineeringDomain,
       tags: ['intent', ...item.intent.toLowerCase().split(' ').slice(0, 3)],
       expectedOpportunityType: mission === 'HACKATHONS' ? 'HACKATHON' : 'INTERNSHIP',
       strategy: 'INTENT' as SearchStrategy,
@@ -235,7 +371,9 @@ export async function generateSearchQueries(
     citiesCovered: [
       ...new Set(finalQueries.map((q) => q.expectedLocation).filter(Boolean) as string[]),
     ],
-    engineeringDomainsCovered: [...new Set(finalQueries.map((q) => q.category))],
+    engineeringDomainsCovered: [
+      ...new Set(finalQueries.map((q) => q.engineeringDomain).filter(Boolean) as string[]),
+    ],
     atsProviders: [...new Set(finalQueries.map((q) => q.expectedATS).filter(Boolean) as string[])],
     companiesExpected: finalQueries.filter((q) => q.strategy === 'COMPANY').length,
     ecosystemsCovered: [
@@ -264,50 +402,25 @@ export async function generateSearchQueries(
     meta,
   };
 
-  console.log(formatPlanLog(plan, diversity));
+  console.log('\n=================================================');
+  console.log('Mission Query Planner — Query Log');
+  console.log('=================================================');
+  console.log(`Mission: ${plan.mission}`);
+  console.log(`Total Queries to Execute: ${finalQueries.length}`);
+  console.log('');
+
+  const budgetUsed: Record<string, number> = {};
+  for (const q of finalQueries) {
+    const key = q.strategy;
+    budgetUsed[key] = (budgetUsed[key] || 0) + 1;
+    console.log(formatQueryLog(q, budgetUsed[key], budgetSlots[q.strategy.toLowerCase()] || 0));
+    console.log('');
+  }
+
+  const summary = formatPlannerSummary(plan, diversity);
+  console.log(summary);
+
+  savePlannerOutput(plan, summary, diversity);
 
   return plan;
-}
-
-function formatPlanLog(plan: PrioritizedSearchPlan, diversity: DiversityReport): string {
-  const strategyCounts = plan.meta.strategiesUsed;
-  const lines: string[] = [];
-
-  lines.push('');
-  lines.push('=================================================');
-  lines.push('Mission Query Planner');
-  lines.push('=================================================');
-  lines.push(`Mission              : ${plan.mission}`);
-  lines.push(`Generated            : ${plan.meta.totalGenerated}`);
-  lines.push(`Removed              : ${plan.meta.duplicatesRemoved} duplicates`);
-  lines.push(`Final                : ${plan.meta.finalQueries}`);
-  lines.push('-----------------------------------------------');
-  lines.push('Strategies');
-  for (const [strategy, count] of Object.entries(strategyCounts)) {
-    if (count > 0) lines.push(`  ${strategy.padEnd(20)}: ${count}`);
-  }
-  lines.push('-----------------------------------------------');
-  lines.push('Engineering Domains');
-  for (const domain of plan.meta.engineeringDomainsCovered.slice(0, 8)) {
-    lines.push(`  ${domain}`);
-  }
-  lines.push('-----------------------------------------------');
-  lines.push('Cities');
-  for (const city of plan.meta.citiesCovered.slice(0, 8)) {
-    lines.push(`  ${city}`);
-  }
-  lines.push('-----------------------------------------------');
-  lines.push('Priority');
-  lines.push(`  Average             : ${plan.meta.averagePriority}`);
-  lines.push(`  Highest             : ${plan.plannedQueries[0]?.priorityScore || 0}`);
-  lines.push(
-    `  Lowest              : ${plan.plannedQueries[plan.plannedQueries.length - 1]?.priorityScore || 0}`,
-  );
-  lines.push('-----------------------------------------------');
-  lines.push('Budget Utilization   : ' + plan.meta.budgetUtilization + '%');
-  lines.push('=================================================');
-  lines.push('');
-  lines.push(DiversityValidator.formatReport(diversity));
-
-  return lines.join('\n');
 }

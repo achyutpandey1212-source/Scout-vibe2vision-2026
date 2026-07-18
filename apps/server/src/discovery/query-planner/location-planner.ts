@@ -5,7 +5,7 @@ export class LocationPlanner {
   static generate(
     mission: DiscoveryMission,
     config: MissionConfiguration,
-    baseIntents: { intent: string; category: SourceCategory }[],
+    baseIntents: { intent: string; category: SourceCategory; engineeringDomain: string }[],
     budgetRatio: number,
     maxQueries: number,
   ): PlannedQuery[] {
@@ -35,6 +35,7 @@ export class LocationPlanner {
         purpose: 'DISCOVER_INTERNSHIPS',
         expectedSourceType: 'SEARCH_API',
         expectedLocation: city,
+        engineeringDomain: intent.engineeringDomain,
         reason: `Location-aware search for ${intent.intent} in ${city}`,
         explanation:
           config.explanationTemplates?.location ||
@@ -55,6 +56,7 @@ export class LocationPlanner {
           purpose: 'DISCOVER_INTERNSHIPS',
           expectedSourceType: 'SEARCH_API',
           expectedLocation: city,
+          engineeringDomain: intent.engineeringDomain,
           reason: `Startup-focused search for ${intent.intent} in ${city}`,
           explanation:
             config.explanationTemplates?.location ||
@@ -79,6 +81,7 @@ export class LocationPlanner {
         purpose: 'DISCOVER_INTERNSHIPS',
         expectedSourceType: 'SEARCH_API',
         expectedLocation: 'Remote',
+        engineeringDomain: 'General Engineering',
         reason: 'Remote startup internship discovery across India',
         explanation:
           config.explanationTemplates?.location ||

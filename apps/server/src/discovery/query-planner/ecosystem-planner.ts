@@ -1,10 +1,11 @@
 import { MissionConfiguration, PlannedQuery } from '../types/query.types';
+import { SourceCategory } from '@scout/shared';
 
 export class EcosystemPlanner {
   static generate(
     mission: string,
     config: MissionConfiguration,
-    baseIntents: { intent: string; category: string }[],
+    baseIntents: { intent: string; category: SourceCategory; engineeringDomain: string }[],
     budgetRatio: number,
     maxQueries: number,
   ): PlannedQuery[] {
@@ -30,6 +31,7 @@ export class EcosystemPlanner {
           purpose: 'DISCOVER_PORTFOLIO',
           expectedSourceType: 'INCUBATOR',
           expectedEcosystem: ecosystem,
+          engineeringDomain: 'General Engineering',
           reason: `Ecosystem-first discovery for ${ecosystem} portfolio companies`,
           explanation:
             config.explanationTemplates?.ecosystem ||
@@ -49,6 +51,7 @@ export class EcosystemPlanner {
           purpose: 'DISCOVER_PORTFOLIO',
           expectedSourceType: 'INCUBATOR',
           expectedEcosystem: ecosystem,
+          engineeringDomain: 'General Engineering',
           reason: `Portfolio company career pages for ${ecosystem}`,
           explanation:
             config.explanationTemplates?.ecosystem ||
@@ -68,6 +71,7 @@ export class EcosystemPlanner {
           purpose: 'DISCOVER_PORTFOLIO',
           expectedSourceType: 'INCUBATOR',
           expectedEcosystem: ecosystem,
+          engineeringDomain: 'General Engineering',
           reason: `Job listings from ${ecosystem} ecosystem`,
           explanation:
             config.explanationTemplates?.ecosystem ||
@@ -87,6 +91,7 @@ export class EcosystemPlanner {
           purpose: 'DISCOVER_PORTFOLIO',
           expectedSourceType: 'UNIVERSITY',
           expectedEcosystem: ecosystem,
+          engineeringDomain: 'General Engineering',
           reason: `Research internships at ${ecosystem}`,
           explanation:
             config.explanationTemplates?.ecosystem ||
@@ -106,6 +111,7 @@ export class EcosystemPlanner {
           purpose: 'DISCOVER_EVENTS',
           expectedSourceType: 'PLATFORM',
           expectedEcosystem: ecosystem,
+          engineeringDomain: 'General Engineering',
           reason: `Hackathons hosted on ${ecosystem} platform`,
           explanation:
             config.explanationTemplates?.ecosystem ||

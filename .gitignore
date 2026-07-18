@@ -124,3 +124,6 @@ dist
 test-data/resumes/**/*
 !test-data/resumes/**/.gitkeep
 
+# Planner output logs
+planner-logs/
+

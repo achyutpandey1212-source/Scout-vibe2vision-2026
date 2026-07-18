@@ -31,6 +31,18 @@ const ATS_KEYWORDS: Record<string, string[]> = {
   ],
 };
 
+const ATS_KEYWORD_DOMAINS: Record<string, string> = {
+  'software engineer intern': 'General Engineering',
+  'backend intern': 'Backend',
+  'frontend intern': 'Frontend',
+  'engineering intern': 'General Engineering',
+  'developer intern': 'General Engineering',
+  'summer intern': 'General Engineering',
+  internship: 'General Engineering',
+  intern: 'General Engineering',
+  'startup intern': 'General Engineering',
+};
+
 export class ATSPlanner {
   static generate(
     mission: DiscoveryMission,
@@ -54,6 +66,7 @@ export class ATSPlanner {
       if (!domain) continue;
 
       const keyword = keywords[i % keywords.length];
+      const engineeringDomain = ATS_KEYWORD_DOMAINS[keyword] || 'General Engineering';
 
       queries.push({
         query: `site:${domain} ${keyword}`.toLowerCase(),
@@ -66,6 +79,7 @@ export class ATSPlanner {
         purpose: 'DISCOVER_ATS',
         expectedSourceType: 'ATS',
         expectedATS: ats,
+        engineeringDomain,
         reason: `Direct ATS search on ${ats} for ${keyword}`,
         explanation:
           config.explanationTemplates?.ats ||

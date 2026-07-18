@@ -69,6 +69,7 @@ export class CompanyPlanner {
           strategy: 'COMPANY',
           purpose: 'DISCOVER_CAREERS',
           expectedSourceType: 'COMPANY',
+          engineeringDomain: 'General Engineering',
           reason: `Direct career page discovery for ${company}`,
           explanation:
             config.explanationTemplates?.company ||
@@ -87,6 +88,7 @@ export class CompanyPlanner {
           strategy: 'COMPANY',
           purpose: 'DISCOVER_CAREERS',
           expectedSourceType: 'COMPANY',
+          engineeringDomain: 'General Engineering',
           reason: `Engineering intern search for ${company}`,
           explanation:
             config.explanationTemplates?.company ||
@@ -114,6 +116,7 @@ export class CompanyPlanner {
             purpose: 'DISCOVER_CAREERS',
             expectedSourceType: 'COMPANY',
             expectedEcosystem: ecosystem,
+            engineeringDomain: 'General Engineering',
             reason: `${company} career page via ${ecosystem} ecosystem`,
             explanation:
               config.explanationTemplates?.company ||
@@ -155,6 +158,7 @@ export class CompanyPlanner {
               purpose: 'DISCOVER_CAREERS',
               expectedSourceType: 'COMPANY',
               expectedLocation: cities[j],
+              engineeringDomain: genericDomains[i],
               reason: `Discover ${genericDomains[i]} startups hiring interns in ${cities[j]}`,
               explanation:
                 config.explanationTemplates?.company ||

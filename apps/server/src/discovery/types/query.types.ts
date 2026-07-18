@@ -54,6 +54,7 @@ export interface PlannedQuery {
   expectedEcosystem?: string;
   expectedLocation?: string;
   expectedATS?: string;
+  engineeringDomain?: string;
   reason: string;
   explanation: string;
   budget: number;
