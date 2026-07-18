@@ -37,7 +37,14 @@ export type EngineeringFocus =
   | 'DEVOPS'
   | 'WEB'
   | 'BLOCKCHAIN'
-  | 'WEB3';
+  | 'WEB3'
+  | 'DATA'
+  | 'SYSTEMS'
+  | 'PHYSICS'
+  | 'BIG_DATA';
+
+/** Deterministic opportunity-yield classification (metadata only). */
+export type OpportunityYield = 'VERY_HIGH' | 'HIGH' | 'MEDIUM' | 'LOW';
 
 /** Priority band (1 = highest). */
 export type Priority = 1 | 2 | 3;
@@ -108,6 +115,8 @@ export interface Ecosystem {
   internshipLikelihood: number;
   /** Remote friendliness (0-1). */
   remoteFriendliness: number;
+  /** Deterministic opportunity-yield classification (metadata only, no scoring). */
+  opportunityYield: OpportunityYield;
   /** Epoch ms of the last configuration update. */
   lastUpdated: number;
 }
@@ -242,6 +251,17 @@ export interface EcosystemHealth {
   coverageByCountry: Record<string, number>;
   coverageByCity: Record<string, number>;
   coverageByType: Record<EcosystemType, number>;
+  /** Count of government ecosystems (type INDIAN_STARTUP_ECOSYSTEM + gov focus). */
+  governmentEcosystems: number;
+  startupEcosystems: number;
+  researchEcosystems: number;
+  developerEcosystems: number;
+  hackathonEcosystems: number;
+  averageOpportunityYield: number;
+  top20HighestYield: { id: string; name: string; yield: OpportunityYield }[];
+  tier1CityCoverage: string[];
+  missingMetadataCount: number;
+  duplicateCount: number;
   generatedAt: string;
 }
 
