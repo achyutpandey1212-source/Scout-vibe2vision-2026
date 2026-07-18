@@ -11,7 +11,9 @@
     "crawl": "npm run build && node dist/ai/playground/test-discovery-orchestrator.js",
     "crawl:extract": "npm run build && node dist/ai/playground/test-firecrawl-extraction.js",
     "company:test": "ts-node-dev -r tsconfig-paths/register --transpile-only scripts/company-test.ts",
-    "company:health": "ts-node-dev -r tsconfig-paths/register --transpile-only scripts/company-health.ts"
+    "company:health": "ts-node-dev -r tsconfig-paths/register --transpile-only scripts/company-health.ts",
+    "ecosystem:health": "ts-node-dev -r tsconfig-paths/register --transpile-only scripts/ecosystem-health.ts",
+    "ecosystem:test": "ts-node-dev -r tsconfig-paths/register --transpile-only scripts/ecosystem-test.ts"
   },
   "dependencies": {
     "@langchain/core": "^1.2.2",

@@ -13,3 +13,5 @@ export type { IDiscoveryRun } from './persistence/discovery-run.model';
 export * from './orchestrator';
 export { opportunityRouter } from './routes/opportunity.routes';
 export * from './company-discovery';
+import * as EcosystemIntelligence from './ecosystem-intelligence';
+export { EcosystemIntelligence };
