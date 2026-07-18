@@ -1,4 +1,4 @@
-import { DeadEndDetection, HopGraph, HopNode, MissionPipelineInput } from './hop.types';
+import { DeadEndDetection, HopGraph, HopNode, MissionPipelineInput, HopType } from './hop.types';
 import { HopValidator } from './hop-validator';
 import {
   classifyUrl,

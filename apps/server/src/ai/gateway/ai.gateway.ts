@@ -105,11 +105,17 @@ export class AIGateway {
     let retriesCount = 0;
     let finalResponse: AIGatewayResponse;
 
+    const primaryPool =
+      context === 'discovery'
+        ? ProviderPoolFactory.discovery(primaryConfig.provider)
+        : ProviderPoolFactory.recommendation(primaryConfig.provider);
+
     try {
       finalResponse = await retryWithBackoff(
         async (attempt) => {
           retriesCount = attempt;
-          return await primaryProvider.generate(options, primaryConfig.apiKey, primaryConfig.model);
+          const activeKey = primaryPool.getCurrentKey();
+          return await primaryProvider.generate(options, activeKey, primaryConfig.model);
         },
         {
           retries: 2,
@@ -121,15 +127,17 @@ export class AIGateway {
         (error, attempt, delayMs) => {
           console.warn(
             `[AI Gateway] Primary provider ${primaryConfig.provider} failed (attempt ${attempt}). ` +
-              `Retrying in ${delayMs.toFixed(0)}ms... Error: ${error.message}`,
+              `Rotating key and retrying in ${delayMs.toFixed(0)}ms... Error: ${error.message}`,
           );
+          primaryPool.rotate();
         },
       );
     } catch (primaryError: any) {
       console.error(
         `[AI Gateway] Primary provider ${primaryConfig.provider} failed completely ` +
-          `after ${retriesCount} retries: ${primaryError.message}`,
+          `after ${retriesCount} retries: ${primaryError.message}. Rotating key...`,
       );
+      primaryPool.rotate();
 
       const fallbackConfig = this.resolveConfig(context, true);
       if (!fallbackConfig) {
@@ -148,17 +156,20 @@ export class AIGateway {
         throw new ScoutAIError(`Fallback provider "${fallbackConfig.provider}" is not supported`);
       }
 
+      const fallbackPool =
+        context === 'discovery'
+          ? ProviderPoolFactory.discovery(fallbackConfig.provider)
+          : ProviderPoolFactory.recommendation(fallbackConfig.provider);
+
       try {
-        finalResponse = await fallbackProvider.generate(
-          options,
-          fallbackConfig.apiKey,
-          fallbackConfig.model,
-        );
+        const fallbackKey = fallbackPool.getCurrentKey();
+        finalResponse = await fallbackProvider.generate(options, fallbackKey, fallbackConfig.model);
         finalResponse.metadata.retries = retriesCount;
       } catch (fallbackError: any) {
         console.error(
-          `[AI Gateway] Fallback provider ${fallbackConfig.provider} also failed: ${fallbackError.message}`,
+          `[AI Gateway] Fallback provider ${fallbackConfig.provider} also failed: ${fallbackError.message}. Rotating key...`,
         );
+        fallbackPool.rotate();
         throw new ScoutAIError(
           `Both primary and fallback AI providers failed. ` +
             `Primary: ${primaryError.message}. Fallback: ${fallbackError.message}`,

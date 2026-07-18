@@ -1,3 +1,4 @@
+import './discovery/utils/logger-capture';
 import express, { Response } from 'express';
 import cors, { CorsOptions } from 'cors';
 import { env, db, redis, firebase } from '@/config';
