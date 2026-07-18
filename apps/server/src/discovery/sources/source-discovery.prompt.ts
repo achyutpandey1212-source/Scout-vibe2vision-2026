@@ -30,8 +30,11 @@ Guidelines:
 - Queries should help find the SOURCE/ORGANIZATION, not individual opportunity pages
 - DO NOT include queries for: executive hiring, experienced jobs, MBA programs, marketing internships, HR internships, finance internships, sales internships, founder accelerators, generic conferences, generic events, career blogs, news articles, generic online courses, volunteer work
 
-Output ONLY a valid JSON array of ${totalQueries} query strings. No explanation, no preamble:
-["query 1", "query 2", ...]`;
+Output ONLY a valid JSON object conforming to the schema:
+{
+  "queries": ["query 1", "query 2", ...]
+}
+No explanation, no markdown backticks, no preamble.`;
 }
 
 // ─── Prompt B — Domain Evaluator ─────────────────────────────────────────────

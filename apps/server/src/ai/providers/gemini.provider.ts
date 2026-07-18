@@ -31,11 +31,16 @@ export class GeminiProvider extends BaseProvider {
     if (options.temperature !== undefined) {
       body.generationConfig.temperature = options.temperature;
     }
-
     if (options.maxTokens !== undefined) {
       body.generationConfig.maxOutputTokens = options.maxTokens;
     }
 
+    if (
+      options.prompt.toLowerCase().includes('json') ||
+      options.prompt.toLowerCase().includes('schema')
+    ) {
+      body.generationConfig.responseMimeType = 'application/json';
+    }
     // Default timeout limit is 30s unless overridden
     const timeoutMs = options.timeoutMs ?? 30000;
 

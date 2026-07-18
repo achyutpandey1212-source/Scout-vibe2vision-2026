@@ -14,6 +14,14 @@ export function safeParseJson<T = any>(text: string): T {
     }
   }
 
+  // Strip single backticks wrapping the JSON (common with some models)
+  if (cleaned.startsWith('`')) {
+    cleaned = cleaned
+      .replace(/^`+(?:json)?\s*/i, '')
+      .replace(/\s*`+$/i, '')
+      .trim();
+  }
+
   cleaned = cleaned.trim();
 
   // If it still doesn't look like JSON, try locating the first '{' or '[' and last matching brace/bracket

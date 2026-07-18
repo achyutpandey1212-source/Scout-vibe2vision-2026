@@ -21,30 +21,32 @@ import { ACTIVE_SOURCE_CATEGORIES } from '@scout/shared';
 const QueryListSchema = z.object({
   queries: z.array(z.string().min(1)),
 });
-
 const DomainEvaluationSchema = z.object({
   isOpportunitySource: z.boolean(),
   confidence: z.number().min(0).max(100),
   reason: z.string(),
-  suggestedSourceType: z.enum([
-    'Organization',
-    'Company',
-    'University',
-    'Government',
-    'NGO',
-    'Community',
-    'Platform',
-    'Hackathon',
-    'Open Source',
-    'Other',
-  ]),
-  suggestedCategory: z.enum(ACTIVE_SOURCE_CATEGORIES as [SourceCategory, ...SourceCategory[]]),
-  suggestedTrustScore: z.number().min(0).max(100),
-  suggestedPriority: z.enum(['critical', 'high', 'medium', 'low']),
-  suggestedCrawlFrequency: z.enum(['daily', 'weekly', 'monthly']),
-  suggestedStrategy: z.enum(['direct', 'search', 'sitemap', 'rss']),
+  suggestedSourceType: z
+    .enum([
+      'Organization',
+      'Company',
+      'University',
+      'Government',
+      'NGO',
+      'Community',
+      'Platform',
+      'Hackathon',
+      'Open Source',
+      'Other',
+    ])
+    .optional(),
+  suggestedCategory: z
+    .enum(ACTIVE_SOURCE_CATEGORIES as [SourceCategory, ...SourceCategory[]])
+    .optional(),
+  suggestedTrustScore: z.number().min(0).max(100).optional(),
+  suggestedPriority: z.enum(['critical', 'high', 'medium', 'low']).optional(),
+  suggestedCrawlFrequency: z.enum(['daily', 'weekly', 'monthly']).optional(),
+  suggestedStrategy: z.enum(['direct', 'search', 'sitemap', 'rss']).optional(),
 });
-
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 interface SourceDiscoveryConfig {
@@ -190,12 +192,13 @@ Batches: ${cfg.totalBatches} × ${cfg.batchSize} queries = ${totalQueries} total
               domain: candidate.domain,
               organization: candidate.organization,
               homepage: `https://${candidate.domain}`,
-              sourceType: result.suggestedSourceType as SourceType,
-              category: result.suggestedCategory as SourceCategory,
-              strategy: result.suggestedStrategy as CrawlStrategy,
-              crawlFrequency: result.suggestedCrawlFrequency as CrawlFrequency,
-              trustScore: result.suggestedTrustScore,
-              priority: result.suggestedPriority as SourcePriority,
+              sourceType: (result.suggestedSourceType || 'Other') as SourceType,
+              category: (result.suggestedCategory || 'INTERNSHIPS') as SourceCategory,
+              strategy: (result.suggestedStrategy || 'direct') as CrawlStrategy,
+              crawlFrequency: (result.suggestedCrawlFrequency || 'weekly') as CrawlFrequency,
+              trustScore: result.suggestedTrustScore ?? 60,
+              priority: (result.suggestedPriority || 'medium') as SourcePriority,
+              ecosystemType: mapSourceTypeToEcosystemType(result.suggestedSourceType) as any,
               confidence: result.confidence,
               reason: result.reason,
               verifiedByAIAt: new Date(),
@@ -249,12 +252,13 @@ Batches: ${cfg.totalBatches} × ${cfg.batchSize} queries = ${totalQueries} total
               domain,
               organization: domain,
               homepage: `https://${domain}`,
-              sourceType: result.suggestedSourceType as SourceType,
-              category: result.suggestedCategory as SourceCategory,
-              strategy: result.suggestedStrategy as CrawlStrategy,
-              crawlFrequency: result.suggestedCrawlFrequency as CrawlFrequency,
-              trustScore: result.suggestedTrustScore,
-              priority: result.suggestedPriority as SourcePriority,
+              sourceType: (result.suggestedSourceType || 'Other') as SourceType,
+              category: (result.suggestedCategory || 'INTERNSHIPS') as SourceCategory,
+              strategy: (result.suggestedStrategy || 'direct') as CrawlStrategy,
+              crawlFrequency: (result.suggestedCrawlFrequency || 'weekly') as CrawlFrequency,
+              trustScore: result.suggestedTrustScore ?? 60,
+              priority: (result.suggestedPriority || 'medium') as SourcePriority,
+              ecosystemType: mapSourceTypeToEcosystemType(result.suggestedSourceType) as any,
               confidence: result.confidence,
               reason: result.reason,
               verifiedByAIAt: new Date(),
@@ -368,11 +372,22 @@ function extractDomainFromUrl(url: string): string | null {
     return null;
   }
 }
-
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < arr.length; i += size) {
     chunks.push(arr.slice(i, i + size));
   }
   return chunks;
+}
+
+function mapSourceTypeToEcosystemType(sourceType: string | undefined): string {
+  if (!sourceType) return 'UNIVERSITY';
+  const type = sourceType.toLowerCase();
+  if (type === 'company' || type === 'startup') return 'STARTUP';
+  if (type === 'university' || type === 'education') return 'UNIVERSITY';
+  if (type === 'government') return 'GOVERNMENT';
+  if (type === 'ngo' || type === 'non-profit' || type === 'non_profit') return 'NON_PROFIT';
+  if (type === 'open source' || type === 'open_source') return 'OPEN_SOURCE';
+  if (type === 'community' || type === 'platform' || type === 'hackathon') return 'COMMUNITY';
+  return 'UNIVERSITY';
 }

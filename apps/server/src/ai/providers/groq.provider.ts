@@ -35,11 +35,16 @@ export class GroqProvider extends BaseProvider {
     if (options.temperature !== undefined) {
       body.temperature = options.temperature;
     }
-
     if (options.maxTokens !== undefined) {
       body.max_tokens = options.maxTokens;
     }
 
+    if (
+      options.prompt.toLowerCase().includes('json') ||
+      options.prompt.toLowerCase().includes('schema')
+    ) {
+      body.response_format = { type: 'json_object' };
+    }
     const timeoutMs = options.timeoutMs ?? 30000;
 
     let response: Response;
