@@ -59,6 +59,12 @@ export interface PlannedQuery {
   explanation: string;
   budget: number;
   depth: number;
+  /** Deterministic 0-100 company priority used by the Budget Allocation Engine (0 = unknown). */
+  expectedCompanyPriority?: number;
+  /** Deterministic 0-100 city priority used by the Budget Allocation Engine (0 = unknown). */
+  expectedCityPriority?: number;
+  /** Deterministic 0-100 budget rank assigned by the Budget Allocation Engine (0 = unfunded). */
+  budgetRank?: number;
 }
 
 export interface PlanMeta {
@@ -100,6 +106,11 @@ export interface PrioritizedSearchPlan extends QueryPlannerResponse {
    * Merged with mission/search queries before crawling. Deterministic.
    */
   companyDerivedUrls?: CompanyDerivedUrl[];
+  /**
+   * Deterministic budget allocation + utilization report produced by the Budget
+   * Allocation Engine. Describes how the crawl/search budget was spent.
+   */
+  budgetReport?: import('../budget/budget.types').BudgetUtilizationReport;
 }
 
 /**

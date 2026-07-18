@@ -1,6 +1,6 @@
 import { PlannedQuery } from '../types/query.types';
 
-const KNOWN_ATS = new Set([
+export const KNOWN_ATS = new Set([
   'Greenhouse',
   'Lever',
   'Ashby',
@@ -11,7 +11,7 @@ const KNOWN_ATS = new Set([
   'Rippling',
 ]);
 
-const KNOWN_COMPANIES = new Set([
+export const KNOWN_COMPANIES = new Set([
   'Google',
   'Microsoft',
   'Amazon',
@@ -44,7 +44,7 @@ const KNOWN_COMPANIES = new Set([
   'Hotstar',
 ]);
 
-const KNOWN_ECOSYSTEMS = new Set([
+export const KNOWN_ECOSYSTEMS = new Set([
   'Y Combinator',
   'Techstars',
   'Antler',
@@ -65,7 +65,7 @@ const KNOWN_ECOSYSTEMS = new Set([
   'Surge',
 ]);
 
-const HIGH_PRIORITY_CITIES = new Set([
+export const HIGH_PRIORITY_CITIES = new Set([
   'bengaluru',
   'bangalore',
   'hyderabad',
@@ -74,7 +74,7 @@ const HIGH_PRIORITY_CITIES = new Set([
   'gurgaon',
 ]);
 
-const MEDIUM_PRIORITY_CITIES = new Set([
+export const MEDIUM_PRIORITY_CITIES = new Set([
   'noida',
   'chennai',
   'mumbai',

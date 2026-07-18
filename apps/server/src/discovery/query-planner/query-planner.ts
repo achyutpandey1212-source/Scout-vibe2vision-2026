@@ -17,6 +17,19 @@ import { QueryDeduplicator } from './query-deduplicator';
 import { DiversityValidator, DiversityReport } from './diversity-validator';
 import { PriorityScorer } from './priority-scorer';
 import { companyDiscoveryEngine } from '../company-discovery';
+import { runBudgetEngine } from '../budget/budget-engine';
+import {
+  buildUtilizationReport,
+  renderUtilizationReport,
+  renderBudgetQueue,
+} from '../budget/budget-report';
+import { OpportunityYield } from '../ecosystem-intelligence/ecosystem.types';
+import {
+  KNOWN_COMPANIES,
+  KNOWN_ECOSYSTEMS,
+  HIGH_PRIORITY_CITIES,
+  MEDIUM_PRIORITY_CITIES,
+} from './priority-scorer';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -95,6 +108,49 @@ function enforceBudget(
   }
 
   return accepted;
+}
+
+function companyPriorityFor(queryLower: string): number {
+  const known = [...KNOWN_COMPANIES].find((c) => queryLower.includes(c.toLowerCase()));
+  if (known) return 95;
+  return 0;
+}
+
+function cityPriorityFor(queryLower: string): number {
+  if (
+    HIGH_PRIORITY_CITIES.has(queryLower) ||
+    [...HIGH_PRIORITY_CITIES].some((c) => queryLower.includes(c))
+  ) {
+    return 90;
+  }
+  if (
+    MEDIUM_PRIORITY_CITIES.has(queryLower) ||
+    [...MEDIUM_PRIORITY_CITIES].some((c) => queryLower.includes(c))
+  ) {
+    return 60;
+  }
+  return 0;
+}
+
+/** Infer an ecosystem opportunity yield from a planned query's expected ecosystem. */
+function inferEcosystemYield(query: PlannedQuery): OpportunityYield {
+  const eco = query.expectedEcosystem;
+  if (!eco) return 'MEDIUM';
+  const known = [...KNOWN_ECOSYSTEMS].find((e) => eco.toLowerCase().includes(e.toLowerCase()));
+  return known ? 'VERY_HIGH' : 'MEDIUM';
+}
+
+/** Attach deterministic company/city priority signals used by the Budget Engine. */
+function enrichBudgetSignals(queries: PlannedQuery[]): void {
+  for (const q of queries) {
+    const ql = q.query.toLowerCase();
+    if (q.expectedCompanyPriority === undefined) {
+      q.expectedCompanyPriority = companyPriorityFor(ql);
+    }
+    if (q.expectedCityPriority === undefined) {
+      q.expectedCityPriority = cityPriorityFor(ql);
+    }
+  }
 }
 
 function formatQueryLog(query: PlannedQuery, usedBudget: number, totalBudget: number): string {
@@ -336,6 +392,21 @@ export async function generateSearchQueries(
     .slice(0, limit)
     .sort((a, b) => b.priorityScore - a.priorityScore);
 
+  // ── Deterministic Budget Allocation Engine ──────────────────────────────
+  // Mission → Query Planner → Budget Allocation → Company Discovery → Search.
+  // The Budget Engine decides which planned queries survive the crawl budget by
+  // assigning each a deterministic budgetRank and funding the top queries per
+  // strategy. No LLM, no randomness. Fully configuration-driven.
+  enrichBudgetSignals(finalQueries);
+  const budgetResult = runBudgetEngine(mission, finalQueries, inferEcosystemYield);
+  const budgetRankById = new Map<string, number>();
+  for (const rq of budgetResult.ranked) {
+    budgetRankById.set(rq.query, rq.budgetRank);
+  }
+  for (const q of finalQueries) {
+    q.budgetRank = budgetRankById.get(q.query) ?? 0;
+  }
+
   const diversity = DiversityValidator.validate(finalQueries);
 
   const avgPriority =
@@ -447,6 +518,13 @@ export async function generateSearchQueries(
 
   const summary = formatPlannerSummary(plan, diversity);
   console.log(summary);
+
+  // ── Budget Allocation Engine report ──
+  const utilization = buildUtilizationReport(budgetResult, finalQueries.length);
+  console.log(renderUtilizationReport(utilization));
+  console.log(renderBudgetQueue(budgetResult));
+
+  plan.budgetReport = utilization;
 
   savePlannerOutput(plan, summary, diversity);
 
