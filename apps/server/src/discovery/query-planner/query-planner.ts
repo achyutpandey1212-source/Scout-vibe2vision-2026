@@ -16,6 +16,7 @@ import { DISCOVERY_CONFIG } from '../config/discovery.config';
 import { QueryDeduplicator } from './query-deduplicator';
 import { DiversityValidator, DiversityReport } from './diversity-validator';
 import { PriorityScorer } from './priority-scorer';
+import { companyDiscoveryEngine } from '../company-discovery';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -401,6 +402,33 @@ export async function generateSearchQueries(
     plannedQueries: finalQueries,
     meta,
   };
+
+  // ── Company Discovery Engine (deterministic, LLM-free) ──
+  // Mission → Planner → Company Discovery → Search Orchestrator → Crawler.
+  // Company-derived career/ATS/portfolio URLs are merged into the plan so they
+  // are crawled alongside mission queries. Nothing bypasses the planner.
+  try {
+    const companyResult = await companyDiscoveryEngine.discover(mission, {
+      includeCountries: context.country ? [context.country] : undefined,
+      detectAts: false,
+      verifyCareers: false,
+      verifyAts: false,
+    });
+    plan.companyDerivedUrls = companyResult.candidateUrls.map((u) => ({
+      url: u.url,
+      company: u.company,
+      type: u.type,
+      priority: u.priority,
+      ats: u.ats,
+      ecosystem: u.ecosystem,
+    }));
+
+    console.log(companyDiscoveryEngine.formatStatistics(companyResult.statistics));
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[Query Planner] Company Discovery failed:', message);
+    plan.companyDerivedUrls = [];
+  }
 
   console.log('\n=================================================');
   console.log('Mission Query Planner — Query Log');

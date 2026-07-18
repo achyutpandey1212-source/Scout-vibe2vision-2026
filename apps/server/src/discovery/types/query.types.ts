@@ -95,6 +95,24 @@ export interface PrioritizedSearchPlan extends QueryPlannerResponse {
   configuration: MissionConfiguration;
   plannedQueries: PlannedQuery[];
   meta: PlanMeta;
+  /**
+   * Company-derived crawl targets produced by the Company Discovery Engine.
+   * Merged with mission/search queries before crawling. Deterministic.
+   */
+  companyDerivedUrls?: CompanyDerivedUrl[];
+}
+
+/**
+ * A company-derived URL emitted by the Company Discovery Engine and merged into
+ * the crawl execution plan. Never bypasses the planner.
+ */
+export interface CompanyDerivedUrl {
+  url: string;
+  company: string;
+  type: 'CAREERS' | 'ATS' | 'PORTFOLIO';
+  priority: number;
+  ats?: string;
+  ecosystem?: string;
 }
 
 export interface DiscoveryContext {

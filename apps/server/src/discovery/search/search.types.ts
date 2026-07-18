@@ -14,14 +14,14 @@ export interface CandidateSearchResult {
   score: number;
   scoreBreakdown: ScoreBreakdown;
   retrievedAt: string;
-  source: 'tavily';
+  source: 'tavily' | 'company-discovery';
   searchRank: number;
   // Future extensibility slots
   metadata?: Record<string, any>;
 }
 
 export interface RejectedSearchResult extends Omit<CandidateSearchResult, 'source'> {
-  source: 'tavily';
+  source: 'tavily' | 'company-discovery';
   rejectionReason: string;
 }
 

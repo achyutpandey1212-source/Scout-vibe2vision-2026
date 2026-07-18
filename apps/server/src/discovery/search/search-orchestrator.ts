@@ -7,7 +7,7 @@ import {
   OrchestratorSearchResponse,
   ScoreBreakdown,
 } from './search.types';
-import { QueryPlannerResponse } from '../types/query.types';
+import { QueryPlannerResponse, CompanyDerivedUrl } from '../types/query.types';
 
 const JUNK_KEYWORDS = [
   '/login',
@@ -289,6 +289,12 @@ function calculateScore(
 
 /**
  * Search Orchestrator fetching candidate pages for given search queries.
+ *
+ * It merges three deterministic sources into a single execution plan:
+ *   1. Mission queries (generic job search)
+ *   2. Company-derived career URLs (Company Discovery Engine)
+ *   3. Company-derived ATS + portfolio URLs
+ * Nothing bypasses the planner.
  */
 export async function searchOpportunities(
   plannerResponse: QueryPlannerResponse,
@@ -307,6 +313,48 @@ export async function searchOpportunities(
 
   // Process queries in concurrency chunks
   const chunkLimit = DISCOVERY_CONFIG.CONCURRENCY_LIMIT;
+
+  // ── Merge Company Discovery Engine outputs into the execution plan ──
+  // Company-derived career/ATS/portfolio URLs are injected as accepted
+  // candidates (deterministic priority from the engine) so they are crawled
+  // before/with generic search results. Never bypasses the planner.
+  const companyDerived = (
+    plannerResponse as QueryPlannerResponse & {
+      companyDerivedUrls?: CompanyDerivedUrl[];
+    }
+  ).companyDerivedUrls;
+
+  let companyMerged = 0;
+  if (companyDerived && companyDerived.length > 0) {
+    for (const cd of companyDerived) {
+      const normalized = normalizeUrl(cd.url);
+      if (processedUrls.has(normalized)) continue;
+      processedUrls.add(normalized);
+      let domain = '';
+      try {
+        domain = new URL(cd.url).hostname;
+      } catch {
+        domain = cd.url;
+      }
+      accepted.push({
+        title: `${cd.type} — ${cd.company}`,
+        url: cd.url,
+        snippet: `Company-derived ${cd.type.toLowerCase()} target from ${cd.company}.`,
+        domain,
+        queryUsed: `company-discovery:${cd.type.toLowerCase()}`,
+        score: Math.min(100, Math.max(0, cd.priority)),
+        scoreBreakdown: { trust: 0, keyword: 0, freshness: 0, urlQuality: 0 },
+        retrievedAt: new Date().toISOString(),
+        source: 'company-discovery',
+        searchRank: 0,
+      });
+      companyMerged++;
+    }
+  }
+
+  if (companyMerged > 0) {
+    console.log(`\n[Search Orchestrator] Merged ${companyMerged} company-derived URLs.`);
+  }
 
   for (let i = 0; i < queries.length; i += chunkLimit) {
     const chunk = queries.slice(i, i + chunkLimit);
