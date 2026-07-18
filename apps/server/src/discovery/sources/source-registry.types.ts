@@ -119,8 +119,19 @@ export interface RegistryStats {
   inactiveSources: number;
 }
 
-export interface AIDomainEvaluation {
-  isOpportunitySource: boolean;
+/**
+ * Discriminated union for AI domain evaluations.
+ *
+ * Case A — isOpportunitySource: true
+ *   The domain is a legitimate opportunity source. All classification
+ *   fields are required.
+ *
+ * Case B — isOpportunitySource: false
+ *   The domain was classified as NOT an opportunity source. Only the
+ *   rejection metadata is required; classification fields are omitted.
+ */
+export interface AIDomainEvaluationOpportunity {
+  isOpportunitySource: true;
   confidence: number;
   reason: string;
   suggestedSourceType: SourceType;
@@ -131,11 +142,41 @@ export interface AIDomainEvaluation {
   suggestedStrategy: CrawlStrategy;
 }
 
+export interface AIDomainEvaluationRejected {
+  isOpportunitySource: false;
+  confidence: number;
+  reason: string;
+  suggestedSourceType?: SourceType;
+  suggestedCategory?: SourceCategory;
+  suggestedTrustScore?: number;
+  suggestedPriority?: SourcePriority;
+  suggestedCrawlFrequency?: CrawlFrequency;
+  suggestedStrategy?: CrawlStrategy;
+}
+
+export type AIDomainEvaluation = AIDomainEvaluationOpportunity | AIDomainEvaluationRejected;
+
+/**
+ * Outcome of evaluating a single domain. Separates normal business decisions
+ * from genuine infrastructure/AI errors so downstream logging can pick the
+ * correct severity.
+ */
+export type DomainEvaluationOutcome =
+  | { kind: 'approved'; evaluation: AIDomainEvaluationOpportunity }
+  | { kind: 'rejected'; evaluation: AIDomainEvaluationRejected }
+  | { kind: 'duplicate' }
+  | { kind: 'invalid'; error: string }
+  | { kind: 'aiError'; error: string };
+
 export interface SourceDiscoveryReport {
   batchesRun: number;
   domainsEvaluated: number;
   domainsApproved: number;
   domainsRejected: number;
+  duplicateSources: number;
+  invalidResponses: number;
+  providerFailures: number;
   affiliateDomainsProcessed: number;
+  averageConfidence: number;
   durationMs: number;
 }

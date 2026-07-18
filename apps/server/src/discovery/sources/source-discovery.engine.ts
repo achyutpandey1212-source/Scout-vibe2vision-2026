@@ -4,10 +4,13 @@ import { sourceRegistryService } from './source-registry.service';
 import { AffiliateExtractor } from './affiliate-extractor';
 import { buildQueryGeneratorPrompt, buildDomainEvaluatorPrompt } from './source-discovery.prompt';
 import { generateStructuredResponse } from '../../ai/capabilities/structured-output';
-import { safeParseJson } from '../../ai/utils/parser';
+import { sanitizeAiOutput } from './ai-output-sanitizer';
 import {
   SourceDiscoveryReport,
   AIDomainEvaluation,
+  AIDomainEvaluationOpportunity,
+  AIDomainEvaluationRejected,
+  DomainEvaluationOutcome,
   SourceCategory,
   SourceType,
   SourcePriority,
@@ -21,7 +24,9 @@ import { ACTIVE_SOURCE_CATEGORIES } from '@scout/shared';
 const QueryListSchema = z.object({
   queries: z.array(z.string().min(1)),
 });
-const DomainEvaluationSchema = z.object({
+
+// Shared fields present in both union branches.
+const EvaluationBaseSchema = z.object({
   isOpportunitySource: z.boolean(),
   confidence: z.number().min(0).max(100),
   reason: z.string(),
@@ -39,6 +44,21 @@ const DomainEvaluationSchema = z.object({
       'Other',
     ])
     .optional(),
+});
+
+// Case A — isOpportunitySource: true → all classification fields required.
+const OpportunityEvaluationSchema = EvaluationBaseSchema.extend({
+  isOpportunitySource: z.literal(true),
+  suggestedCategory: z.enum(ACTIVE_SOURCE_CATEGORIES as [SourceCategory, ...SourceCategory[]]),
+  suggestedTrustScore: z.number().min(0).max(100),
+  suggestedPriority: z.enum(['critical', 'high', 'medium', 'low']),
+  suggestedCrawlFrequency: z.enum(['daily', 'weekly', 'monthly']),
+  suggestedStrategy: z.enum(['direct', 'search', 'sitemap', 'rss']),
+});
+
+// Case B — isOpportunitySource: false → classification fields omitted/optional.
+const RejectedEvaluationSchema = EvaluationBaseSchema.extend({
+  isOpportunitySource: z.literal(false),
   suggestedCategory: z
     .enum(ACTIVE_SOURCE_CATEGORIES as [SourceCategory, ...SourceCategory[]])
     .optional(),
@@ -47,6 +67,9 @@ const DomainEvaluationSchema = z.object({
   suggestedCrawlFrequency: z.enum(['daily', 'weekly', 'monthly']).optional(),
   suggestedStrategy: z.enum(['direct', 'search', 'sitemap', 'rss']).optional(),
 });
+
+// Discriminated union keyed on isOpportunitySource (Task 1).
+const DomainEvaluationSchema = z.union([OpportunityEvaluationSchema, RejectedEvaluationSchema]);
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 interface SourceDiscoveryConfig {
@@ -100,6 +123,10 @@ Batches: ${cfg.totalBatches} × ${cfg.batchSize} queries = ${totalQueries} total
     let domainsEvaluated = 0;
     let domainsApproved = 0;
     let domainsRejected = 0;
+    let duplicateSources = 0;
+    let invalidResponses = 0;
+    let providerFailures = 0;
+    const confidenceSamples: number[] = [];
 
     // ──────────────────────────────────────────────────────────────────────────
     // STEP 1: AI generates diverse search queries
@@ -179,21 +206,23 @@ Batches: ${cfg.totalBatches} × ${cfg.batchSize} queries = ${totalQueries} total
 
       for (const candidate of domainCandidates) {
         domainsEvaluated++;
-        const result = await this.evaluateDomain(
+        const outcome = await this.evaluateDomain(
           candidate.domain,
           candidate.organization,
           candidate.snippet,
         );
 
-        if (result && result.isOpportunitySource) {
+        if (outcome.kind === 'approved') {
+          const result = outcome.evaluation;
           domainsApproved++;
+          confidenceSamples.push(result.confidence);
           try {
             await sourceRegistryService.upsertSource({
               domain: candidate.domain,
               organization: candidate.organization,
               homepage: `https://${candidate.domain}`,
               sourceType: (result.suggestedSourceType || 'Other') as SourceType,
-              category: (result.suggestedCategory || 'INTERNSHIPS') as SourceCategory,
+              category: result.suggestedCategory as SourceCategory,
               strategy: (result.suggestedStrategy || 'direct') as CrawlStrategy,
               crawlFrequency: (result.suggestedCrawlFrequency || 'weekly') as CrawlFrequency,
               trustScore: result.suggestedTrustScore ?? 60,
@@ -215,10 +244,28 @@ Batches: ${cfg.totalBatches} × ${cfg.batchSize} queries = ${totalQueries} total
               `[Source Discovery Engine] Failed to upsert ${candidate.domain}: ${err.message}`,
             );
           }
-        } else {
+        } else if (outcome.kind === 'rejected') {
           domainsRejected++;
+          confidenceSamples.push(outcome.evaluation.confidence);
+          const { evaluation } = outcome;
           console.log(
-            `[Source Discovery Engine] ❌ Rejected: ${candidate.domain} — ${result?.reason || 'AI evaluation failed'}`,
+            `[Source Discovery] Rejected Source\n` +
+              `  Domain:    ${candidate.domain}\n` +
+              `  Reason:    ${evaluation.reason || 'Not an opportunity source.'}\n` +
+              `  Confidence: ${evaluation.confidence ?? 'N/A'}%`,
+          );
+        } else if (outcome.kind === 'duplicate') {
+          duplicateSources++;
+          console.log(`[Source Discovery] Skipped duplicate: ${candidate.domain}`);
+        } else if (outcome.kind === 'invalid') {
+          invalidResponses++;
+          console.warn(
+            `[Source Discovery] Invalid response for ${candidate.domain}: ${outcome.error}`,
+          );
+        } else {
+          providerFailures++;
+          console.error(
+            `[Source Discovery] Provider failure for ${candidate.domain}: ${outcome.error}`,
           );
         }
       }
@@ -239,21 +286,26 @@ Batches: ${cfg.totalBatches} × ${cfg.batchSize} queries = ${totalQueries} total
       for (const domain of affiliateDomains) {
         // Skip if already registered (race condition guard)
         const exists = await sourceRegistryService.domainExists(domain);
-        if (exists) continue;
+        if (exists) {
+          duplicateSources++;
+          continue;
+        }
 
         affiliateDomainsProcessed++;
         domainsEvaluated++;
 
-        const result = await this.evaluateDomain(domain, domain, '');
-        if (result && result.isOpportunitySource) {
+        const outcome = await this.evaluateDomain(domain, domain, '');
+        if (outcome.kind === 'approved') {
+          const result = outcome.evaluation;
           domainsApproved++;
+          confidenceSamples.push(result.confidence);
           try {
             await sourceRegistryService.upsertSource({
               domain,
               organization: domain,
               homepage: `https://${domain}`,
               sourceType: (result.suggestedSourceType || 'Other') as SourceType,
-              category: (result.suggestedCategory || 'INTERNSHIPS') as SourceCategory,
+              category: result.suggestedCategory as SourceCategory,
               strategy: (result.suggestedStrategy || 'direct') as CrawlStrategy,
               crawlFrequency: (result.suggestedCrawlFrequency || 'weekly') as CrawlFrequency,
               trustScore: result.suggestedTrustScore ?? 60,
@@ -275,34 +327,58 @@ Batches: ${cfg.totalBatches} × ${cfg.batchSize} queries = ${totalQueries} total
               `[Source Discovery Engine] Failed to upsert affiliate ${domain}: ${err.message}`,
             );
           }
-        } else {
+        } else if (outcome.kind === 'rejected') {
           domainsRejected++;
+          confidenceSamples.push(outcome.evaluation.confidence);
+          console.log(
+            `[Source Discovery] Rejected Source\n` +
+              `  Domain:    ${domain}\n` +
+              `  Reason:    ${outcome.evaluation.reason || 'Not an opportunity source.'}\n` +
+              `  Confidence: ${outcome.evaluation.confidence ?? 'N/A'}%`,
+          );
+        } else if (outcome.kind === 'invalid') {
+          invalidResponses++;
+          console.warn(
+            `[Source Discovery] Invalid response for affiliate ${domain}: ${outcome.error}`,
+          );
+        } else if (outcome.kind === 'aiError') {
+          providerFailures++;
+          console.error(
+            `[Source Discovery] Provider failure for affiliate ${domain}: ${outcome.error}`,
+          );
         }
       }
     }
 
     const durationMs = Date.now() - startTime;
-    const durationSec = (durationMs / 1000).toFixed(1);
+    const averageConfidence =
+      confidenceSamples.length > 0
+        ? Math.round(confidenceSamples.reduce((a, b) => a + b, 0) / confidenceSamples.length)
+        : 0;
 
     const report: SourceDiscoveryReport = {
       batchesRun: batches.length,
       domainsEvaluated,
       domainsApproved,
       domainsRejected,
+      duplicateSources,
+      invalidResponses,
+      providerFailures,
       affiliateDomainsProcessed,
+      averageConfidence,
       durationMs,
     };
 
     console.log(`
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[Source Discovery Engine] Run Complete
-Batches run:              ${report.batchesRun}
-Domains evaluated:        ${report.domainsEvaluated}
-Domains approved:         ${report.domainsApproved}
-Domains rejected:         ${report.domainsRejected}
-Affiliate domains:        ${report.affiliateDomainsProcessed}
-Duration:                 ${durationSec}s
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+========== Source Discovery Report ==========
+Domains Evaluated:    ${report.domainsEvaluated}
+Approved Sources:     ${report.domainsApproved}
+Rejected Sources:     ${report.domainsRejected}
+Duplicate Sources:    ${report.duplicateSources}
+Invalid Responses:    ${report.invalidResponses}
+Provider Failures:    ${report.providerFailures}
+Average Confidence:   ${report.averageConfidence}%
+=============================================`);
 
     return report;
   }
@@ -313,21 +389,37 @@ Duration:                 ${durationSec}s
     domain: string,
     organization: string,
     snippet: string,
-  ): Promise<AIDomainEvaluation | null> {
+  ): Promise<DomainEvaluationOutcome> {
     try {
-      const result = await generateStructuredResponse({
+      const result = (await generateStructuredResponse({
         prompt: buildDomainEvaluatorPrompt(domain, organization, snippet),
         schema: DomainEvaluationSchema,
         context: 'discovery',
         temperature: 0.1, // Low temperature for deterministic classification
         maxTokens: 512,
-      });
-      return result as AIDomainEvaluation;
+        sanitize: sanitizeAiOutput,
+      })) as AIDomainEvaluation;
+
+      if (result.isOpportunitySource) {
+        return { kind: 'approved', evaluation: result as AIDomainEvaluationOpportunity };
+      }
+      return { kind: 'rejected', evaluation: result as AIDomainEvaluationRejected };
     } catch (err: any) {
-      console.error(
-        `[Source Discovery Engine] Domain evaluation failed for ${domain}: ${err.message}`,
-      );
-      return null;
+      // Differentiate genuine AI/infrastructure errors from invalid responses
+      // so only real failures are logged at ERROR level (Tasks 2 & 4).
+      const isInfra =
+        err?.name === 'AISchemaValidationError'
+          ? false // malformed response after retries → invalid, not infra
+          : true; // network/timeout/provider errors → genuine infra failure
+
+      if (isInfra) {
+        console.error(
+          `[Source Discovery Engine] Provider failure evaluating ${domain}: ${err.message}`,
+        );
+        return { kind: 'aiError', error: err.message };
+      }
+      console.warn(`[Source Discovery] Invalid response for ${domain}: ${err.message}`);
+      return { kind: 'invalid', error: err.message };
     }
   }
 

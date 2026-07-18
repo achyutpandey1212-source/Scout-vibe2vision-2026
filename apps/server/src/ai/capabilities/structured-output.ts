@@ -12,6 +12,12 @@ export interface StructuredOutputOptions<T> {
   maxTokens?: number;
   systemInstruction?: string;
   timeoutMs?: number;
+  /**
+   * Optional deterministic pre-validation sanitizer. Receives the raw parsed
+   * JSON (post JSON.parse) and returns the normalized object handed to Zod.
+   * Used by the Source Discovery Engine to clean legacy/placeholder values.
+   */
+  sanitize?: (input: unknown) => unknown;
 }
 
 /**
@@ -52,15 +58,17 @@ export async function generateStructuredResponse<T>(
       // 1. Safely extract and parse JSON from the response text
       const parsedData = safeParseJson(lastResponseText);
 
+      // 1b. Run the deterministic sanitization/normalization layer (Task 6)
+      const sanitizedData = options.sanitize ? options.sanitize(parsedData) : parsedData;
+
       // 2. Validate against Zod schema
-      const validationResult = options.schema.safeParse(parsedData);
+      const validationResult = options.schema.safeParse(sanitizedData);
 
       if (validationResult.success) {
         return validationResult.data;
       }
 
       // 3. If validation failed, throw validation error to trigger auto-healing
-      const errorMsg = JSON.stringify(validationResult.error.format());
       throw new AISchemaValidationError(
         `Zod validation failed: ${validationResult.error.message}`,
         validationResult.error.format(),
@@ -70,16 +78,23 @@ export async function generateStructuredResponse<T>(
       console.warn(
         `[AI Layer] Schema validation failed on attempt ${attempts}/${maxSchemaAttempts}. Error: ${parseOrValidationError.message}`,
       );
+      console.warn(`[AI Layer] Raw output (first 500 chars): ${lastResponseText.slice(0, 500)}`);
 
       if (attempts >= maxSchemaAttempts) {
         throw parseOrValidationError; // Re-throw if out of attempts
       }
 
-      // Suffix prompt with the error details for the next retry attempt
+      // Suffix prompt with a lightweight repair instruction for the next retry
+      // (Task 5) — this usually fixes malformed responses on the second attempt.
+      const repairInstruction =
+        `\n\nYour previous response failed schema validation. ` +
+        `Return ONLY valid JSON matching the schema. Do not include explanations. ` +
+        `Do not invent placeholder enum values.`;
+
       const schemaFeedback =
         parseOrValidationError instanceof AISchemaValidationError
-          ? `\n\nERROR: The previous response failed Zod validation with the following error schema:\n${JSON.stringify(parseOrValidationError.schemaErrors)}\n\nPlease correct the errors and output the valid JSON conforming strictly to the schema.`
-          : `\n\nERROR: The previous response was not valid JSON: ${parseOrValidationError.message}. Please return only the corrected valid JSON object structure.`;
+          ? `${repairInstruction}\n\nValidation errors:\n${JSON.stringify(parseOrValidationError.schemaErrors)}`
+          : `${repairInstruction}\n\nThe previous response was not valid JSON: ${parseOrValidationError.message}.`;
 
       currentPrompt = options.prompt + formatInstructions + schemaFeedback;
     }

@@ -87,7 +87,7 @@ export class ProviderKeyPool {
     if (envValue) {
       this.keys = envValue
         .split(',')
-        .map((k) => k.trim())
+        .map((k) => k.trim().replace(/^["']|["']$/g, ''))
         .filter(Boolean);
     }
 

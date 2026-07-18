@@ -67,16 +67,28 @@ If approved, also classify:
 - crawlFrequency: daily (new listings very frequently) | weekly (listings update weekly) | monthly (updates monthly or less)
 - strategy: direct (homepage has listings directly) | search (site search needed) | sitemap (sitemap available) | rss (RSS feed available)
 
-Respond ONLY with a valid JSON object — no explanation, no preamble:
+Respond ONLY with a valid JSON object — no explanation, no preamble.
+
+If the domain IS an opportunity source (isOpportunitySource: true), include ALL classification fields:
 {
-  "isOpportunitySource": boolean,
-  "confidence": 0-100,
-  "reason": "one concise sentence",
-  "suggestedSourceType": "...",
-  "suggestedCategory": "...",
-  "suggestedTrustScore": 0-100,
-  "suggestedPriority": "...",
-  "suggestedCrawlFrequency": "...",
-  "suggestedStrategy": "..."
-}`;
+  "isOpportunitySource": true,
+  "confidence": 85,
+  "reason": "CSIR CBRI is a research organization that publishes opportunities for engineering students.",
+  "suggestedSourceType": "Government",
+  "suggestedCategory": "RESEARCH_INTERNSHIP",
+  "suggestedTrustScore": 90,
+  "suggestedPriority": "medium",
+  "suggestedCrawlFrequency": "monthly",
+  "suggestedStrategy": "search"
+}
+
+If the domain is NOT an opportunity source (isOpportunitySource: false), return ONLY the rejection fields — do NOT include suggestedCategory, suggestedTrustScore, suggestedPriority, suggestedCrawlFrequency or suggestedStrategy:
+{
+  "isOpportunitySource": false,
+  "confidence": 95,
+  "reason": "Surveymonkey is a survey tool, not an opportunity source.",
+  "suggestedSourceType": "Platform"
+}
+
+Never use placeholder values such as NONE, none, null, "never", or empty strings for any field. Omit fields rather than sending placeholders.`;
 }

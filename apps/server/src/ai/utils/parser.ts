@@ -3,12 +3,10 @@ export function safeParseJson<T = any>(text: string): T {
 
   // Strip Markdown JSON code block wrappers if present
   if (cleaned.includes('```')) {
-    // Try regex matching to extract content from markdown fences
     const match = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
     if (match && match[1]) {
       cleaned = match[1].trim();
     } else {
-      // Manual strip fallback
       cleaned = cleaned.replace(/^```(?:json)?\n?/i, '');
       cleaned = cleaned.replace(/\n?```$/i, '');
     }
@@ -22,27 +20,86 @@ export function safeParseJson<T = any>(text: string): T {
       .trim();
   }
 
+  // Replace backticks used as quotes for keys/values
+  cleaned = cleaned.replace(/`([^`\n]+)`/g, '"$1"');
+
+  // Convert single quotes around keys/values to double quotes
+  cleaned = cleaned.replace(/'([a-zA-Z0-9_]+)'\s*:/g, '"$1":');
+  cleaned = cleaned.replace(/:\s*'([^'\\]*(?:\\.[^'\\]*)*)'/g, ': "$1"');
+  cleaned = cleaned.replace(/\[\s*'([^'\\]*(?:\\.[^'\\]*)*)'/g, '["$1"');
+  cleaned = cleaned.replace(/,\s*'([^'\\]*(?:\\.[^'\\]*)*)'/g, ', "$1"');
+
   cleaned = cleaned.trim();
 
-  // If it still doesn't look like JSON, try locating the first '{' or '[' and last matching brace/bracket
-  if (!cleaned.startsWith('{') && !cleaned.startsWith('[')) {
-    const firstBrace = cleaned.indexOf('{');
-    const firstBracket = cleaned.indexOf('[');
-    let startIdx = -1;
-    let endIdx = -1;
+  // Extract the first complete JSON structure from the text.
+  // This handles cases where the model outputs preamble/postscript around the JSON,
+  // or where JSON.parse would fail due to trailing garbage.
+  const extracted = extractFirstJsonStructure(cleaned);
+  if (extracted !== null) {
+    cleaned = extracted;
+  } else if (!cleaned.startsWith('{') && !cleaned.startsWith('[') && cleaned.includes(':')) {
+    cleaned = '{' + cleaned + '}';
+  }
 
-    if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
-      startIdx = firstBrace;
-      endIdx = cleaned.lastIndexOf('}');
-    } else if (firstBracket !== -1) {
-      startIdx = firstBracket;
-      endIdx = cleaned.lastIndexOf(']');
-    }
+  // Quote unquoted property names (e.g. {key: "value"} → {"key": "value"})
+  cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":');
 
-    if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-      cleaned = cleaned.substring(startIdx, endIdx + 1);
+  // Quote unquoted string values (e.g. "reason": CSIR CBRI. → "reason": "CSIR CBRI.")
+  cleaned = cleaned.replace(/:\s*(true|false|null|[a-zA-Z_][a-zA-Z0-9_\s.]*)/g, (match, value) => {
+    if (value === 'true' || value === 'false' || value === 'null') return match;
+    if (value.startsWith('"') || value.startsWith("'")) return match;
+    return ': "' + value + '"';
+  });
+
+  // Remove trailing commas in JSON object/array structures (invalid in strict JSON)
+  cleaned = cleaned.replace(/,\s*([}\]])/g, '$1');
+
+  return JSON.parse(cleaned) as T;
+}
+
+function extractFirstJsonStructure(text: string): string | null {
+  const openers = ['{', '['];
+  const closers: Record<string, string> = { '{': '}', '[': ']' };
+
+  for (let i = 0; i < text.length; i++) {
+    if (!openers.includes(text[i])) continue;
+
+    const opener = text[i];
+    const closer = closers[opener];
+    let depth = 1;
+    let inString = false;
+    let escapeNext = false;
+
+    for (let j = i + 1; j < text.length; j++) {
+      const char = text[j];
+
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+
+      if (char === '\\' && inString) {
+        escapeNext = true;
+        continue;
+      }
+
+      if (char === '"' && !escapeNext) {
+        inString = !inString;
+        continue;
+      }
+
+      if (inString) continue;
+
+      if (char === opener) {
+        depth++;
+      } else if (char === closer) {
+        depth--;
+        if (depth === 0) {
+          return text.substring(i, j + 1);
+        }
+      }
     }
   }
 
-  return JSON.parse(cleaned) as T;
+  return null;
 }
