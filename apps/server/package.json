@@ -14,7 +14,8 @@
     "company:health": "ts-node-dev -r tsconfig-paths/register --transpile-only scripts/company-health.ts",
     "ecosystem:health": "ts-node-dev -r tsconfig-paths/register --transpile-only scripts/ecosystem-health.ts",
     "ecosystem:test": "ts-node-dev -r tsconfig-paths/register --transpile-only scripts/ecosystem-test.ts",
-    "budget:health": "ts-node-dev -r tsconfig-paths/register --transpile-only scripts/budget-health.ts"
+    "budget:health": "ts-node-dev -r tsconfig-paths/register --transpile-only scripts/budget-health.ts",
+    "mission:health": "ts-node-dev -r tsconfig-paths/register --transpile-only scripts/mission-health.ts"
   },
   "dependencies": {
     "@langchain/core": "^1.2.2",

@@ -15,3 +15,4 @@ export { opportunityRouter } from './routes/opportunity.routes';
 export * from './company-discovery';
 import * as EcosystemIntelligence from './ecosystem-intelligence';
 export { EcosystemIntelligence };
+export * from './mission-pipeline';
