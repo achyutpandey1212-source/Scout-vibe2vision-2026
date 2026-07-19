@@ -22,7 +22,35 @@ export class RecommendationRepository {
     packId: string,
     updateData: Partial<IRecommendationPack>,
   ): Promise<IRecommendationPack | null> {
-    return RecommendationPackModel.findByIdAndUpdate(packId, { $set: updateData }, { new: true })
+    const pack = await RecommendationPackModel.findById(packId);
+    if (!pack) return null;
+
+    if (updateData.status) pack.status = updateData.status;
+    if (updateData.progressPhase) pack.progressPhase = updateData.progressPhase;
+    if (updateData.todayMission) pack.todayMission = updateData.todayMission;
+    if (updateData.aiSummary) pack.aiSummary = updateData.aiSummary;
+
+    if (updateData.perfectMatch !== undefined) pack.perfectMatch = updateData.perfectMatch;
+    if (updateData.hiddenGem !== undefined) pack.hiddenGem = updateData.hiddenGem;
+    if (updateData.stretchGoal !== undefined) pack.stretchGoal = updateData.stretchGoal;
+    if (updateData.quickWin !== undefined) pack.quickWin = updateData.quickWin;
+    if (updateData.confidenceBuilder !== undefined)
+      pack.confidenceBuilder = updateData.confidenceBuilder;
+
+    if (updateData.metadata) {
+      pack.metadata = {
+        ...pack.metadata,
+        ...updateData.metadata,
+      };
+    }
+    if (updateData.expiresAt) pack.expiresAt = updateData.expiresAt;
+    if (updateData.generatedAt) pack.generatedAt = updateData.generatedAt;
+    if (updateData.profileHash) pack.profileHash = updateData.profileHash;
+    if (updateData.generationReason) pack.generationReason = updateData.generationReason;
+
+    await pack.save();
+
+    return RecommendationPackModel.findById(packId)
       .populate('perfectMatch.opportunityId')
       .populate('hiddenGem.opportunityId')
       .populate('stretchGoal.opportunityId')
