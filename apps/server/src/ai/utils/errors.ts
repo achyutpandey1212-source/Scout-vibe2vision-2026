@@ -47,3 +47,21 @@ export class AISchemaValidationError extends ScoutAIError {
     });
   }
 }
+
+export class AIIncompleteGenerationError extends ScoutAIError {
+  constructor(
+    message: string,
+    public readonly rawOutput: string,
+  ) {
+    super(`Incomplete AI Generation: ${message}`, { rawOutput });
+  }
+}
+
+export class AIParserError extends ScoutAIError {
+  constructor(
+    message: string,
+    public readonly rawOutput: string,
+  ) {
+    super(`AI JSON Parser Failure: ${message}`, { rawOutput });
+  }
+}

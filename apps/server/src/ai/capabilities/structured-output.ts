@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import { AIGateway } from '../gateway/ai.gateway';
 import { safeParseJson } from '../utils/parser';
-import { AISchemaValidationError } from '../utils/errors';
+import {
+  AISchemaValidationError,
+  AIIncompleteGenerationError,
+  AIParserError,
+} from '../utils/errors';
 import { AIWorkflowContext } from '../types/ai.types';
 
 export interface StructuredOutputOptions<T> {
@@ -25,6 +29,52 @@ export interface StructuredOutputOptions<T> {
  * Automatically parses text responses, validates schemas, and performs
  * self-healing retries with descriptive feedback if validation fails.
  */
+function isResponseJsonComplete(text: string): boolean {
+  const cleaned = text.trim();
+  if (cleaned.length < 15) {
+    return false;
+  }
+
+  const hasBraces = cleaned.includes('{') || cleaned.includes('[');
+  if (!hasBraces) {
+    return false;
+  }
+
+  const hasOpenCurly = cleaned.includes('{');
+  const hasCloseCurly = cleaned.includes('}');
+  const hasOpenBracket = cleaned.includes('[');
+  const hasCloseBracket = cleaned.includes(']');
+
+  if (hasOpenCurly && !hasCloseCurly) return false;
+  if (hasOpenBracket && !hasCloseBracket) return false;
+
+  const lastChar = cleaned[cleaned.length - 1];
+  if ([':', ',', '{', '['].includes(lastChar)) {
+    return false;
+  }
+
+  let quoteCount = 0;
+  let inEscape = false;
+  for (let i = 0; i < cleaned.length; i++) {
+    if (inEscape) {
+      inEscape = false;
+      continue;
+    }
+    if (cleaned[i] === '\\') {
+      inEscape = true;
+      continue;
+    }
+    if (cleaned[i] === '"') {
+      quoteCount++;
+    }
+  }
+  if (quoteCount % 2 !== 0) {
+    return false;
+  }
+
+  return true;
+}
+
 export async function generateStructuredResponse<T>(
   options: StructuredOutputOptions<T>,
 ): Promise<T> {
@@ -33,7 +83,7 @@ export async function generateStructuredResponse<T>(
   let attempts = 0;
   let currentPrompt = options.prompt;
   let lastResponseText = '';
-  const attemptLogs: { attempt: number; reason: string } = [] as any;
+  const attemptLogs: { attempt: number; type: string; reason: string; recovery: string }[] = [];
 
   const formatInstructions = `\n\nIMPORTANT: You must respond ONLY with a valid JSON object matching the expected schema. Do not include any chat preamble, postscript, or explanations. Just pure JSON.`;
 
@@ -50,17 +100,30 @@ export async function generateStructuredResponse<T>(
       temperature: options.temperature ?? 0.1, // Structured response favors low temperature
       maxTokens: options.maxTokens,
       systemInstruction: options.systemInstruction,
-      timeoutMs: options.timeoutMs,
-      responseMimeType: 'application/json', // Enable native JSON generation (Task 4)
+      timeoutMs: options.timeoutMs ?? 15000, // Faster timeout default (Task 4)
+      responseMimeType: 'application/json', // Enable native JSON generation (Task 6)
     });
 
     lastResponseText = response.text;
 
     try {
-      // 1. Safely extract and parse JSON from the response text
-      const parsedData = safeParseJson(lastResponseText);
+      // Early Response Sanity Check (Task 2)
+      if (!isResponseJsonComplete(lastResponseText)) {
+        throw new AIIncompleteGenerationError(
+          'Incomplete JSON response detected early during sanity check.',
+          lastResponseText,
+        );
+      }
 
-      // 1b. Run the deterministic sanitization/normalization layer (Task 6)
+      // 1. Safely extract and parse JSON from the response text
+      let parsedData: any;
+      try {
+        parsedData = safeParseJson(lastResponseText);
+      } catch (parseErr: any) {
+        throw new AIParserError(`JSON parsing failed: ${parseErr.message}`, lastResponseText);
+      }
+
+      // 1b. Run the deterministic sanitization/normalization layer
       const sanitizedData = options.sanitize ? options.sanitize(parsedData) : parsedData;
 
       // 2. Validate against Zod schema
@@ -72,7 +135,14 @@ export async function generateStructuredResponse<T>(
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 AI Validation Recovered
 
-${(attemptLogs as any).map((al: any) => `Attempt ${al.attempt}\nReason:\n${al.reason}`).join('\n\n')}
+${attemptLogs
+  .map(
+    (al: any) => `Attempt ${al.attempt}
+  Failure Type:    ${al.type}
+  Reason:          ${al.reason}
+  Recovery Action: ${al.recovery}`,
+  )
+  .join('\n\n')}
 
 Final Result:
 SUCCESS on attempt ${attempts}
@@ -88,9 +158,34 @@ SUCCESS on attempt ${attempts}
         lastResponseText,
       );
     } catch (parseOrValidationError: any) {
-      (attemptLogs as any).push({
+      let failureType = 'Parser';
+      let recoveryAction = 'Repair';
+
+      if (parseOrValidationError instanceof AIIncompleteGenerationError) {
+        failureType = 'Incomplete JSON';
+        recoveryAction = 'Retry';
+      } else if (parseOrValidationError instanceof AISchemaValidationError) {
+        failureType = 'Schema Alias';
+        recoveryAction = 'Retry';
+      } else if (parseOrValidationError instanceof AIParserError) {
+        failureType = 'Parser';
+        recoveryAction = 'Repair';
+      } else if (
+        parseOrValidationError.name === 'AIRateLimitError' ||
+        parseOrValidationError.status === 429
+      ) {
+        failureType = '429 (Rate Limit)';
+        recoveryAction = 'Rotated Key';
+      } else if (parseOrValidationError.name === 'AITimeoutError') {
+        failureType = 'Timeout';
+        recoveryAction = 'Fallback';
+      }
+
+      attemptLogs.push({
         attempt: attempts,
+        type: failureType,
         reason: parseOrValidationError.message,
+        recovery: recoveryAction,
       });
 
       if (attempts >= maxSchemaAttempts) {
@@ -98,7 +193,14 @@ SUCCESS on attempt ${attempts}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 AI Validation Failed
 
-${(attemptLogs as any).map((al: any) => `Attempt ${al.attempt}\nReason:\n${al.reason}`).join('\n\n')}
+${attemptLogs
+  .map(
+    (al: any) => `Attempt ${al.attempt}
+  Failure Type:    ${al.type}
+  Reason:          ${al.reason}
+  Recovery Action: ${al.recovery}`,
+  )
+  .join('\n\n')}
 
 Final Result:
 FAILED
@@ -113,7 +215,6 @@ FAILED
       }
 
       // Suffix prompt with a lightweight repair instruction for the next retry
-      // (Task 5) — this usually fixes malformed responses on the second attempt.
       const repairInstruction =
         `\n\nYour previous response failed schema validation. ` +
         `Return ONLY valid JSON matching the schema. Do not include explanations. ` +

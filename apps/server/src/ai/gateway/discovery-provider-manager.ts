@@ -102,8 +102,8 @@ export class DiscoveryProviderManager {
             return await activeProvider.generate(options, activeKey, activeState.model);
           },
           {
-            retries: 2,
-            minTimeoutMs: 1500,
+            retries: 1,
+            minTimeoutMs: 1000,
             shouldRetry: (error) => {
               // Only retry on transient errors
               const msg = error.message.toLowerCase();

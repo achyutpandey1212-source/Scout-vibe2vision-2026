@@ -88,34 +88,42 @@ export function sanitizeAiOutput(input: unknown): any {
   const result: Record<string, any> = {};
 
   for (const [key, rawValue] of Object.entries(parsed)) {
+    let targetKey = key;
+    if (key === 'category') targetKey = 'suggestedCategory';
+    else if (key === 'trustScore') targetKey = 'suggestedTrustScore';
+    else if (key === 'priority') targetKey = 'suggestedPriority';
+    else if (key === 'crawlFrequency') targetKey = 'suggestedCrawlFrequency';
+    else if (key === 'strategy') targetKey = 'suggestedStrategy';
+
     let value = rawValue;
 
     if (typeof value === 'string') {
       value = value.trim();
       if (value === '') {
-        result[key] = undefined;
+        result[targetKey] = undefined;
         continue;
       }
       // Normalize enum-cased fields where applicable
-      if (key === 'suggestedPriority') value = normalizeEnum(value, PRIORITY_VALUES) ?? value;
-      else if (key === 'suggestedCrawlFrequency')
+      if (targetKey === 'suggestedPriority') value = normalizeEnum(value, PRIORITY_VALUES) ?? value;
+      else if (targetKey === 'suggestedCrawlFrequency')
         value = normalizeEnum(value, FREQUENCY_VALUES) ?? value;
-      else if (key === 'suggestedStrategy') value = normalizeEnum(value, STRATEGY_VALUES) ?? value;
+      else if (targetKey === 'suggestedStrategy')
+        value = normalizeEnum(value, STRATEGY_VALUES) ?? value;
     }
 
     // Placeholder normalization → undefined
     if (isPlaceholder(value)) {
-      result[key] = undefined;
+      result[targetKey] = undefined;
       continue;
     }
 
     // "never" specifically → monthly (valid enum) unless field is not required
     if (typeof value === 'string' && value.trim().toLowerCase() === 'never') {
-      result[key] = key === 'suggestedCrawlFrequency' ? 'monthly' : undefined;
+      result[targetKey] = targetKey === 'suggestedCrawlFrequency' ? 'monthly' : undefined;
       continue;
     }
 
-    result[key] = value;
+    result[targetKey] = value;
   }
 
   return result;
