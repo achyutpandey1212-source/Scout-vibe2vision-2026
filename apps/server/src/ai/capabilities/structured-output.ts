@@ -6,6 +6,7 @@ import {
   AIIncompleteGenerationError,
   AIParserError,
 } from '../utils/errors';
+import { DiscoveryProviderManager } from '../gateway/discovery-provider-manager';
 import { AIWorkflowContext } from '../types/ai.types';
 
 export interface StructuredOutputOptions<T> {
@@ -57,8 +58,11 @@ function isResponseJsonComplete(text: string): boolean {
   let inEscape = false;
   for (let i = 0; i < cleaned.length; i++) {
     if (inEscape) {
-      inEscape = false;
+      DiscoveryProviderManager.getInstance().metrics.parserRecoveries++;
       continue;
+      console.warn(
+        `[Structured Output] Unable to record parser recovery metric: ${(metricErr as Error).message}`,
+      );
     }
     if (cleaned[i] === '\\') {
       inEscape = true;
@@ -131,6 +135,13 @@ export async function generateStructuredResponse<T>(
 
       if (validationResult.success) {
         if (attempts > 1) {
+          try {
+            DiscoveryProviderManager.getInstance().metrics.parserRecoveries++;
+          } catch (metricErr) {
+            console.warn(
+              `[Structured Output] Unable to record parser recovery metric: ${(metricErr as Error).message}`,
+            );
+          }
           console.log(`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 AI Validation Recovered

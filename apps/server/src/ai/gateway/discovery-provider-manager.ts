@@ -19,6 +19,23 @@ export class DiscoveryProviderManager {
   private groqProvider: GroqProvider;
   private providerPool: ProviderState[] = [];
   private activeProviderIdx = 0;
+  private geminiBlockedUntil = 0;
+
+  public metrics = {
+    geminiCalls: 0,
+    groqCalls: 0,
+    fallbacks: 0,
+    parserRecoveries: 0,
+  };
+
+  public resetMetrics(): void {
+    this.metrics = {
+      geminiCalls: 0,
+      groqCalls: 0,
+      fallbacks: 0,
+      parserRecoveries: 0,
+    };
+  }
 
   private constructor() {
     this.geminiProvider = new GeminiProvider();
@@ -85,7 +102,19 @@ export class DiscoveryProviderManager {
     );
 
     while (attempts < maxProviderRotations) {
-      const activeState = this.providerPool[this.activeProviderIdx];
+      let activeState = this.providerPool[this.activeProviderIdx];
+
+      // Circuit Breaker check (Task 2)
+      if (activeState.provider === 'gemini' && Date.now() < this.geminiBlockedUntil) {
+        console.warn(
+          `[Circuit Breaker] Gemini is temporarily marked unavailable. Routing directly to Groq.`,
+        );
+        const groqIdx = this.providerPool.findIndex((p) => p.provider === 'groq');
+        if (groqIdx !== -1) {
+          activeState = this.providerPool[groqIdx];
+        }
+      }
+
       const pool = ProviderPoolFactory.discovery(activeState.provider);
       const activeKey = pool.getCurrentKey();
       const activeProvider =
@@ -95,6 +124,13 @@ export class DiscoveryProviderManager {
         `[Discovery Provider Manager] Using ${activeState.provider.toUpperCase()} ` +
           `(Model: ${activeState.model}, Key index: ${pool.getTelemetry().activeIndex})`,
       );
+
+      // Increment metrics (Task 5)
+      if (activeState.provider === 'gemini') {
+        this.metrics.geminiCalls++;
+      } else {
+        this.metrics.groqCalls++;
+      }
 
       try {
         const response = await retryWithBackoff(
@@ -149,6 +185,12 @@ export class DiscoveryProviderManager {
           console.warn(
             `[Discovery Provider Manager] Permanent failure on ${activeState.provider}: ${err.message}`,
           );
+          if (activeState.provider === 'gemini') {
+            this.geminiBlockedUntil = Date.now() + 5 * 60 * 1000; // Block Gemini for 5 minutes
+            console.warn(
+              `[Circuit Breaker] Gemini blocked for 5 minutes due to quota/auth issues.`,
+            );
+          }
           this.rotateKeyOrProvider(activeState);
         } else {
           console.warn(`[Discovery Provider Manager] Provider failed: ${err.message}. Rotating...`);
@@ -171,6 +213,7 @@ export class DiscoveryProviderManager {
     if (newIndex === 0 && oldIndex >= 0 && pool.getTelemetry().totalKeys > 1) {
       // All keys for this provider exhausted — rotate to next provider
       this.activeProviderIdx = (this.activeProviderIdx + 1) % this.providerPool.length;
+      this.metrics.fallbacks++; // Count fallbacks (Task 5)
       console.warn(
         `[Discovery Provider Manager] Exhausted keys for ${state.provider}. ` +
           `Switched to next provider: ${this.providerPool[this.activeProviderIdx].provider}`,

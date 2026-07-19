@@ -4,6 +4,7 @@ import { sourceRegistryService } from './source-registry.service';
 import { AffiliateExtractor } from './affiliate-extractor';
 import { buildQueryGeneratorPrompt, buildDomainEvaluatorPrompt } from './source-discovery.prompt';
 import { generateStructuredResponse } from '../../ai/capabilities/structured-output';
+import { DiscoveryProviderManager } from '../../ai/gateway/discovery-provider-manager';
 import { sanitizeAiOutput } from './ai-output-sanitizer';
 import {
   SourceDiscoveryReport,
@@ -111,6 +112,9 @@ export class SourceDiscoveryEngine {
     if (envBatches) cfg.totalBatches = Math.min(parseInt(envBatches, 10), 10);
     if (envBatchSize) cfg.batchSize = parseInt(envBatchSize, 10);
 
+    // Reset provider manager metrics at the start of a run (Task 5)
+    DiscoveryProviderManager.getInstance().resetMetrics();
+
     const totalQueries = cfg.totalBatches * cfg.batchSize;
     const startTime = Date.now();
 
@@ -127,6 +131,7 @@ Batches: ${cfg.totalBatches} × ${cfg.batchSize} queries = ${totalQueries} total
     let invalidResponses = 0;
     let providerFailures = 0;
     const confidenceSamples: number[] = [];
+    const seenInRun = new Set<string>();
 
     // ──────────────────────────────────────────────────────────────────────────
     // STEP 1: AI generates diverse search queries
@@ -205,6 +210,14 @@ Batches: ${cfg.totalBatches} × ${cfg.batchSize} queries = ${totalQueries} total
       );
 
       for (const candidate of domainCandidates) {
+        const normDomain = candidate.domain.toLowerCase().trim();
+        if (seenInRun.has(normDomain)) {
+          duplicateSources++;
+          console.log(`[Source Discovery] Skipped in-run duplicate: ${candidate.domain}`);
+          continue;
+        }
+        seenInRun.add(normDomain);
+
         domainsEvaluated++;
         const outcome = await this.evaluateDomain(
           candidate.domain,
@@ -291,6 +304,14 @@ Batches: ${cfg.totalBatches} × ${cfg.batchSize} queries = ${totalQueries} total
           continue;
         }
 
+        const normDomain = domain.toLowerCase().trim();
+        if (seenInRun.has(normDomain)) {
+          duplicateSources++;
+          console.log(`[Source Discovery] Skipped in-run duplicate affiliate: ${domain}`);
+          continue;
+        }
+        seenInRun.add(normDomain);
+
         affiliateDomainsProcessed++;
         domainsEvaluated++;
 
@@ -369,27 +390,154 @@ Batches: ${cfg.totalBatches} × ${cfg.batchSize} queries = ${totalQueries} total
       durationMs,
     };
 
+    const telemetry = DiscoveryProviderManager.getInstance().metrics;
+
     console.log(`
 ========== Source Discovery Report ==========
-Domains Evaluated:    ${report.domainsEvaluated}
-Approved Sources:     ${report.domainsApproved}
-Rejected Sources:     ${report.domainsRejected}
-Duplicate Sources:    ${report.duplicateSources}
-Invalid Responses:    ${report.invalidResponses}
-Provider Failures:    ${report.providerFailures}
-Average Confidence:   ${report.averageConfidence}%
-=============================================`);
+Queries Generated:      ${totalQueries}
+Domains Evaluated:      ${report.domainsEvaluated}
+Approved:               ${report.domainsApproved}
+Rejected:               ${report.domainsRejected}
+Skipped (Duplicate):    ${report.duplicateSources}
+Gemini Calls:           ${telemetry.geminiCalls}
+Groq Calls:             ${telemetry.groqCalls}
+Fallbacks:              ${telemetry.fallbacks}
+Parser Recoveries:      ${telemetry.parserRecoveries}
+Average Confidence:     ${report.averageConfidence}%
+Duration:               ${(report.durationMs / 1000).toFixed(1)}s
+===========================================`);
 
     return report;
   }
 
   // ─── AI Domain Evaluation ─────────────────────────────────────────────────
 
+  private getReputationOverride(domain: string): AIDomainEvaluationOpportunity | null {
+    const d = domain.toLowerCase().trim();
+    if (d === 'github.com') {
+      return {
+        isOpportunitySource: true,
+        confidence: 100,
+        reason: 'Deterministic reputation override for GitHub.',
+        suggestedSourceType: 'Platform',
+        suggestedCategory: 'OPEN_SOURCE_PROGRAM',
+        suggestedTrustScore: 90,
+        suggestedPriority: 'medium',
+        suggestedCrawlFrequency: 'weekly',
+        suggestedStrategy: 'search',
+      };
+    }
+    if (d === 'linkedin.com') {
+      return {
+        isOpportunitySource: true,
+        confidence: 100,
+        reason: 'Deterministic reputation override for LinkedIn.',
+        suggestedSourceType: 'Platform',
+        suggestedCategory: 'INTERNSHIPS',
+        suggestedTrustScore: 80,
+        suggestedPriority: 'medium',
+        suggestedCrawlFrequency: 'weekly',
+        suggestedStrategy: 'search',
+      };
+    }
+    if (d === 'indeed.com') {
+      return {
+        isOpportunitySource: true,
+        confidence: 100,
+        reason: 'Deterministic reputation override for Indeed.',
+        suggestedSourceType: 'Platform',
+        suggestedCategory: 'INTERNSHIPS',
+        suggestedTrustScore: 80,
+        suggestedPriority: 'medium',
+        suggestedCrawlFrequency: 'weekly',
+        suggestedStrategy: 'search',
+      };
+    }
+    if (d === 'hackerrank.com') {
+      return {
+        isOpportunitySource: true,
+        confidence: 100,
+        reason: 'Deterministic reputation override for HackerRank.',
+        suggestedSourceType: 'Platform',
+        suggestedCategory: 'HACKATHONS',
+        suggestedTrustScore: 90,
+        suggestedPriority: 'high',
+        suggestedCrawlFrequency: 'weekly',
+        suggestedStrategy: 'search',
+      };
+    }
+    if (d === 'devpost.com') {
+      return {
+        isOpportunitySource: true,
+        confidence: 100,
+        reason: 'Deterministic reputation override for Devpost.',
+        suggestedSourceType: 'Platform',
+        suggestedCategory: 'HACKATHONS',
+        suggestedTrustScore: 95,
+        suggestedPriority: 'high',
+        suggestedCrawlFrequency: 'weekly',
+        suggestedStrategy: 'search',
+      };
+    }
+    if (d === 'kaggle.com') {
+      return {
+        isOpportunitySource: true,
+        confidence: 100,
+        reason: 'Deterministic reputation override for Kaggle.',
+        suggestedSourceType: 'Platform',
+        suggestedCategory: 'STUDENT_COMPETITION',
+        suggestedTrustScore: 95,
+        suggestedPriority: 'medium',
+        suggestedCrawlFrequency: 'weekly',
+        suggestedStrategy: 'search',
+      };
+    }
+    if (d === 'careers.google.com' || d.includes('google.com/careers') || d === 'google.com') {
+      return {
+        isOpportunitySource: true,
+        confidence: 100,
+        reason: 'Deterministic reputation override for Google Careers.',
+        suggestedSourceType: 'Company',
+        suggestedCategory: 'INTERNSHIPS',
+        suggestedTrustScore: 98,
+        suggestedPriority: 'critical',
+        suggestedCrawlFrequency: 'weekly',
+        suggestedStrategy: 'search',
+      };
+    }
+    if (
+      d === 'careers.microsoft.com' ||
+      d.includes('microsoft.com/careers') ||
+      d === 'microsoft.com'
+    ) {
+      return {
+        isOpportunitySource: true,
+        confidence: 100,
+        reason: 'Deterministic reputation override for Microsoft Careers.',
+        suggestedSourceType: 'Company',
+        suggestedCategory: 'INTERNSHIPS',
+        suggestedTrustScore: 98,
+        suggestedPriority: 'critical',
+        suggestedCrawlFrequency: 'weekly',
+        suggestedStrategy: 'search',
+      };
+    }
+    return null;
+  }
+
   private async evaluateDomain(
     domain: string,
     organization: string,
     snippet: string,
   ): Promise<DomainEvaluationOutcome> {
+    const override = this.getReputationOverride(domain);
+    if (override) {
+      console.log(
+        `[Source Discovery Override] Applied reputation override for well-known domain: ${domain}`,
+      );
+      return { kind: 'approved', evaluation: override };
+    }
+
     try {
       const result = (await generateStructuredResponse({
         prompt: buildDomainEvaluatorPrompt(domain, organization, snippet),
@@ -401,12 +549,36 @@ Average Confidence:   ${report.averageConfidence}%
       })) as AIDomainEvaluation;
 
       if (result.isOpportunitySource) {
-        return { kind: 'approved', evaluation: result as AIDomainEvaluationOpportunity };
+        const type = result.suggestedSourceType || 'Other';
+        let threshold = 80; // Default threshold
+        const domainLower = domain.toLowerCase();
+
+        if (type === 'Government') threshold = 70;
+        else if (type === 'University') threshold = 75;
+        else if (domainLower.includes('medium.com')) threshold = 95;
+        else if (domainLower.includes('github.io')) threshold = 90;
+        else if (
+          domainLower.includes('blog') ||
+          domainLower.includes('wordpress') ||
+          domainLower.includes('blogspot')
+        )
+          threshold = 95;
+
+        if (result.confidence >= threshold) {
+          return { kind: 'approved', evaluation: result as AIDomainEvaluationOpportunity };
+        } else {
+          return {
+            kind: 'rejected',
+            evaluation: {
+              isOpportunitySource: false,
+              confidence: result.confidence,
+              reason: `Confidence score ${result.confidence}% is below adaptive threshold ${threshold}% for source type: ${type}`,
+            } as any,
+          };
+        }
       }
       return { kind: 'rejected', evaluation: result as AIDomainEvaluationRejected };
     } catch (err: any) {
-      // Differentiate genuine AI/infrastructure errors from invalid responses
-      // so only real failures are logged at ERROR level (Tasks 2 & 4).
       const isInfra =
         err?.name === 'AISchemaValidationError'
           ? false // malformed response after retries → invalid, not infra
