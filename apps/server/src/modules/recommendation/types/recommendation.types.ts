@@ -10,7 +10,9 @@ export type RecommendationGenerationReason =
   | 'MANUAL_REFRESH'
   | 'VERSION_CHANGED'
   | 'CACHE_EXPIRED'
-  | 'ADMIN_FORCE';
+  | 'ADMIN_FORCE'
+  | 'ADMIN_REGENERATE'
+  | 'ADMIN_DRY_RUN';
 
 export interface IRecommendationItem {
   opportunityId?: mongoose.Types.ObjectId;
