@@ -4,7 +4,7 @@ import cors, { CorsOptions } from 'cors';
 import { env, db, redis, firebase } from '@/config';
 import { authRouter } from './auth';
 import { profileRouter, profileV2Router } from './profile';
-import { recommendationRouter } from './intelligence/recommendation';
+import { recommendationRouter } from './modules/recommendation';
 import { opportunityRouter } from './discovery/routes/opportunity.routes';
 import { bookmarkRouter } from './auth/routes/bookmark.routes';
 import { sourceRegistryService } from './discovery/sources/source-registry.service';

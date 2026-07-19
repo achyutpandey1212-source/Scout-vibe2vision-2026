@@ -1,0 +1,10 @@
+export * from './types/recommendation.types';
+export * from './constants';
+export { recommendationRouter } from './routes/recommendation.routes';
+export { RecommendationService } from './service/recommendation.service';
+export { RecommendationRepository } from './repository/recommendation.repository';
+export { GenerateRecommendationsUseCase } from './use-cases/generate-recommendations.use-case';
+export { ProfileHashGenerator } from './hash/profile-hash.generator';
+export { CacheValidationService } from './cache/cache-validation.service';
+export { RecommendationTriggerService } from './triggers/recommendation-trigger.service';
+export { RecommendationPackModel } from './schemas/recommendation-pack.schema';
