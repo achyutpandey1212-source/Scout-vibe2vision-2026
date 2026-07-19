@@ -8,6 +8,7 @@ import { ScoringEngine } from './engine/scoring.engine';
 import { DiversificationEngine } from './engine/diversification.engine';
 import { IOpportunity } from '../../discovery/extraction/models/opportunity.model';
 import { IProfile } from '../../profile/models/profile.model';
+import { ResponseValidator, FallbackPersonalization, PromptManager } from './index';
 import mongoose from 'mongoose';
 
 describe('Recommendation Module Unit Tests', () => {
@@ -50,6 +51,35 @@ describe('Recommendation Module Unit Tests', () => {
     ],
   };
 
+  const makeMockOp = (fields: Partial<IOpportunity>): IOpportunity => {
+    return {
+      _id: new mongoose.Types.ObjectId(),
+      title: 'Mock Op',
+      description: 'Mock Description',
+      summary: 'Mock Summary',
+      organization: 'Mock Org',
+      opportunityType: 'INTERNSHIP',
+      category: 'Design',
+      applicationUrl: 'https://example.com/' + Math.random(),
+      sourceURL: 'https://example.com/' + Math.random(),
+      sourceDomain: 'example.com',
+      sourceType: 'OTHER',
+      confidence: 90,
+      hash: 'mock-hash-' + Math.random(),
+      status: 'ACTIVE',
+      visibility: 'PUBLIC',
+      archived: false,
+      eligibleBranches: [],
+      eligibleYears: [],
+      minimumEducation: '',
+      womenFocused: false,
+      visaSponsored: false,
+      tags: [],
+      skills: [],
+      ...fields,
+    } as unknown as IOpportunity;
+  };
+
   describe('ProfileHashGenerator', () => {
     it('should generate a deterministic hash (same inputs = same hash)', () => {
       const hash1 = ProfileHashGenerator.generate(mockProfile, mockResume, RECOMMENDATION_VERSION);
@@ -74,35 +104,6 @@ describe('Recommendation Module Unit Tests', () => {
   });
 
   describe('Scoring and Diversification Engine (Phase 3)', () => {
-    const makeMockOp = (fields: Partial<IOpportunity>): IOpportunity => {
-      return {
-        _id: new mongoose.Types.ObjectId(),
-        title: 'Mock Op',
-        description: 'Mock Description',
-        summary: 'Mock Summary',
-        organization: 'Mock Org',
-        opportunityType: 'INTERNSHIP',
-        category: 'Design',
-        applicationUrl: 'https://example.com/' + Math.random(),
-        sourceURL: 'https://example.com/' + Math.random(),
-        sourceDomain: 'example.com',
-        sourceType: 'OTHER',
-        confidence: 90,
-        hash: 'mock-hash-' + Math.random(),
-        status: 'ACTIVE',
-        visibility: 'PUBLIC',
-        archived: false,
-        eligibleBranches: [],
-        eligibleYears: [],
-        minimumEducation: '',
-        womenFocused: false,
-        visaSponsored: false,
-        tags: [],
-        skills: [],
-        ...fields,
-      } as unknown as IOpportunity;
-    };
-
     it('should calculate reproducible and deterministic scores (same input = same score)', () => {
       const op = makeMockOp({ title: 'Frontend Developer React', tags: ['React', 'Design'] });
       const score1 = ScoringEngine.scoreOpportunity(op, mockProfile);
@@ -211,6 +212,80 @@ describe('Recommendation Module Unit Tests', () => {
         );
         expect(cand.finalScore).toBe(match?.finalScore);
       });
+    });
+  });
+
+  describe('AI Personalization & Validation (Phase 4)', () => {
+    it('should validate correctly formatted structured JSON response', () => {
+      const validText = JSON.stringify({
+        todayMission: 'Complete onboarding',
+        aiSummary: 'Here are matching opportunities.',
+        recommendationsBySlot: {
+          perfectMatch: {
+            personalizedReason: 'Matches CSE',
+            missingSkills: ['Git'],
+            firstAction: 'Read details',
+            confidenceMessage: 'Achievable',
+          },
+        },
+      });
+
+      const parsed = ResponseValidator.validate(validText);
+      expect(parsed.todayMission).toBe('Complete onboarding');
+      expect(parsed.recommendationsBySlot.perfectMatch.personalizedReason).toBe('Matches CSE');
+    });
+
+    it('should reject response with missing fields or invalid format', () => {
+      const invalidText = JSON.stringify({
+        todayMission: 'Complete onboarding',
+        // missing aiSummary and recommendationsBySlot
+      });
+
+      expect(() => ResponseValidator.validate(invalidText)).toThrow();
+    });
+
+    it('should fall back to smart deterministic properties successfully', () => {
+      const mockOp = makeMockOp({
+        title: 'Mock Internship',
+        organization: 'Company',
+        opportunityType: 'INTERNSHIP' as any,
+        category: 'INTERNSHIPS' as any,
+      });
+      const mockRanked = [
+        {
+          opportunity: mockOp,
+          finalScore: 90,
+          rank: 1,
+          scoreBreakdown: {} as any,
+          recommendationExplanations: [
+            { type: 'interest' as const, message: 'Matches React interests' },
+          ],
+          diversificationTags: {
+            category: 'INTERNSHIPS',
+            organization: 'Company',
+            domain: 'React',
+            workMode: 'REMOTE',
+          },
+        },
+      ] as any;
+
+      const fallback = FallbackPersonalization.generate(mockRanked);
+      expect(fallback.todayMission).toBe("Review today's personalized recommendations.");
+      expect(fallback.recommendationsBySlot.perfectMatch.personalizedReason).toContain(
+        'Matches React interests',
+      );
+      expect(fallback.recommendationsBySlot.perfectMatch.firstAction).toBe(
+        'Read the official application page.',
+      );
+    });
+
+    it('should hash prompts deterministically using SHA-256', () => {
+      const prompt = 'Test prompt';
+      const hash1 = PromptManager.hashPrompt(prompt);
+      const hash2 = PromptManager.hashPrompt(prompt);
+
+      expect(hash1).toBe(hash2);
+      expect(hash1).toHaveLength(64);
     });
   });
 });

@@ -1,11 +1,13 @@
-import { ProfileModel } from '@/profile';
+import { ProfileModel, ResumeModel } from '../../../profile';
 import { RecommendationService } from '../service/recommendation.service';
 import { CandidateRetrievalService } from '../service/candidate-retrieval.service';
 import { HardFilterEngine } from '../engine/hard-filter.engine';
 import { ScoringEngine } from '../engine/scoring.engine';
 import { DiversificationEngine } from '../engine/diversification.engine';
+import { PersonalizationService } from '../ai/personalization.service';
 import { IRecommendationPack, RecommendationGenerationReason } from '../types/recommendation.types';
 import { IRankedCandidate } from '../types/scoring.types';
+import { IProfile } from '../../../profile/models/profile.model';
 import mongoose from 'mongoose';
 
 export class GenerateRecommendationsUseCase {
@@ -29,6 +31,8 @@ export class GenerateRecommendationsUseCase {
       await RecommendationService.shouldGenerate(userId);
 
     if (shouldGenerate || forcedReason) {
+      const startTime = Date.now();
+
       // Fetch user profile for filtering
       const profile = await ProfileModel.findOne({
         userId: new mongoose.Types.ObjectId(userId),
@@ -37,6 +41,11 @@ export class GenerateRecommendationsUseCase {
       if (!profile) {
         throw new Error('User profile not found. Onboarding must be completed first.');
       }
+
+      // Fetch user resume if available
+      const resume = await ResumeModel.findOne({
+        userId: new mongoose.Types.ObjectId(userId),
+      }).exec();
 
       // Fetch candidates and run Hard Filters to log discovery report
       const rawCandidates = await CandidateRetrievalService.fetchActiveCandidates();
@@ -64,8 +73,16 @@ export class GenerateRecommendationsUseCase {
         forcedReason || reason || 'LOGIN',
       );
 
-      // Trigger async placeholder generation in background (Phase 3 behavior with top 5)
-      this.runBackgroundPlaceholderGeneration(generatingPack._id.toString(), top5Candidates);
+      // Trigger async personalization in background
+      this.runBackgroundPersonalization(
+        generatingPack._id.toString(),
+        top5Candidates,
+        profile,
+        resume,
+        startTime,
+        rawCandidates.length,
+        pool.length,
+      );
 
       return { status: 'PENDING', pack: generatingPack };
     }
@@ -148,72 +165,151 @@ export class GenerateRecommendationsUseCase {
   }
 
   /**
+   * Logs AI Personalization statistics.
+   */
+  private static logAIPersonalizationAudit(
+    userId: string,
+    candidatesCount: number,
+    meta: any,
+    success: boolean,
+  ): void {
+    console.log('========== AI Personalization Audit ==========');
+    console.log(`User: ${userId}`);
+    console.log(`Top 5 Candidates: ${candidatesCount}`);
+    console.log(`\nProvider: ${meta.provider}`);
+    console.log(`Model: ${meta.model}`);
+    console.log(`Prompt Version: ${meta.promptVersion}`);
+    console.log(`Schema Version: ${meta.schemaVersion}`);
+    console.log(`Latency: ${(meta.latencyMs / 1000).toFixed(1)}s`);
+    console.log(`Repair Used: ${meta.repairUsed ? 'Yes' : 'No'}`);
+    console.log(`Fallback Used: ${meta.fallbackUsed ? 'Yes' : 'No'}`);
+    console.log(`Prompt Length: ${meta.promptLength.toLocaleString()} chars`);
+    console.log(`Response Length: ${meta.responseLength.toLocaleString()} chars`);
+    console.log(`Generation: ${success ? 'SUCCESS' : 'FAILED'}`);
+    console.log('==============================================\n');
+  }
+
+  /**
    * Simulates asynchronous generation in the background.
    */
-  private static runBackgroundPlaceholderGeneration(
+  private static runBackgroundPersonalization(
     packId: string,
     top5: IRankedCandidate[],
+    profile: IProfile,
+    resume: any,
+    totalStartTime: number,
+    candidateCount: number,
+    filteredCount: number,
   ): void {
     setTimeout(async () => {
       try {
+        const { response, metadata: aiMeta } = await PersonalizationService.personalize(
+          profile,
+          resume,
+          top5,
+        );
+
+        // Print AI Audit Log
+        this.logAIPersonalizationAudit(
+          profile.userId.toString(),
+          top5.length,
+          aiMeta,
+          !aiMeta.fallbackUsed,
+        );
+
+        const overallTimeMs = Date.now() - totalStartTime;
+
+        // Map and save to pack
         await RecommendationService.markReady(packId, {
-          todayMission: 'Complete onboarding fully and bookmark two high-value startups.',
+          todayMission: response.todayMission,
           perfectMatch: {
             opportunityId: top5[0]?.opportunity?._id || null,
             personalizedReason:
-              top5[0]?.recommendationExplanations.map((e) => e.message).join('. ') ||
-              'Matches your core skills and career goals.',
-            whyNow: 'Applications are closing soon.',
-            missingSkills: ['Git', 'Docker'],
-            firstAction: 'Refine your project README.',
-            score: top5[0]?.finalScore || 95,
+              response.recommendationsBySlot['perfectMatch']?.personalizedReason || '',
+            whyNow:
+              response.recommendationsBySlot['perfectMatch']?.confidenceMessage ||
+              'Highly recommended based on your profile.',
+            missingSkills: response.recommendationsBySlot['perfectMatch']?.missingSkills || [],
+            firstAction:
+              response.recommendationsBySlot['perfectMatch']?.firstAction ||
+              'Read the official application page.',
+            score: top5[0]?.finalScore || 0,
             scoreBreakdown: top5[0]?.scoreBreakdown || {},
           },
           hiddenGem: {
             opportunityId: top5[1]?.opportunity?._id || null,
             personalizedReason:
-              top5[1]?.recommendationExplanations.map((e) => e.message).join('. ') ||
-              'An underrated opportunity that matches your branch closely.',
-            whyNow: 'Limited applicant exposure right now.',
-            missingSkills: [],
-            firstAction: 'Apply immediately.',
-            score: top5[1]?.finalScore || 88,
+              response.recommendationsBySlot['hiddenGem']?.personalizedReason || '',
+            whyNow:
+              response.recommendationsBySlot['hiddenGem']?.confidenceMessage ||
+              'Underrated gem matching your goals.',
+            missingSkills: response.recommendationsBySlot['hiddenGem']?.missingSkills || [],
+            firstAction:
+              response.recommendationsBySlot['hiddenGem']?.firstAction ||
+              'Read the official application page.',
+            score: top5[1]?.finalScore || 0,
             scoreBreakdown: top5[1]?.scoreBreakdown || {},
           },
           stretchGoal: {
             opportunityId: top5[2]?.opportunity?._id || null,
             personalizedReason:
-              top5[2]?.recommendationExplanations.map((e) => e.message).join('. ') ||
-              'Highly prestigious, great for resume visibility.',
-            whyNow: 'Competitive applicant pool.',
-            missingSkills: ['AWS', 'K8s'],
-            firstAction: 'Take a certification course first.',
-            score: top5[2]?.finalScore || 82,
+              response.recommendationsBySlot['stretchGoal']?.personalizedReason || '',
+            whyNow:
+              response.recommendationsBySlot['stretchGoal']?.confidenceMessage ||
+              'Stretch target to reach new milestones.',
+            missingSkills: response.recommendationsBySlot['stretchGoal']?.missingSkills || [],
+            firstAction:
+              response.recommendationsBySlot['stretchGoal']?.firstAction ||
+              'Read the official application page.',
+            score: top5[2]?.finalScore || 0,
             scoreBreakdown: top5[2]?.scoreBreakdown || {},
           },
           quickWin: {
             opportunityId: top5[3]?.opportunity?._id || null,
             personalizedReason:
-              top5[3]?.recommendationExplanations.map((e) => e.message).join('. ') ||
-              'Easy application process with immediate response.',
-            whyNow: 'Highly active hiring manager.',
-            missingSkills: [],
-            firstAction: 'Submit default resume copy.',
-            score: top5[3]?.finalScore || 90,
+              response.recommendationsBySlot['quickWin']?.personalizedReason || '',
+            whyNow:
+              response.recommendationsBySlot['quickWin']?.confidenceMessage ||
+              'Low effort application to build momentum.',
+            missingSkills: response.recommendationsBySlot['quickWin']?.missingSkills || [],
+            firstAction:
+              response.recommendationsBySlot['quickWin']?.firstAction ||
+              'Read the official application page.',
+            score: top5[3]?.finalScore || 0,
             scoreBreakdown: top5[3]?.scoreBreakdown || {},
           },
           confidenceBuilder: {
             opportunityId: top5[4]?.opportunity?._id || null,
             personalizedReason:
-              top5[4]?.recommendationExplanations.map((e) => e.message).join('. ') ||
-              'Excellent match for beginner-level candidates.',
-            whyNow: 'Friendly interview timeline.',
-            missingSkills: [],
-            firstAction: 'Brush up basic interview topics.',
-            score: top5[4]?.finalScore || 92,
+              response.recommendationsBySlot['confidenceBuilder']?.personalizedReason || '',
+            whyNow:
+              response.recommendationsBySlot['confidenceBuilder']?.confidenceMessage ||
+              'Safe opportunity matching your skills.',
+            missingSkills: response.recommendationsBySlot['confidenceBuilder']?.missingSkills || [],
+            firstAction:
+              response.recommendationsBySlot['confidenceBuilder']?.firstAction ||
+              'Read the official application page.',
+            score: top5[4]?.finalScore || 0,
             scoreBreakdown: top5[4]?.scoreBreakdown || {},
           },
-          aiSummary: `This placeholder pack has been generated successfully. Handled ${top5.length} recommendations from candidate pool.`,
+          aiSummary: response.aiSummary,
+          metadata: {
+            provider: aiMeta.provider,
+            model: aiMeta.model,
+            promptVersion: aiMeta.promptVersion,
+            schemaVersion: aiMeta.schemaVersion,
+            engineVersion: aiMeta.engineVersion,
+            generationTimeMs: overallTimeMs,
+            candidateCount,
+            filteredCount,
+            aiLatency: aiMeta.latencyMs,
+            cacheHit: false,
+            fallbackUsed: aiMeta.fallbackUsed,
+            repairUsed: aiMeta.repairUsed,
+            promptLength: aiMeta.promptLength,
+            responseLength: aiMeta.responseLength,
+            promptHash: aiMeta.promptHash,
+          },
         });
       } catch (error) {
         console.error(`[Recommendation] Background generation failed for pack ${packId}:`, error);

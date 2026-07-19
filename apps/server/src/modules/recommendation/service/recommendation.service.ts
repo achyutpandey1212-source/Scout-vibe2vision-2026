@@ -1,4 +1,4 @@
-import { ProfileModel, ResumeModel } from '@/profile';
+import { ProfileModel, ResumeModel } from '../../../profile';
 import { RecommendationRepository } from '../repository/recommendation.repository';
 import { ProfileHashGenerator } from '../hash/profile-hash.generator';
 import { RecommendationTriggerService } from '../triggers/recommendation-trigger.service';
@@ -27,9 +27,7 @@ export class RecommendationService {
   /**
    * Evaluates if a new recommendation pack needs to be generated.
    */
-  static async shouldGenerate(
-    userId: string,
-  ): Promise<{
+  static async shouldGenerate(userId: string): Promise<{
     shouldGenerate: boolean;
     reason?: RecommendationGenerationReason;
     currentHash: string;

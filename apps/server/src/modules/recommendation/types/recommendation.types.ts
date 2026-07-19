@@ -26,11 +26,18 @@ export interface IRecommendationMetadata {
   provider: string;
   model: string;
   promptVersion: string;
+  schemaVersion?: string;
+  engineVersion?: string;
   generationTimeMs: number;
   candidateCount: number;
   filteredCount: number;
   aiLatency: number;
   cacheHit: boolean;
+  fallbackUsed?: boolean;
+  repairUsed?: boolean;
+  promptLength?: number;
+  responseLength?: number;
+  promptHash?: string;
 }
 
 export interface IRecommendationPack extends Document {

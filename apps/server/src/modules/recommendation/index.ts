@@ -1,6 +1,7 @@
 export * from './types/recommendation.types';
 export * from './types/candidate-pool.types';
 export * from './types/scoring.types';
+export * from './ai/ai.types';
 export * from './constants';
 export * from './config/scoring.config';
 export { recommendationRouter } from './routes/recommendation.routes';
@@ -16,3 +17,9 @@ export { CountryCompatibilityService } from './service/country-compatibility.ser
 export { HardFilterEngine } from './engine/hard-filter.engine';
 export { ScoringEngine } from './engine/scoring.engine';
 export { DiversificationEngine } from './engine/diversification.engine';
+export { RecommendationAI } from './ai/recommendation.ai';
+export { PersonalizationService } from './ai/personalization.service';
+export { PromptManager } from './ai/prompt-manager';
+export { ResponseValidator } from './ai/response-validator';
+export { RepairService } from './ai/repair.service';
+export { FallbackPersonalization } from './ai/fallback-personalization';
