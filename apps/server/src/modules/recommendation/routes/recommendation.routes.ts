@@ -5,7 +5,7 @@ import { requireAuth } from '../../../middleware/auth';
 const router = Router();
 
 router.get('/', requireAuth, RecommendationController.getRecommendations);
-router.post('/regenerate', requireAuth, RecommendationController.regenerate);
+router.post('/refresh', requireAuth, RecommendationController.refresh);
 
 export const recommendationRouter = router;
 export default recommendationRouter;

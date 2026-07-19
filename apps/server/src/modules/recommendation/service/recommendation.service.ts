@@ -100,7 +100,10 @@ export class RecommendationService {
     updateData: Partial<IRecommendationPack>,
   ): Promise<IRecommendationPack | null> {
     console.log('[Recommendation] Generation finished');
-    return RecommendationRepository.markReady(packId, updateData);
+    return RecommendationRepository.markReady(packId, {
+      ...updateData,
+      progressPhase: 'COMPLETED' as any,
+    });
   }
 
   /**

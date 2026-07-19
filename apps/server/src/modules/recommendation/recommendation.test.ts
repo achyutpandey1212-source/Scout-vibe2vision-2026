@@ -8,7 +8,16 @@ import { ScoringEngine } from './engine/scoring.engine';
 import { DiversificationEngine } from './engine/diversification.engine';
 import { IOpportunity } from '../../discovery/extraction/models/opportunity.model';
 import { IProfile } from '../../profile/models/profile.model';
-import { ResponseValidator, FallbackPersonalization, PromptManager } from './index';
+import {
+  ResponseValidator,
+  FallbackPersonalization,
+  PromptManager,
+  RecommendationPackBuilder,
+  BackgroundGenerationService,
+  RecommendationStatusService,
+  RecommendationSchedulerService,
+  RecommendationDto,
+} from './index';
 import mongoose from 'mongoose';
 
 describe('Recommendation Module Unit Tests', () => {
@@ -286,6 +295,112 @@ describe('Recommendation Module Unit Tests', () => {
 
       expect(hash1).toBe(hash2);
       expect(hash1).toHaveLength(64);
+    });
+  });
+
+  describe('Recommendation Pack & Lifecycle (Phase 5)', () => {
+    it('should map scored candidates and AI responses to Mongo fields via RecommendationPackBuilder', () => {
+      const mockOp = makeMockOp({ title: 'Build Internship' });
+      const mockRanked = [
+        {
+          opportunity: mockOp,
+          finalScore: 92,
+          rank: 1,
+          scoreBreakdown: { interest: 10, baseMatch: 15 },
+          recommendationExplanations: [],
+          diversificationTags: {
+            category: 'INTERNSHIPS',
+            organization: 'Company',
+            domain: 'React',
+            workMode: 'REMOTE',
+          },
+        },
+      ] as any;
+
+      const mockAiRes = {
+        todayMission: 'Build React projects',
+        aiSummary: 'Good opportunities.',
+        recommendationsBySlot: {
+          perfectMatch: {
+            personalizedReason: 'Matches CSE React interests',
+            missingSkills: [],
+            firstAction: 'Read application details',
+            confidenceMessage: 'Achievable match',
+          },
+        },
+      };
+
+      const mockAiMeta = {
+        provider: 'gemini',
+        model: 'gemini-3.5-flash',
+        latencyMs: 1200,
+        promptVersion: '1',
+        schemaVersion: '1',
+        engineVersion: '1',
+        fallbackUsed: false,
+        repairUsed: false,
+        promptLength: 100,
+        responseLength: 100,
+        promptHash: 'some-hash',
+      } as any;
+
+      const fields = RecommendationPackBuilder.build(
+        mockUserId.toString(),
+        'some-profile-hash',
+        'LOGIN',
+        mockRanked,
+        mockAiRes as any,
+        mockAiMeta,
+      );
+
+      expect(fields.todayMission).toBe('Build React projects');
+      expect(fields.perfectMatch?.score).toBe(92);
+      expect(fields.perfectMatch?.personalizedReason).toBe('Matches CSE React interests');
+    });
+
+    it('should serialize ready packs via RecommendationDto and exclude scoreBreakdown', () => {
+      const mockPack = {
+        _id: new mongoose.Types.ObjectId(),
+        userId: mockUserId,
+        generatedAt: new Date(),
+        expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+        todayMission: 'Mission test',
+        aiSummary: 'Summary test',
+        perfectMatch: {
+          opportunityId: {
+            _id: new mongoose.Types.ObjectId(),
+            title: 'Perfect Job',
+          } as any,
+          score: 95,
+          personalizedReason: 'Matches you perfectly',
+          scoreBreakdown: { interest: 20 },
+        },
+      } as any;
+
+      const dto = RecommendationDto.toDto(mockPack);
+      expect(dto.todayMission).toBe('Mission test');
+      expect(dto.perfectMatch.score).toBe(95);
+      expect(dto.perfectMatch.scoreBreakdown).toBeUndefined(); // Stripped from output
+    });
+
+    it('should evaluate scheduler expiration correctly', () => {
+      const freshPack = { expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 12) } as any;
+      const expiredPack = { expiresAt: new Date(Date.now() - 1000 * 60) } as any;
+
+      expect(RecommendationSchedulerService.shouldRegenerate(freshPack)).toBe(false);
+      expect(RecommendationSchedulerService.shouldRegenerate(expiredPack)).toBe(true);
+      expect(RecommendationSchedulerService.shouldRegenerate(null)).toBe(true);
+    });
+
+    it('should lock active users during background generation', () => {
+      const testUser = new mongoose.Types.ObjectId().toString();
+      expect(BackgroundGenerationService.isGenerating(testUser)).toBe(false);
+
+      // Trigger dummy async action that doesn't resolve instantly to hold lock
+      BackgroundGenerationService.trigger(testUser, 'hash1', 'LOGIN');
+
+      // Lock should now be active
+      expect(BackgroundGenerationService.isGenerating(testUser)).toBe(true);
     });
   });
 });

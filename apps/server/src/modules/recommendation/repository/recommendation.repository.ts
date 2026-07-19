@@ -46,7 +46,14 @@ export class RecommendationRepository {
   }
 
   static async markFailed(packId: string): Promise<IRecommendationPack | null> {
-    return this.updatePack(packId, { status: 'FAILED' });
+    return this.updatePack(packId, { status: 'FAILED', progressPhase: 'COMPLETED' as any });
+  }
+
+  static async updateProgressPhase(
+    packId: string,
+    progressPhase: IRecommendationPack['progressPhase'],
+  ): Promise<IRecommendationPack | null> {
+    return this.updatePack(packId, { progressPhase });
   }
 
   static async deleteExpired(userId: string): Promise<number> {

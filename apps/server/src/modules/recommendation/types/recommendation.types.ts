@@ -56,6 +56,14 @@ export interface IRecommendationPack extends Document {
   confidenceBuilder?: IRecommendationItem;
   aiSummary?: string;
   metadata?: IRecommendationMetadata;
+  progressPhase?:
+    | 'RETRIEVING'
+    | 'FILTERING'
+    | 'SCORING'
+    | 'DIVERSIFYING'
+    | 'PERSONALIZING'
+    | 'BUILDING_PACK'
+    | 'COMPLETED';
   createdAt: Date;
   updatedAt: Date;
 }

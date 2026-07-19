@@ -54,6 +54,18 @@ const RecommendationPackSchema = new Schema<IRecommendationPack>(
       aiLatency: { type: Number },
       cacheHit: { type: Boolean },
     },
+    progressPhase: {
+      type: String,
+      enum: [
+        'RETRIEVING',
+        'FILTERING',
+        'SCORING',
+        'DIVERSIFYING',
+        'PERSONALIZING',
+        'BUILDING_PACK',
+        'COMPLETED',
+      ],
+    },
   },
   {
     timestamps: true,
