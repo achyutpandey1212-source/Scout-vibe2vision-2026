@@ -8,6 +8,7 @@ import { CrawlTarget } from '../sources/source-registry.types';
 export interface CandidateURL {
   url: string;
   source: string;
+  domain?: string;
   query: string;
   snippet: string;
   score: number;
@@ -18,7 +19,7 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
   /**
    * Executes Stage 1: Registry-Driven Opportunity Discovery
    *
-   * Reads from the SourceRegistry (via CrawlSchedulerService) to get today's crawl targets.
+   * Reads from the SourceRegistry (via CrawlSchedulerService / persistent cursor) to get today's crawl targets.
    * For each source, resolves candidate URLs using the source's configured strategy:
    *
    *   direct  → use homepage URL directly (no Tavily)
@@ -34,25 +35,21 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
   ): Promise<CandidateURL[]> {
     console.log('[Stage 1] Initializing registry-driven opportunity discovery...');
 
-    // 1. Get crawl targets from SourceRegistry filtered by selected mode
+    // 1. Get crawl targets from SourceRegistry filtered by selected mode using persistent cursor
     const runMode = (context as any).runMode || 'due';
     const runCategory = (context as any).runCategory;
     const runCustomDomains = (context as any).runCustomDomains || [];
     let targets: CrawlTarget[] = [];
 
-    const { SourceRegistryModel } = await import('../sources/source-registry.model');
+    const { sourceRegistryService } = await import('../sources/source-registry.service');
 
-    const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+    const filterQuery: Record<string, any> = {};
 
-    const query: Record<string, any> = { isActive: true };
-
-    if (runMode === 'due') {
-      query.nextCrawlAt = { $lte: new Date() };
-    } else if (runMode === 'high-priority') {
-      query.priority = { $in: ['critical', 'high'] };
+    if (runMode === 'high-priority') {
+      filterQuery.priority = { $in: ['critical', 'high'] };
     } else if (runMode === 'category' && runCategory) {
       if (runCategory === 'STARTUP_INTERNSHIPS') {
-        query.$or = [
+        filterQuery.$or = [
           { category: 'STARTUP_INTERNSHIPS' },
           {
             category: 'INTERNSHIPS',
@@ -60,18 +57,17 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
           },
         ];
       } else {
-        query.category = runCategory;
+        filterQuery.category = runCategory;
       }
     } else if (runMode === 'custom' && runCustomDomains.length > 0) {
       const cleanDomains = runCustomDomains.map((d: string) => d.toLowerCase().trim());
-      query.domain = { $in: cleanDomains };
+      filterQuery.domain = { $in: cleanDomains };
     }
 
-    const sources = await SourceRegistryModel.find(query)
-      .sort({ trustScore: -1, nextCrawlAt: 1 })
-      .lean();
+    const maxTargets = (_options as any)?.maxTargets || 50;
+    const sources = await sourceRegistryService.getDueSourcesWithCursor(maxTargets, filterQuery);
 
-    const mappedTargets = sources.map((s: any) => ({
+    targets = sources.map((s: any) => ({
       domain: s.domain,
       organization: s.organization,
       homepage: s.homepage,
@@ -79,22 +75,8 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
       defaultTags: s.defaultTags,
       trustScore: s.trustScore,
       priority: s.priority,
-      // Temporarily store composite score for sorting
-      compositeScore:
-        (s.trustScore || 0) +
-        (s.discoveryValue || 50) +
-        (s.freshnessScore || 50) +
-        (s.studentRelevance || 50),
       nextCrawlAt: s.nextCrawlAt,
     }));
-
-    // Sort by composite score DESC, then nextCrawlAt ASC
-    targets = mappedTargets.sort((a: any, b: any) => {
-      if (b.compositeScore !== a.compositeScore) {
-        return b.compositeScore - a.compositeScore;
-      }
-      return new Date(a.nextCrawlAt).getTime() - new Date(b.nextCrawlAt).getTime();
-    });
 
     if (targets.length === 0) {
       console.warn(`[Stage 1] No sources found matching filter criteria (Mode: ${runMode}).`);
@@ -120,6 +102,7 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
             allCandidates.push({
               url: target.homepage,
               source: target.organization,
+              domain: target.domain,
               query: `direct:${target.domain}`,
               snippet: '',
               score: target.trustScore / 10, // normalize 0–100 → 0–10 range
@@ -147,6 +130,7 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
                 allCandidates.push({
                   url: result.url,
                   source: target.organization,
+                  domain: target.domain,
                   query,
                   snippet: result.content || '',
                   score: target.trustScore / 10,
@@ -169,6 +153,7 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
             allCandidates.push({
               url: sitemapUrl,
               source: target.organization,
+              domain: target.domain,
               query: `sitemap:${target.domain}`,
               snippet: '',
               score: target.trustScore / 10,
@@ -187,6 +172,7 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
             allCandidates.push({
               url: feedUrl,
               source: target.organization,
+              domain: target.domain,
               query: `rss:${target.domain}`,
               snippet: '',
               score: target.trustScore / 10,

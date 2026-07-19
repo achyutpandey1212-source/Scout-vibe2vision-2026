@@ -60,81 +60,139 @@ function extractDomain(url: string): string {
 
 class SourceRegistryService {
   /**
-   * Returns all sources due for crawling today.
-   * Ordered by: priority (critical → low), then trustScore DESC, then nextCrawlAt ASC.
+   * Returns sources due for crawling using a persistent round-robin cursor + nextCrawlAt filter.
+   * Guarantees fair progression across the registry without starving lower-ranked sources.
    */
-  async getDueSources(limit = 50): Promise<ISourceRegistryEntry[]> {
-    const sources = await SourceRegistryModel.find({
-      isActive: true,
-      nextCrawlAt: { $lte: new Date() },
-    }).lean();
+  async getDueSourcesWithCursor(
+    limit = 50,
+    customQuery: Record<string, any> = {},
+  ): Promise<ISourceRegistryEntry[]> {
+    const { SchedulerCursorModel } = await import('./scheduler-cursor.model');
 
-    const getCompositeScore = (s: any) =>
-      (s.trustScore || 0) +
-      (s.discoveryValue || 50) +
-      (s.freshnessScore || 50) +
-      (s.studentRelevance || 50);
+    // 1. Fetch persistent cursor document
+    let cursorDoc = await SchedulerCursorModel.findOne({ key: 'discovery_crawl_cursor' });
+    if (!cursorDoc) {
+      cursorDoc = await SchedulerCursorModel.create({
+        key: 'discovery_crawl_cursor',
+        cursorIndex: 0,
+      });
+    }
 
-    // Sort by composite score DESC, then nextCrawlAt ASC
-    return sources
-      .sort((a, b) => {
-        const scoreA = getCompositeScore(a);
-        const scoreB = getCompositeScore(b);
-        if (scoreB !== scoreA) {
-          return scoreB - scoreA;
-        }
-        return new Date(a.nextCrawlAt).getTime() - new Date(b.nextCrawlAt).getTime();
-      })
-      .slice(0, limit) as unknown as ISourceRegistryEntry[];
+    // 2. Fetch all active sources matching custom filter criteria sorted deterministically
+    const baseQuery = { isActive: true, ...customQuery };
+    const allActiveSources = await SourceRegistryModel.find(baseQuery).sort({ domain: 1 }).lean();
+
+    if (allActiveSources.length === 0) {
+      return [];
+    }
+
+    const total = allActiveSources.length;
+    let startIdx = (cursorDoc.cursorIndex || 0) % total;
+    if (startIdx < 0) startIdx = 0;
+
+    const selected: ISourceRegistryEntry[] = [];
+    const now = new Date();
+    let scanned = 0;
+    let currentIdx = startIdx;
+    let lastEvaluatedSourceId = cursorDoc.lastProcessedSourceId;
+
+    // 3. Scan round-robin starting at startIdx
+    while (scanned < total && selected.length < limit) {
+      const source = allActiveSources[currentIdx];
+
+      // Check nextCrawlAt <= now
+      const isDue = !source.nextCrawlAt || new Date(source.nextCrawlAt) <= now;
+      if (isDue) {
+        selected.push(source as unknown as ISourceRegistryEntry);
+      }
+
+      lastEvaluatedSourceId = source._id;
+      scanned++;
+      currentIdx = (currentIdx + 1) % total;
+    }
+
+    // 4. Update and persist cursor index immediately
+    const nextCursorIndex = currentIdx;
+    await SchedulerCursorModel.updateOne(
+      { key: 'discovery_crawl_cursor' },
+      {
+        $set: {
+          cursorIndex: nextCursorIndex,
+          lastProcessedSourceId: lastEvaluatedSourceId,
+          updatedAt: now,
+        },
+      },
+    );
+
+    console.log(
+      `[Scheduler Cursor] Scanned ${scanned}/${total} active sources starting at index ${startIdx}. ` +
+        `Selected ${selected.length}/${limit} due sources. Next cursor index: ${nextCursorIndex}.`,
+    );
+
+    return selected;
   }
 
   /**
-   * Records a successful crawl: updates timestamps and accumulates analytics.
+   * Legacy wrapper delegating to getDueSourcesWithCursor for daily crawl targets.
+   */
+  async getDueSources(limit = 50): Promise<ISourceRegistryEntry[]> {
+    return this.getDueSourcesWithCursor(limit);
+  }
+
+  /**
+   * Records a successful crawl immediately: updates timestamps and accumulates analytics.
    */
   async markCrawled(
     domain: string,
     stats: { pagesCrawled: number; opportunitiesFound: number },
   ): Promise<void> {
     const now = new Date();
+    const cleanDomain = domain.toLowerCase().trim();
 
-    const source = await SourceRegistryModel.findOne({ domain });
+    const source = await SourceRegistryModel.findOne({ domain: cleanDomain });
     if (!source) {
-      console.warn(`[SourceRegistry] markCrawled: domain not found — ${domain}`);
+      console.warn(`[SourceRegistry] markCrawled: domain not found — ${cleanDomain}`);
       return;
     }
 
-    const newPagesCrawled = source.totalPagesCrawled + stats.pagesCrawled;
-    const newOppsFound = source.totalOpportunitiesFound + stats.opportunitiesFound;
+    const newPagesCrawled = (source.totalPagesCrawled || 0) + stats.pagesCrawled;
+    const newOppsFound = (source.totalOpportunitiesFound || 0) + stats.opportunitiesFound;
     const newDensity = newPagesCrawled > 0 ? newOppsFound / newPagesCrawled : 0;
+    const nextCrawl = calculateNextCrawlAt(source.crawlFrequency);
 
     await SourceRegistryModel.updateOne(
-      { domain },
+      { domain: cleanDomain },
       {
         $set: {
           lastCrawledAt: now,
-          nextCrawlAt: calculateNextCrawlAt(source.crawlFrequency),
+          nextCrawlAt: nextCrawl,
           consecutiveFailures: 0,
           totalPagesCrawled: newPagesCrawled,
           totalOpportunitiesFound: newOppsFound,
-          opportunityDensity: Math.round(newDensity * 1000) / 1000, // 3 decimal places
+          opportunityDensity: Math.round(newDensity * 1000) / 1000,
         },
         $inc: { totalRuns: 1 },
       },
     );
+
+    console.log(
+      `[SourceRegistry] Immediate markCrawled for ${cleanDomain}: nextCrawlAt set to ${nextCrawl.toISOString()}`,
+    );
   }
 
   /**
-   * Records a failed crawl. Deactivates the source after 5 consecutive failures.
+   * Records a failed crawl immediately. Deactivates the source after 5 consecutive failures.
    */
   async markFailed(domain: string): Promise<void> {
-    const source = await SourceRegistryModel.findOne({ domain });
+    const cleanDomain = domain.toLowerCase().trim();
+    const source = await SourceRegistryModel.findOne({ domain: cleanDomain });
     if (!source) return;
 
-    const newFailureCount = source.consecutiveFailures + 1;
+    const newFailureCount = (source.consecutiveFailures || 0) + 1;
     const shouldDeactivate = newFailureCount >= 5;
 
     await SourceRegistryModel.updateOne(
-      { domain },
+      { domain: cleanDomain },
       {
         $set: {
           consecutiveFailures: newFailureCount,
@@ -143,8 +201,13 @@ class SourceRegistryService {
       },
     );
 
+    console.warn(
+      `[SourceRegistry] Immediate markFailed for ${cleanDomain} (consecutiveFailures: ${newFailureCount})`,
+    );
     if (shouldDeactivate) {
-      console.warn(`[SourceRegistry] Source deactivated after 5 consecutive failures: ${domain}`);
+      console.warn(
+        `[SourceRegistry] Source deactivated after 5 consecutive failures: ${cleanDomain}`,
+      );
     }
   }
 

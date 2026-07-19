@@ -3,14 +3,83 @@ import { RawPageModel } from '../firecrawl/raw-page.model';
 import { DiscoveryContext } from '../types/query.types';
 import { DiscoveryOptions, DiscoveryOrchestratorResponse, PipelineMetrics } from './pipeline.types';
 import { TRUSTED_SOURCES } from '../sources/registry';
-import { Stage1Discovery } from '../stages/stage1';
+import { Stage1Discovery, CandidateURL } from '../stages/stage1';
 import { Stage2Crawling, CrawledPage } from '../stages/stage2';
 import { Stage3Extraction } from '../stages/stage3';
 import { Stage4QualityAcceptance } from '../stages/stage4';
 import { Stage5Persistence } from '../stages/stage5';
 import { DashboardStateInstance } from '../utils/dashboard-state';
+import { sourceRegistryService } from '../sources/source-registry.service';
 import { CANONICAL_TARGET_AUDIENCE, VERSION_CONSTANTS } from '@scout/shared';
 import crypto from 'crypto';
+
+function extractDomain(urlStr: string): string | null {
+  try {
+    const parsed = new URL(urlStr);
+    let host = parsed.hostname.toLowerCase();
+    if (host.startsWith('www.')) host = host.slice(4);
+    return host;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Immediately updates crawl metadata (markCrawled / markFailed) for each candidate domain.
+ * Runs in a try/finally block so registry state updates immediately even if execution is interrupted.
+ */
+async function updateDomainCrawlStates(
+  candidates: CandidateURL[],
+  crawledPages: CrawledPage[],
+  evaluatedOpps: any[],
+): Promise<void> {
+  const domainMap = new Map<string, { pages: CrawledPage[]; oppsCount: number }>();
+
+  // 1. Map candidates by domain
+  for (const c of candidates) {
+    const dom = c.domain || extractDomain(c.url);
+    if (!dom) continue;
+    const cleanDom = dom.toLowerCase().trim();
+    if (!domainMap.has(cleanDom)) {
+      domainMap.set(cleanDom, { pages: [], oppsCount: 0 });
+    }
+  }
+
+  // 2. Map crawled pages to domain
+  for (const page of crawledPages) {
+    const dom = extractDomain(page.url);
+    if (!dom) continue;
+    const cleanDom = dom.toLowerCase().trim();
+    if (domainMap.has(cleanDom)) {
+      domainMap.get(cleanDom)!.pages.push(page);
+    } else {
+      domainMap.set(cleanDom, { pages: [page], oppsCount: 0 });
+    }
+  }
+
+  // 3. Map evaluated opportunities to domain
+  for (const opp of evaluatedOpps) {
+    const dom = extractDomain(opp.opportunityUrl || opp.sourceUrl || '');
+    if (!dom) continue;
+    const cleanDom = dom.toLowerCase().trim();
+    if (domainMap.has(cleanDom)) {
+      domainMap.get(cleanDom)!.oppsCount++;
+    }
+  }
+
+  // 4. Update each domain in SourceRegistry immediately
+  for (const [dom, data] of domainMap.entries()) {
+    const hasSuccessfulPage = data.pages.some((p) => p.crawlStatus === 'SUCCESS');
+    if (hasSuccessfulPage || data.pages.length > 0) {
+      await sourceRegistryService.markCrawled(dom, {
+        pagesCrawled: data.pages.length,
+        opportunitiesFound: data.oppsCount,
+      });
+    } else {
+      await sourceRegistryService.markFailed(dom);
+    }
+  }
+}
 
 /**
  * Persists raw crawled pages to MongoDB to maintain E2E database audits
@@ -72,22 +141,30 @@ export async function discoverOpportunities(
   const candidates = await stage1.execute(context, options);
   DashboardStateInstance.updateState({ urlsFound: candidates.length });
 
-  // 2. Execute Stage 2 (Modular Crawling)
-  const stage2 = new Stage2Crawling();
-  const crawledPages = await stage2.execute(candidates, {
-    maxExtractions: (options as any)?.maxExtractions || 15,
-  });
+  let crawledPages: CrawledPage[] = [];
+  let evaluatedOpps: any[] = [];
 
-  // DB Backwards compatibility raw page saves
-  await persistRawPagesCompatibility(crawledPages);
+  try {
+    // 2. Execute Stage 2 (Modular Crawling)
+    const stage2 = new Stage2Crawling();
+    crawledPages = await stage2.execute(candidates, {
+      maxExtractions: (options as any)?.maxExtractions || 15,
+    });
 
-  // 3. Execute Stage 3 (Modular AI Extraction)
-  const stage3 = new Stage3Extraction();
-  const extractions = await stage3.execute(crawledPages, options);
+    // DB Backwards compatibility raw page saves
+    await persistRawPagesCompatibility(crawledPages);
 
-  // 4. Execute Stage 4 (Modular Quality & Acceptance)
-  const stage4 = new Stage4QualityAcceptance();
-  const evaluatedOpps = await stage4.execute(extractions, options);
+    // 3. Execute Stage 3 (Modular AI Extraction)
+    const stage3 = new Stage3Extraction();
+    const extractions = await stage3.execute(crawledPages, options);
+
+    // 4. Execute Stage 4 (Modular Quality & Acceptance)
+    const stage4 = new Stage4QualityAcceptance();
+    evaluatedOpps = await stage4.execute(extractions, options);
+  } finally {
+    // Task 1 & 2: Immediate per-domain crawl state persistence
+    await updateDomainCrawlStates(candidates, crawledPages, evaluatedOpps);
+  }
 
   const rejectedCount = evaluatedOpps.filter((o) => o.decision === 'REJECT').length;
   const reviewCount = evaluatedOpps.filter((o) => o.decision === 'REVIEW').length;
