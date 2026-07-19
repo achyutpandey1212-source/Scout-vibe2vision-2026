@@ -45,14 +45,24 @@ export class RecommendationController {
       const result = await RecommendationDashboardService.getDashboardData(userId);
 
       if (result.status === 'GENERATING' || triggerRes.status === 'PENDING') {
+        const latestPack = await RecommendationPackModel.findOne({
+          userId: new mongoose.Types.ObjectId(userId),
+        })
+          .sort({ generatedAt: -1 })
+          .exec();
         return res.status(200).json({
+          success: true,
           status: 'GENERATING',
+          progressPhase: latestPack ? latestPack.progressPhase : 'RETRIEVING',
+          data: null,
         });
       }
 
       if (result.status === 'FAILED' || triggerRes.status === 'FAILED') {
         return res.status(200).json({
+          success: true,
           status: 'FAILED',
+          data: null,
         });
       }
 
@@ -66,8 +76,9 @@ export class RecommendationController {
       }
 
       return res.status(200).json({
+        success: true,
         status: 'READY',
-        pack: result.pack,
+        data: result.pack,
       });
     } catch (error: any) {
       console.error('[Recommendation] Failed to get recommendations:', error);
@@ -96,7 +107,9 @@ export class RecommendationController {
       await GenerateRecommendationsUseCase.execute(userId, 'MANUAL_REFRESH');
 
       return res.status(200).json({
+        success: true,
         status: 'GENERATING',
+        data: null,
       });
     } catch (error: any) {
       console.error('[Recommendation] Failed to trigger refresh:', error);

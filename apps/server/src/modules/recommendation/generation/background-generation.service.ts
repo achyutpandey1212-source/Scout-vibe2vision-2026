@@ -180,8 +180,39 @@ export class BackgroundGenerationService {
         finalPackFields.metadata.filteredCount = filteredCount;
       }
 
+      console.log(
+        '[BackgroundGenerationService] RecommendationPackBuilder finished building. Object keys:',
+        Object.keys(finalPackFields),
+      );
+      console.log(
+        '[BackgroundGenerationService] perfectMatch content:',
+        JSON.stringify(finalPackFields.perfectMatch),
+      );
+      console.log(
+        '[BackgroundGenerationService] metadata content:',
+        JSON.stringify(finalPackFields.metadata),
+      );
+
       // Mark pack ready
-      await RecommendationService.markReady(packId, finalPackFields);
+      const readyPack = await RecommendationService.markReady(packId, finalPackFields);
+      if (readyPack) {
+        console.log(
+          '[BackgroundGenerationService] Verification Check: saved status =',
+          readyPack.status,
+        );
+        console.log(
+          '[BackgroundGenerationService] Verification Check: saved perfectMatch oppId =',
+          readyPack.perfectMatch?.opportunityId,
+        );
+        console.log(
+          '[BackgroundGenerationService] Verification Check: saved metadata candidateCount =',
+          readyPack.metadata?.candidateCount,
+        );
+      } else {
+        console.error(
+          '[BackgroundGenerationService] Verification Check Error: markReady returned null!',
+        );
+      }
       success = true;
 
       // Print Quality Report Logs

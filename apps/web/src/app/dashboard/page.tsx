@@ -31,6 +31,12 @@ export default function DashboardPage() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'recommended' | 'all'>('recommended');
 
+  // Engine States for Workspace Prep UX
+  const [engineStatus, setEngineStatus] = useState<'READY' | 'GENERATING' | 'FAILED' | 'LOADING'>(
+    'LOADING',
+  );
+  const [progressPhase, setProgressPhase] = useState<string>('RETRIEVING');
+
   // API Data
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [catalog, setCatalog] = useState<Opportunity[]>([]);
@@ -44,14 +50,6 @@ export default function DashboardPage() {
   const [feedQuery, setFeedQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<'match' | 'deadline'>('match');
-
-  const loadingMessages = [
-    "Finding today's matches...",
-    'Reviewing new opportunities...',
-    'Comparing eligibility...',
-    'Preparing your recommendations...',
-    'Almost ready...',
-  ];
 
   // Global listener for Cmd+K / Ctrl+K and layout searches
   useEffect(() => {
@@ -91,27 +89,37 @@ export default function DashboardPage() {
 
       if (recRes.data?.success) {
         const rawData = recRes.data.data;
-        if (Array.isArray(rawData)) {
-          setRecommendations(rawData);
-        } else if (rawData && typeof rawData === 'object') {
-          const keys: (
-            'perfectMatch' | 'hiddenGem' | 'stretchGoal' | 'quickWin' | 'confidenceBuilder'
-          )[] = ['perfectMatch', 'hiddenGem', 'stretchGoal', 'quickWin', 'confidenceBuilder'];
-          const mapped: Recommendation[] = [];
-          keys.forEach((key) => {
-            const item = rawData[key];
-            const opportunityDoc = item?.opportunityId;
-            if (item && opportunityDoc && typeof opportunityDoc === 'object') {
-              mapped.push({
-                opportunity: opportunityDoc as any,
-                recommendationScore: item.score || 80,
-                matchedFactors: [],
-                missingFactors: item.missingSkills || [],
-                explanation: item.personalizedReason || item.whyNow || '',
-              });
-            }
-          });
-          setRecommendations(mapped);
+        const status = recRes.data.status || 'READY';
+        setEngineStatus(status);
+        if (status === 'GENERATING') {
+          if (recRes.data.progressPhase) {
+            setProgressPhase(recRes.data.progressPhase);
+          }
+        }
+
+        if (status === 'READY' && rawData) {
+          if (Array.isArray(rawData)) {
+            setRecommendations(rawData);
+          } else if (typeof rawData === 'object') {
+            const keys: (
+              'perfectMatch' | 'hiddenGem' | 'stretchGoal' | 'quickWin' | 'confidenceBuilder'
+            )[] = ['perfectMatch', 'hiddenGem', 'stretchGoal', 'quickWin', 'confidenceBuilder'];
+            const mapped: Recommendation[] = [];
+            keys.forEach((key) => {
+              const item = rawData[key];
+              const opportunityDoc = item?.opportunityId;
+              if (item && opportunityDoc && typeof opportunityDoc === 'object') {
+                mapped.push({
+                  opportunity: opportunityDoc as any,
+                  recommendationScore: item.score || 80,
+                  matchedFactors: [],
+                  missingFactors: item.missingSkills || [],
+                  explanation: item.personalizedReason || item.whyNow || '',
+                });
+              }
+            });
+            setRecommendations(mapped);
+          }
         }
       }
       if (bookmarkRes.data?.success) {
@@ -127,8 +135,41 @@ export default function DashboardPage() {
     } catch (err: any) {
       console.error('Failed to load dashboard data:', err);
       setError('We are having trouble connecting to Scout right now. Please try again.');
+    } finally {
+      setPageLoading(false);
     }
   };
+
+  // Initial fetch
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  // Polling loop when status is GENERATING
+  useEffect(() => {
+    if (engineStatus === 'GENERATING') {
+      const interval = setInterval(async () => {
+        try {
+          const recRes = await recommendationsApi.list();
+          if (recRes.data?.success) {
+            const status = recRes.data.status || 'READY';
+            setEngineStatus(status);
+            if (status === 'GENERATING') {
+              if (recRes.data.progressPhase) {
+                setProgressPhase(recRes.data.progressPhase);
+              }
+            } else if (status === 'READY') {
+              await loadDashboardData();
+              clearInterval(interval);
+            }
+          }
+        } catch (err) {
+          console.error('Polling dashboard status failed:', err);
+        }
+      }, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [engineStatus]);
 
   // Fetch paginated catalog opportunities
   const loadCatalogData = useCallback(
@@ -205,25 +246,106 @@ export default function DashboardPage() {
   // Setup references
   const featuredRec = recommendations[0];
   const featuredOpp = featuredRec?.opportunity;
-  const hiddenGems = recommendations.filter((r) => r.opportunity.isHiddenGem);
+  const hiddenGems = recommendations.filter((r) => r?.opportunity?.isHiddenGem);
   const recommendedOpps = recommendations.filter(
-    (r) => r.recommendationScore >= 75 && r !== featuredRec,
+    (r) => r && r.recommendationScore >= 75 && r !== featuredRec,
   );
 
   const categories = ['ALL', 'SCHOLARSHIP', 'INTERNSHIP', 'FELLOWSHIP', 'GRANT'];
+
+  // Stages definitions for live progress
+  const stages = [
+    { key: 'RETRIEVING', label: 'Retrieving opportunities' },
+    { key: 'FILTERING', label: 'Filtering opportunities' },
+    { key: 'SCORING', label: 'Scoring matches' },
+    { key: 'DIVERSIFYING', label: 'Diversifying recommendations' },
+    { key: 'PERSONALIZING', label: 'Generating AI insights' },
+    { key: 'BUILDING_PACK', label: 'Building recommendation pack' },
+    { key: 'COMPLETED', label: 'Workspace Ready' },
+  ];
+
+  const getStageIndex = (phase: string) => {
+    return stages.findIndex((s) => s.key === phase);
+  };
+
+  const currentStageIndex = getStageIndex(progressPhase);
+
+  const renderPreparingWorkspace = () => {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#FAF8F5] dark:bg-[#0B0C0E] px-6 select-none">
+        <div className="w-full max-w-md space-y-8 text-center">
+          <div className="space-y-3 animate-fade-in">
+            <Typography
+              variant="heading-m"
+              className="text-2xl md:text-3xl font-light tracking-tight text-foreground"
+            >
+              Preparing your Scout Workspace
+            </Typography>
+            <Typography variant="body" className="text-sm text-secondary/60 font-light block">
+              We&apos;re building recommendations tailored specifically for you.
+            </Typography>
+          </div>
+
+          <div className="bg-card border border-border/40 rounded-3xl p-6 text-left space-y-4 shadow-sm">
+            {stages.map((stage, idx) => {
+              const isCompleted = idx < currentStageIndex;
+              const isCurrent = idx === currentStageIndex;
+
+              return (
+                <div
+                  key={stage.key}
+                  className="flex items-center gap-3 transition-all duration-300"
+                >
+                  {isCompleted ? (
+                    <div className="h-5 w-5 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-scale-up" />
+                    </div>
+                  ) : isCurrent ? (
+                    <div className="h-5 w-5 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 animate-pulse">
+                      <span className="h-2.5 w-2.5 rounded-full bg-primary animate-ping" />
+                    </div>
+                  ) : (
+                    <div className="h-5 w-5 rounded-full bg-accent/20 border border-border/30 flex items-center justify-center shrink-0">
+                      <span className="h-1.5 w-1.5 rounded-full bg-secondary/30" />
+                    </div>
+                  )}
+
+                  <span
+                    className={`text-xs font-mono tracking-wide ${
+                      isCompleted
+                        ? 'text-emerald-500 font-semibold'
+                        : isCurrent
+                          ? 'text-foreground font-bold'
+                          : 'text-secondary/40 font-light'
+                    }`}
+                  >
+                    {stage.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <ProtectedRoute>
       {pageLoading ? (
         <div className="min-h-screen flex items-center justify-center bg-[#FAF8F5] dark:bg-[#0B0C0E]">
           <UniversalLoader
-            messages={loadingMessages}
-            intervalMs={450}
-            onComplete={() => {
-              loadDashboardData().then(() => setPageLoading(false));
-            }}
+            messages={[
+              'Accessing security credentials...',
+              'Synchronizing local workspace...',
+              'Logging in...',
+            ]}
+            intervalMs={200}
+            onComplete={() => {}}
           />
         </div>
+      ) : engineStatus === 'GENERATING' ? (
+        renderPreparingWorkspace()
       ) : (
         <DashboardLayout>
           <PageTransition>
@@ -457,7 +579,7 @@ export default function DashboardPage() {
                       </Typography>
                       <Typography
                         variant="body"
-                        className="text-xs text-secondary/60 max-w-sm mx-auto font-light leading-relaxed"
+                        className="text-xs text-secondary/60 max-w-sm mx-auto font-light leading-relaxed block"
                       >
                         Scout is analyzing opportunities in the background. Your personalized feed
                         will show up here.
@@ -524,7 +646,7 @@ export default function DashboardPage() {
                       </Typography>
                       <Typography
                         variant="body"
-                        className="text-xs text-secondary/60 max-w-sm mx-auto font-light leading-relaxed"
+                        className="text-xs text-secondary/60 max-w-sm mx-auto font-light leading-relaxed block"
                       >
                         No opportunities matched your search criteria. Try removing filters or
                         changing the search keyword.
@@ -550,7 +672,7 @@ export default function DashboardPage() {
                       </Typography>
                       <Typography
                         variant="body"
-                        className="text-xs text-secondary/70 font-light leading-relaxed"
+                        className="text-xs text-secondary/70 font-light leading-relaxed block"
                       >
                         Your technical projects match 92% of the skills demanded by local fullstack
                         engineering programs.
@@ -568,7 +690,7 @@ export default function DashboardPage() {
                       </Typography>
                       <Typography
                         variant="body"
-                        className="text-xs text-secondary/70 font-light leading-relaxed"
+                        className="text-xs text-secondary/70 font-light leading-relaxed block"
                       >
                         Google Scholars and Qualcomm Travel Grants are currently receiving 15% fewer
                         applicant clicks than similar listings.
@@ -586,7 +708,7 @@ export default function DashboardPage() {
                       </Typography>
                       <Typography
                         variant="body"
-                        className="text-xs text-secondary/70 font-light leading-relaxed"
+                        className="text-xs text-secondary/70 font-light leading-relaxed block"
                       >
                         The highest match scholarship deadline is approaching. We suggest preparing
                         essay drafts by this Friday.

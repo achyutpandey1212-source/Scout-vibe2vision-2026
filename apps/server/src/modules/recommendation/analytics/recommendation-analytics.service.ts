@@ -50,11 +50,26 @@ export class RecommendationAnalyticsService {
     metadata: Record<string, any> = {},
   ): Promise<void> {
     try {
+      if (
+        !mongoose.Types.ObjectId.isValid(userId) ||
+        !mongoose.Types.ObjectId.isValid(recommendationPackId)
+      ) {
+        console.warn(
+          `[Analytics] Ignored invalid event "${event}" due to invalid userId or packId: user=${userId}, pack=${recommendationPackId}`,
+        );
+        return;
+      }
+
+      const validOppId =
+        opportunityId && mongoose.Types.ObjectId.isValid(opportunityId)
+          ? new mongoose.Types.ObjectId(opportunityId)
+          : null;
+
       await RecommendationEventModel.create({
         event,
         userId: new mongoose.Types.ObjectId(userId),
         recommendationPackId: new mongoose.Types.ObjectId(recommendationPackId),
-        opportunityId: opportunityId ? new mongoose.Types.ObjectId(opportunityId) : null,
+        opportunityId: validOppId,
         metadata,
       });
       console.log(`[Analytics] Event recorded: "${event}" for User ${userId}`);
