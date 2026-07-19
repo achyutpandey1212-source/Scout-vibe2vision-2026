@@ -6,6 +6,11 @@ export class RecommendationRepository {
   static async findLatestByUser(userId: string): Promise<IRecommendationPack | null> {
     return RecommendationPackModel.findOne({ userId: new mongoose.Types.ObjectId(userId) })
       .sort({ generatedAt: -1 })
+      .populate('perfectMatch.opportunityId')
+      .populate('hiddenGem.opportunityId')
+      .populate('stretchGoal.opportunityId')
+      .populate('quickWin.opportunityId')
+      .populate('confidenceBuilder.opportunityId')
       .exec();
   }
 
@@ -17,11 +22,13 @@ export class RecommendationRepository {
     packId: string,
     updateData: Partial<IRecommendationPack>,
   ): Promise<IRecommendationPack | null> {
-    return RecommendationPackModel.findByIdAndUpdate(
-      packId,
-      { $set: updateData },
-      { new: true },
-    ).exec();
+    return RecommendationPackModel.findByIdAndUpdate(packId, { $set: updateData }, { new: true })
+      .populate('perfectMatch.opportunityId')
+      .populate('hiddenGem.opportunityId')
+      .populate('stretchGoal.opportunityId')
+      .populate('quickWin.opportunityId')
+      .populate('confidenceBuilder.opportunityId')
+      .exec();
   }
 
   static async markGenerating(packId: string): Promise<IRecommendationPack | null> {

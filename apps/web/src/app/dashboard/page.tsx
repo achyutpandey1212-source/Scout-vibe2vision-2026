@@ -90,7 +90,29 @@ export default function DashboardPage() {
       ]);
 
       if (recRes.data?.success) {
-        setRecommendations(recRes.data.data);
+        const rawData = recRes.data.data;
+        if (Array.isArray(rawData)) {
+          setRecommendations(rawData);
+        } else if (rawData && typeof rawData === 'object') {
+          const keys: (
+            'perfectMatch' | 'hiddenGem' | 'stretchGoal' | 'quickWin' | 'confidenceBuilder'
+          )[] = ['perfectMatch', 'hiddenGem', 'stretchGoal', 'quickWin', 'confidenceBuilder'];
+          const mapped: Recommendation[] = [];
+          keys.forEach((key) => {
+            const item = rawData[key];
+            const opportunityDoc = item?.opportunityId;
+            if (item && opportunityDoc && typeof opportunityDoc === 'object') {
+              mapped.push({
+                opportunity: opportunityDoc as any,
+                recommendationScore: item.score || 80,
+                matchedFactors: [],
+                missingFactors: item.missingSkills || [],
+                explanation: item.personalizedReason || item.whyNow || '',
+              });
+            }
+          });
+          setRecommendations(mapped);
+        }
       }
       if (bookmarkRes.data?.success) {
         const bookmarkedList: Opportunity[] = bookmarkRes.data.data;

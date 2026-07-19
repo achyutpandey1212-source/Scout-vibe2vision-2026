@@ -1,5 +1,9 @@
+import { ProfileModel } from '@/profile';
 import { RecommendationService } from '../service/recommendation.service';
+import { CandidateRetrievalService } from '../service/candidate-retrieval.service';
+import { HardFilterEngine } from '../engine/hard-filter.engine';
 import { IRecommendationPack, RecommendationGenerationReason } from '../types/recommendation.types';
+import mongoose from 'mongoose';
 
 export class GenerateRecommendationsUseCase {
   /**
@@ -22,6 +26,22 @@ export class GenerateRecommendationsUseCase {
       await RecommendationService.shouldGenerate(userId);
 
     if (shouldGenerate || forcedReason) {
+      // Fetch user profile for filtering
+      const profile = await ProfileModel.findOne({
+        userId: new mongoose.Types.ObjectId(userId),
+      }).exec();
+
+      if (!profile) {
+        throw new Error('User profile not found. Onboarding must be completed first.');
+      }
+
+      // Fetch candidates and run Hard Filters to log discovery report
+      const rawCandidates = await CandidateRetrievalService.fetchActiveCandidates();
+      const { pool, report } = HardFilterEngine.run(rawCandidates, profile);
+
+      // Print Discovery-style logs with percentages
+      this.logFilterReport(report);
+
       // Start generating
       const generatingPack = await RecommendationService.createGeneratingPack(
         userId,
@@ -29,8 +49,8 @@ export class GenerateRecommendationsUseCase {
         forcedReason || reason || 'LOGIN',
       );
 
-      // Trigger async placeholder generation in background (Phase 1 behavior)
-      this.runBackgroundPlaceholderGeneration(generatingPack._id.toString());
+      // Trigger async placeholder generation in background (Phase 1/2 behavior)
+      this.runBackgroundPlaceholderGeneration(generatingPack._id.toString(), pool);
 
       return { status: 'PENDING', pack: generatingPack };
     }
@@ -39,28 +59,78 @@ export class GenerateRecommendationsUseCase {
   }
 
   /**
+   * Logs filter report in Discovery-style logs.
+   */
+  private static logFilterReport(report: any): void {
+    console.log('\n====================================');
+    console.log('Candidate Retrieval');
+    console.log('====================================');
+    console.log(`Fetched: ${report.initialCount}`);
+
+    report.stages.forEach((stage: any) => {
+      console.log('↓');
+      console.log(`${stage.stage} removed: ${stage.removedCount} (${stage.removedPercentage}%)`);
+    });
+
+    console.log('↓');
+    console.log(`Candidate Pool: ${report.finalCount}`);
+    console.log('====================================\n');
+  }
+
+  /**
    * Simulates asynchronous generation in the background.
    */
-  private static runBackgroundPlaceholderGeneration(packId: string): void {
+  private static runBackgroundPlaceholderGeneration(packId: string, pool: any[]): void {
     setTimeout(async () => {
       try {
-        // In later phases, this will run candidate retrieval, scoring, and AI.
-        // For Phase 1, we just update the status to READY after a small delay.
         await RecommendationService.markReady(packId, {
           todayMission: 'Complete onboarding fully and bookmark two high-value startups.',
           perfectMatch: {
+            opportunityId: pool[0]?.opportunity?._id || null,
             personalizedReason: 'Matches your core skills and career goals.',
             whyNow: 'Applications are closing soon.',
             missingSkills: ['Git', 'Docker'],
             firstAction: 'Refine your project README.',
             score: 95,
           },
-          aiSummary: 'This placeholder pack has been generated successfully.',
+          hiddenGem: {
+            opportunityId: pool[1]?.opportunity?._id || null,
+            personalizedReason: 'An underrated opportunity that matches your branch closely.',
+            whyNow: 'Limited applicant exposure right now.',
+            missingSkills: [],
+            firstAction: 'Apply immediately.',
+            score: 88,
+          },
+          stretchGoal: {
+            opportunityId: pool[2]?.opportunity?._id || null,
+            personalizedReason: 'Highly prestigious, great for resume visibility.',
+            whyNow: 'Competitive applicant pool.',
+            missingSkills: ['AWS', 'K8s'],
+            firstAction: 'Take a certification course first.',
+            score: 82,
+          },
+          quickWin: {
+            opportunityId: pool[3]?.opportunity?._id || null,
+            personalizedReason: 'Easy application process with immediate response.',
+            whyNow: 'Highly active hiring manager.',
+            missingSkills: [],
+            firstAction: 'Submit default resume copy.',
+            score: 90,
+          },
+          confidenceBuilder: {
+            opportunityId: pool[4]?.opportunity?._id || null,
+            personalizedReason: 'Excellent match for beginner-level candidates.',
+            whyNow: 'Friendly interview timeline.',
+            missingSkills: [],
+            firstAction: 'Brush up basic interview topics.',
+            score: 92,
+          },
+          aiSummary: `This placeholder pack has been generated successfully. Handled ${pool.length} eligible candidates.`,
         });
       } catch (error) {
         console.error(`[Recommendation] Background generation failed for pack ${packId}:`, error);
         await RecommendationService.markFailed(packId).catch(() => {});
       }
-    }, 1000); // 1-second delay to simulate network/AI operations
+    }, 1000);
   }
 }

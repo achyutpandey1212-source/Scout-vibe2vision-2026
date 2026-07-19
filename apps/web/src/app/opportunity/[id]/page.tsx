@@ -73,9 +73,29 @@ export default function OpportunityDetailsPage() {
       }
 
       if (recRes.data?.success) {
-        const found = (recRes.data.data as Recommendation[]).find(
-          (r) => r.opportunity._id === oppId,
-        );
+        const rawData = recRes.data.data;
+        let mapped: Recommendation[] = [];
+        if (Array.isArray(rawData)) {
+          mapped = rawData;
+        } else if (rawData && typeof rawData === 'object') {
+          const keys: (
+            'perfectMatch' | 'hiddenGem' | 'stretchGoal' | 'quickWin' | 'confidenceBuilder'
+          )[] = ['perfectMatch', 'hiddenGem', 'stretchGoal', 'quickWin', 'confidenceBuilder'];
+          keys.forEach((key) => {
+            const item = rawData[key];
+            const opportunityDoc = item?.opportunityId;
+            if (item && opportunityDoc && typeof opportunityDoc === 'object') {
+              mapped.push({
+                opportunity: opportunityDoc as any,
+                recommendationScore: item.score || 80,
+                matchedFactors: [],
+                missingFactors: item.missingSkills || [],
+                explanation: item.personalizedReason || item.whyNow || '',
+              });
+            }
+          });
+        }
+        const found = mapped.find((r) => r.opportunity._id === oppId);
         if (found) {
           setRecommendation(found);
         }
