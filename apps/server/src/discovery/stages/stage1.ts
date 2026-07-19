@@ -3,7 +3,7 @@ import { DiscoveryContext } from '../types/query.types';
 import { crawlSchedulerService } from '../sources/crawl-scheduler.service';
 import { TavilyClient } from '../search/tavily.client';
 import { normalizeUrl } from '../search/search-orchestrator';
-import { CrawlTarget } from '../sources/source-registry.types';
+import { CrawlTarget, ISourceRegistryEntry } from '../sources/source-registry.types';
 
 export interface CandidateURL {
   url: string;
@@ -18,16 +18,6 @@ export interface CandidateURL {
 export class Stage1Discovery implements IPipelineStage<DiscoveryContext, CandidateURL[]> {
   /**
    * Executes Stage 1: Registry-Driven Opportunity Discovery
-   *
-   * Reads from the SourceRegistry (via CrawlSchedulerService / persistent cursor) to get today's crawl targets.
-   * For each source, resolves candidate URLs using the source's configured strategy:
-   *
-   *   direct  → use homepage URL directly (no Tavily)
-   *   search  → Tavily site:domain queries → collect result URLs
-   *   sitemap → use /sitemap.xml as candidate
-   *   rss     → use /feed as candidate
-   *
-   * Always returns CandidateURL[] — same contract as before for Stage 2+.
    */
   async execute(
     context: DiscoveryContext,
@@ -35,7 +25,6 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
   ): Promise<CandidateURL[]> {
     console.log('[Stage 1] Initializing registry-driven opportunity discovery...');
 
-    // 1. Get crawl targets from SourceRegistry filtered by selected mode using persistent cursor
     const runMode = (context as any).runMode || 'due';
     const runCategory = (context as any).runCategory;
     const runCustomDomains = (context as any).runCustomDomains || [];
@@ -84,7 +73,37 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
     }
 
     console.log(`[Stage 1] ${targets.length} sources resolved for crawl (Mode: ${runMode}).`);
+    return this.resolveCandidatesForTargets(targets, context);
+  }
 
+  /**
+   * Resolves candidate URLs specifically for a provided batch of ISourceRegistryEntry targets.
+   */
+  async executeForSources(
+    sources: ISourceRegistryEntry[],
+    context: DiscoveryContext,
+  ): Promise<CandidateURL[]> {
+    const targets: CrawlTarget[] = sources.map((s: any) => ({
+      domain: s.domain,
+      organization: s.organization,
+      homepage: s.homepage,
+      strategy: s.strategy,
+      defaultTags: s.defaultTags,
+      trustScore: s.trustScore,
+      priority: s.priority,
+      nextCrawlAt: s.nextCrawlAt,
+    }));
+
+    return this.resolveCandidatesForTargets(targets, context);
+  }
+
+  /**
+   * Helper to resolve candidate URLs for a set of CrawlTargets.
+   */
+  private async resolveCandidatesForTargets(
+    targets: CrawlTarget[],
+    context: DiscoveryContext,
+  ): Promise<CandidateURL[]> {
     const allCandidates: CandidateURL[] = [];
     const tavilyClient = new TavilyClient();
     const processedUrls = new Set<string>();
