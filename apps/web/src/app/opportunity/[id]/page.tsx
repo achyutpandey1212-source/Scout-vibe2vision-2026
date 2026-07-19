@@ -83,7 +83,7 @@ export default function OpportunityDetailsPage() {
           )[] = ['perfectMatch', 'hiddenGem', 'stretchGoal', 'quickWin', 'confidenceBuilder'];
           keys.forEach((key) => {
             const item = rawData[key];
-            const opportunityDoc = item?.opportunityId;
+            const opportunityDoc = item?.opportunity || item?.opportunityId;
             if (item && opportunityDoc && typeof opportunityDoc === 'object') {
               mapped.push({
                 opportunity: opportunityDoc as any,

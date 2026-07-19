@@ -107,7 +107,7 @@ export default function DashboardPage() {
             const mapped: Recommendation[] = [];
             keys.forEach((key) => {
               const item = rawData[key];
-              const opportunityDoc = item?.opportunityId;
+              const opportunityDoc = item?.opportunity || item?.opportunityId;
               if (item && opportunityDoc && typeof opportunityDoc === 'object') {
                 mapped.push({
                   opportunity: opportunityDoc as any,
@@ -115,7 +115,8 @@ export default function DashboardPage() {
                   matchedFactors: [],
                   missingFactors: item.missingSkills || [],
                   explanation: item.personalizedReason || item.whyNow || '',
-                });
+                  slot: key,
+                } as any);
               }
             });
             setRecommendations(mapped);
@@ -244,11 +245,12 @@ export default function DashboardPage() {
   };
 
   // Setup references
-  const featuredRec = recommendations[0];
+  const featuredRec =
+    recommendations.find((r: any) => r?.slot === 'perfectMatch') || recommendations[0];
   const featuredOpp = featuredRec?.opportunity;
-  const hiddenGems = recommendations.filter((r) => r?.opportunity?.isHiddenGem);
+  const hiddenGems = recommendations.filter((r: any) => r?.slot === 'hiddenGem');
   const recommendedOpps = recommendations.filter(
-    (r) => r && r.recommendationScore >= 75 && r !== featuredRec,
+    (r: any) => r && r.slot !== 'perfectMatch' && r.slot !== 'hiddenGem',
   );
 
   const categories = ['ALL', 'SCHOLARSHIP', 'INTERNSHIP', 'FELLOWSHIP', 'GRANT'];
