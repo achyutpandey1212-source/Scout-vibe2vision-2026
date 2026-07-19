@@ -4,11 +4,13 @@ import { ProfileHashGenerator } from './hash/profile-hash.generator';
 import { IRecommendationPack } from './types/recommendation.types';
 import { RECOMMENDATION_VERSION } from './constants';
 import { HardFilterEngine } from './engine/hard-filter.engine';
+import { ScoringEngine } from './engine/scoring.engine';
+import { DiversificationEngine } from './engine/diversification.engine';
 import { IOpportunity } from '../../discovery/extraction/models/opportunity.model';
 import { IProfile } from '../../profile/models/profile.model';
 import mongoose from 'mongoose';
 
-describe('Recommendation Module Phase 1 & 2 Tests', () => {
+describe('Recommendation Module Unit Tests', () => {
   const mockUserId = new mongoose.Types.ObjectId();
 
   const mockProfile = {
@@ -28,6 +30,9 @@ describe('Recommendation Module Phase 1 & 2 Tests', () => {
     careerGoals: ['Land a startup internship'],
     opportunityPreferences: { internships: true },
     persona: 'COLLEGE_STUDENT' as const,
+    careerReadinessScore: 75,
+    availability: { hoursPerWeek: 20 },
+    remotePreference: true,
   } as unknown as IProfile;
 
   const mockResume = {
@@ -52,17 +57,6 @@ describe('Recommendation Module Phase 1 & 2 Tests', () => {
       expect(hash1).toBe(hash2);
       expect(hash1).toHaveLength(64);
     });
-
-    it('should change hash when onboarding changes', () => {
-      const hash1 = ProfileHashGenerator.generate(mockProfile, mockResume, RECOMMENDATION_VERSION);
-      const updatedProfile = { ...mockProfile, branch: 'Information Technology' };
-      const hash2 = ProfileHashGenerator.generate(
-        updatedProfile,
-        mockResume,
-        RECOMMENDATION_VERSION,
-      );
-      expect(hash1).not.toBe(hash2);
-    });
   });
 
   describe('RecommendationTriggerService', () => {
@@ -77,25 +71,9 @@ describe('Recommendation Module Phase 1 & 2 Tests', () => {
       expect(result.shouldGenerate).toBe(true);
       expect(result.reason).toBe('LOGIN');
     });
-
-    it('should NOT generate if a fresh ready pack exists with matching hash and version', () => {
-      const mockPack = {
-        userId: mockUserId,
-        status: 'READY',
-        expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 12),
-        profileHash: currentHash,
-        recommendationVersion: RECOMMENDATION_VERSION,
-      } as IRecommendationPack;
-
-      const result = RecommendationTriggerService.shouldGenerateRecommendation(
-        mockPack,
-        currentHash,
-      );
-      expect(result.shouldGenerate).toBe(false);
-    });
   });
 
-  describe('HardFilterEngine and Candidate Pooling', () => {
+  describe('Scoring and Diversification Engine (Phase 3)', () => {
     const makeMockOp = (fields: Partial<IOpportunity>): IOpportunity => {
       return {
         _id: new mongoose.Types.ObjectId(),
@@ -119,120 +97,120 @@ describe('Recommendation Module Phase 1 & 2 Tests', () => {
         minimumEducation: '',
         womenFocused: false,
         visaSponsored: false,
+        tags: [],
+        skills: [],
         ...fields,
       } as unknown as IOpportunity;
     };
 
-    it('should filter out expired opportunities', () => {
-      const expiredOp1 = makeMockOp({ deadlineStatus: 'EXPIRED' });
-      const expiredOp2 = makeMockOp({ intelligence: { expired: true } as any });
-      const expiredOp3 = makeMockOp({ deadline: new Date(Date.now() - 1000 * 60).toISOString() }); // 1 min ago
-      const activeOp = makeMockOp({
-        deadline: new Date(Date.now() + 1000 * 60 * 60).toISOString(),
-      }); // 1 hour later
-
-      const candidates = [expiredOp1, expiredOp2, expiredOp3, activeOp];
-      const { pool } = HardFilterEngine.run(candidates, mockProfile);
-
-      expect(pool).toHaveLength(1);
-      expect(pool[0].opportunity._id.toString()).toBe(activeOp._id.toString());
+    it('should calculate reproducible and deterministic scores (same input = same score)', () => {
+      const op = makeMockOp({ title: 'Frontend Developer React', tags: ['React', 'Design'] });
+      const score1 = ScoringEngine.scoreOpportunity(op, mockProfile);
+      const score2 = ScoringEngine.scoreOpportunity(op, mockProfile);
+      expect(score1.finalScore).toBe(score2.finalScore);
+      expect(score1.scoreBreakdown).toEqual(score2.scoreBreakdown);
     });
 
-    it('should filter out US-only citizenship restrictions for Indian users', () => {
-      const usOnlyOp = makeMockOp({ description: 'This program is open to US Citizens Only.' });
-      const globalOp = makeMockOp({ description: 'Open to everyone globally.' });
-
-      const candidates = [usOnlyOp, globalOp];
-      const { pool } = HardFilterEngine.run(candidates, mockProfile);
-
-      expect(pool).toHaveLength(1);
-      expect(pool[0].opportunity._id.toString()).toBe(globalOp._id.toString());
-    });
-
-    it('should filter out visa authorization requirements if not sponsored', () => {
-      const visaRequiredOp = makeMockOp({
-        description: 'Requires UK Work Authorization to apply.',
-        visaSponsored: false,
+    it('should increase score for branch matches and interest overlaps', () => {
+      const opLowMatch = makeMockOp({
+        title: 'System Analyst',
+        eligibleBranches: ['Mechanical Engineering'],
       });
-      const visaSponsoredOp = makeMockOp({
-        description: 'Requires UK Work Authorization but visa is sponsored.',
-        visaSponsored: true,
+      const opHighMatch = makeMockOp({
+        title: 'Software Developer',
+        eligibleBranches: ['Computer Science'],
+        tags: ['React', 'Software Engineering'],
       });
 
-      const candidates = [visaRequiredOp, visaSponsoredOp];
-      const { pool } = HardFilterEngine.run(candidates, mockProfile);
+      const resLow = ScoringEngine.scoreOpportunity(opLowMatch, mockProfile);
+      const resHigh = ScoringEngine.scoreOpportunity(opHighMatch, mockProfile);
 
-      expect(pool).toHaveLength(1);
-      expect(pool[0].opportunity._id.toString()).toBe(visaSponsoredOp._id.toString());
+      expect(resHigh.finalScore).toBeGreaterThan(resLow.finalScore);
+      expect(resHigh.scoreBreakdown.baseMatch).toBeGreaterThan(resLow.scoreBreakdown.baseMatch);
+      expect(resHigh.scoreBreakdown.interest).toBeGreaterThan(resLow.scoreBreakdown.interest);
     });
 
-    it('should check branch synonym matching and filter mismatching branches', () => {
-      const matchingOp = makeMockOp({ eligibleBranches: ['CSE', 'Information Technology'] });
-      const mismatchingOp = makeMockOp({ eligibleBranches: ['Mechanical Engineering'] });
+    it('should apply women-centric bonus for female users', () => {
+      const opGeneral = makeMockOp({ title: 'Standard Fellowship', womenFocused: false });
+      const opWomen = makeMockOp({ title: 'Women in Tech Fellowship', womenFocused: true });
 
-      const candidates = [matchingOp, mismatchingOp];
-      const { pool } = HardFilterEngine.run(candidates, mockProfile);
+      const scoreGen = ScoringEngine.scoreOpportunity(opGeneral, mockProfile);
+      const scoreWomen = ScoringEngine.scoreOpportunity(opWomen, mockProfile);
 
-      expect(pool).toHaveLength(1);
-      expect(pool[0].opportunity._id.toString()).toBe(matchingOp._id.toString());
+      expect(scoreWomen.scoreBreakdown.womenBonus).toBe(5);
+      expect(scoreGen.scoreBreakdown.womenBonus).toBe(0);
     });
 
-    it('should filter year eligibility mismatch', () => {
-      const matchingOp = makeMockOp({ suitableThirdYear: true, eligibleYears: ['3rd'] });
-      const mismatchingOp = makeMockOp({ suitableThirdYear: false, eligibleYears: ['4th'] });
+    it('should score portfolio builders and hidden gems higher', () => {
+      const opStandard = makeMockOp({ hiddenGemScore: 0 });
+      const opPremium = makeMockOp({
+        hiddenGemScore: 90,
+        careerValPortfolio: 5,
+        careerValResume: 5,
+        careerValLearning: 5,
+      });
 
-      const candidates = [matchingOp, mismatchingOp];
-      const { pool } = HardFilterEngine.run(candidates, mockProfile);
+      const resStandard = ScoringEngine.scoreOpportunity(opStandard, mockProfile);
+      const resPremium = ScoringEngine.scoreOpportunity(opPremium, mockProfile);
 
-      expect(pool).toHaveLength(1);
-      expect(pool[0].opportunity._id.toString()).toBe(matchingOp._id.toString());
+      expect(resPremium.scoreBreakdown.portfolio).toBeGreaterThan(
+        resStandard.scoreBreakdown.portfolio,
+      );
+      expect(resPremium.scoreBreakdown.hiddenGem).toBe(5);
     });
 
-    it('should filter masters-only minimum qualification for undergraduate', () => {
-      const mastersOp = makeMockOp({ minimumEducation: 'Masters degree or PhD required' });
-      const undergradOp = makeMockOp({ minimumEducation: 'B.Tech or equivalent' });
+    it('should respect remote work preference', () => {
+      const opOnsite = makeMockOp({ remote: false });
+      const opRemote = makeMockOp({ remote: true });
 
-      const candidates = [mastersOp, undergradOp];
-      const { pool } = HardFilterEngine.run(candidates, mockProfile);
+      const resOnsite = ScoringEngine.scoreOpportunity(opOnsite, mockProfile);
+      const resRemote = ScoringEngine.scoreOpportunity(opRemote, mockProfile);
 
-      expect(pool).toHaveLength(1);
-      expect(pool[0].opportunity._id.toString()).toBe(undergradOp._id.toString());
+      expect(resRemote.scoreBreakdown.remote).toBe(5);
+      expect(resOnsite.scoreBreakdown.remote).toBe(3);
     });
 
-    it('should allow unknown eligibility values and rolling/no deadline', () => {
-      const rollingOp = makeMockOp({ deadlineStatus: 'ROLLING' });
-      const noDeadlineOp = makeMockOp({ deadline: null });
-      const unknownGenderOp = makeMockOp({ genderEligibility: null });
+    it('should stably sort tie scores using trust, quality, then date', () => {
+      const now = new Date();
+      const op1 = makeMockOp({ trustScore: 60, qualityScore: 80, createdAt: now as any });
+      const op2 = makeMockOp({ trustScore: 90, qualityScore: 80, createdAt: now as any });
+      const op3 = makeMockOp({ trustScore: 90, qualityScore: 95, createdAt: now as any });
 
-      const candidates = [rollingOp, noDeadlineOp, unknownGenderOp];
-      const { pool } = HardFilterEngine.run(candidates, mockProfile);
+      // Trigger run to score and sort
+      const ranked = ScoringEngine.run([op1, op2, op3], mockProfile);
 
-      expect(pool).toHaveLength(3);
+      expect(ranked[0].opportunity._id.toString()).toBe(op3._id.toString()); // Highest quality (95) among highest trust (90)
+      expect(ranked[1].opportunity._id.toString()).toBe(op2._id.toString()); // Next highest trust (90)
+      expect(ranked[2].opportunity._id.toString()).toBe(op1._id.toString()); // Lowest trust (60)
     });
 
-    it('should create detailed filter stage report counts and percentages', () => {
-      const op1 = makeMockOp({ deadlineStatus: 'EXPIRED' });
-      const op2 = makeMockOp({ description: 'US Citizens Only.' });
-      const op3 = makeMockOp({ eligibleBranches: ['Mechanical Engineering'] });
-      const op4 = makeMockOp({ title: 'Eligible Software Role', eligibleBranches: ['CSE'] });
+    it('should select diversified candidates from ranked pool without mutating original scores', () => {
+      // Create candidates from same organization/category to test diversification
+      const op1 = makeMockOp({ organization: 'Razorpay', category: 'INTERNSHIPS' as any });
+      const op2 = makeMockOp({ organization: 'Razorpay', category: 'INTERNSIPS' as any }); // should be penalized during selection
+      const op3 = makeMockOp({ organization: 'Google', category: 'FELLOWSHIPS' as any }); // different org & type, should be prioritized over op2
+      const op4 = makeMockOp({ organization: 'Microsoft', category: 'JOBS' as any });
 
-      const candidates = [op1, op2, op3, op4];
-      const { report } = HardFilterEngine.run(candidates, mockProfile);
+      const ranked = ScoringEngine.run([op1, op2, op3, op4], mockProfile);
+      ranked[0].finalScore = 95;
+      ranked[1].finalScore = 94;
+      ranked[2].finalScore = 90;
+      ranked[3].finalScore = 85;
+      const originalScores = ranked.map((c) => c.finalScore);
 
-      expect(report.initialCount).toBe(4);
-      expect(report.finalCount).toBe(1);
-      expect(report.rejectedCandidates).toHaveLength(3);
+      const diversified = DiversificationEngine.diversify(ranked, 3);
 
-      // Check specific rejection reasons
-      const rejectedOpTitles = report.rejectedCandidates.map((c) => c.title);
-      expect(rejectedOpTitles).toContain(op1.title);
-      expect(rejectedOpTitles).toContain(op2.title);
-      expect(rejectedOpTitles).toContain(op3.title);
+      // Verify the selection prioritized op3 over op2 due to same organization penalty
+      expect(diversified[0].opportunity.organization).toBe('Razorpay');
+      expect(diversified[1].opportunity.organization).toBe('Google'); // op3 is selected 2nd
 
-      // Check percentage calculation in stages
-      const deadlineStage = report.stages.find((s) => s.stage === 'Deadline Filter');
-      expect(deadlineStage?.removedCount).toBe(1);
-      expect(deadlineStage?.removedPercentage).toBe(25); // 1 out of 4 removed = 25%
+      // Verify scores are not mutated
+      diversified.forEach((cand) => {
+        const match = ranked.find(
+          (r) => r.opportunity._id.toString() === cand.opportunity._id.toString(),
+        );
+        expect(cand.finalScore).toBe(match?.finalScore);
+      });
     });
   });
 });

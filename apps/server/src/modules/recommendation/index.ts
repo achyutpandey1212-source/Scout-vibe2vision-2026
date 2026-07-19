@@ -1,6 +1,8 @@
 export * from './types/recommendation.types';
 export * from './types/candidate-pool.types';
+export * from './types/scoring.types';
 export * from './constants';
+export * from './config/scoring.config';
 export { recommendationRouter } from './routes/recommendation.routes';
 export { RecommendationService } from './service/recommendation.service';
 export { RecommendationRepository } from './repository/recommendation.repository';
@@ -12,3 +14,5 @@ export { RecommendationPackModel } from './schemas/recommendation-pack.schema';
 export { CandidateRetrievalService } from './service/candidate-retrieval.service';
 export { CountryCompatibilityService } from './service/country-compatibility.service';
 export { HardFilterEngine } from './engine/hard-filter.engine';
+export { ScoringEngine } from './engine/scoring.engine';
+export { DiversificationEngine } from './engine/diversification.engine';
