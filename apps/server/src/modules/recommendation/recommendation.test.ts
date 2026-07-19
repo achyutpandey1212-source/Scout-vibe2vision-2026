@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RecommendationTriggerService } from './triggers/recommendation-trigger.service';
 import { ProfileHashGenerator } from './hash/profile-hash.generator';
 import { IRecommendationPack } from './types/recommendation.types';
@@ -17,6 +17,13 @@ import {
   RecommendationStatusService,
   RecommendationSchedulerService,
   RecommendationDto,
+  RecommendationConfig,
+  ScoringExperimentsService,
+  RecommendationAnalyticsService,
+  RecommendationQualityService,
+  RecommendationExplainabilityService,
+  RecommendationMetricsService,
+  RecommendationPackModel,
 } from './index';
 import mongoose from 'mongoose';
 
@@ -351,6 +358,8 @@ describe('Recommendation Module Unit Tests', () => {
         mockRanked,
         mockAiRes as any,
         mockAiMeta,
+        'A',
+        90,
       );
 
       expect(fields.todayMission).toBe('Build React projects');
@@ -401,6 +410,97 @@ describe('Recommendation Module Unit Tests', () => {
 
       // Lock should now be active
       expect(BackgroundGenerationService.isGenerating(testUser)).toBe(true);
+    });
+  });
+
+  describe('Recommendation Tuning & Intelligence (Phase 6)', () => {
+    it('should dynamically query weights and feature flags from RecommendationConfig', () => {
+      const flags = RecommendationConfig.getFlags();
+      expect(flags.enableWomenBonus).toBe(true);
+
+      const weightsA = RecommendationConfig.getWeights('A');
+      const weightsB = RecommendationConfig.getWeights('B');
+      expect(weightsA.interest).toBe(20);
+      expect(weightsB.interest).toBe(25);
+    });
+
+    it('should assign users deterministically to experiment group A or B', () => {
+      const user1 = new mongoose.Types.ObjectId().toString();
+      const user2 = new mongoose.Types.ObjectId().toString();
+
+      const group1 = ScoringExperimentsService.assignGroup(user1);
+      const group2 = ScoringExperimentsService.assignGroup(user1);
+      expect(group1).toBe(group2); // Deterministic
+
+      const groupForUser2 = ScoringExperimentsService.assignGroup(user2);
+      expect(['A', 'B']).toContain(groupForUser2);
+    });
+
+    it('should calculate pack quality score correctly', () => {
+      const mockOp = makeMockOp({ hiddenGemScore: 80, careerValPortfolio: 5, careerValResume: 5 });
+      const mockRanked = [
+        {
+          opportunity: mockOp,
+          finalScore: 90,
+          recommendationExplanations: [],
+          diversificationTags: {
+            category: 'INTERNSHIPS',
+            organization: 'Company',
+            domain: 'React',
+            workMode: 'REMOTE',
+          },
+        },
+      ] as any;
+
+      const score = RecommendationQualityService.evaluatePack(mockRanked);
+      expect(score).toBeGreaterThan(0);
+      expect(score).toBeLessThanOrEqual(100);
+    });
+
+    it('should format explainability logs cleanly', () => {
+      const mockPack = {
+        _id: new mongoose.Types.ObjectId(),
+        userId: mockUserId,
+        generatedAt: new Date(),
+        todayMission: 'Test mission',
+        aiSummary: 'Test summary',
+        perfectMatch: {
+          opportunityId: { _id: new mongoose.Types.ObjectId() } as any,
+          score: 95,
+          scoreBreakdown: { interest: 20 },
+        },
+      } as any;
+
+      const explanation = RecommendationExplainabilityService.explainPack(mockPack);
+      expect(explanation?.todayMission).toBe('Test mission');
+      expect(explanation?.recommendations.perfectMatch.scoreBreakdown.interest).toBe(20);
+    });
+
+    it('should fetch system health and determine statuses correctly', async () => {
+      const spy = vi.spyOn(RecommendationPackModel, 'find').mockReturnValue({
+        sort: () => ({
+          limit: () => ({
+            exec: async () => [
+              {
+                status: 'READY',
+                metadata: {
+                  cacheHit: true,
+                  fallbackUsed: false,
+                  generationTimeMs: 1500,
+                  qualityScore: 90,
+                },
+              },
+            ],
+          }),
+        }),
+      } as any);
+
+      const health = await RecommendationMetricsService.getRecommendationHealth();
+      expect(health.status).toBe('HEALTHY');
+      expect(health.cacheHitRate).toBe(100);
+      expect(health.averageLatency).toBe(1500);
+
+      spy.mockRestore();
     });
   });
 });

@@ -6,16 +6,21 @@ import {
   IRecommendationExplanation,
 } from '../types/scoring.types';
 import { ScoringWeights } from '../config/scoring.config';
-import mongoose from 'mongoose';
+import { RecommendationConfig } from '../config/recommendation-config';
 
 export class ScoringEngine {
   /**
    * Computes match score and breakdown for a single candidate.
    */
-  static scoreOpportunity(opportunity: IOpportunity, profile: IProfile): IRankedCandidate {
+  static scoreOpportunity(
+    opportunity: IOpportunity,
+    profile: IProfile,
+    weights = ScoringWeights,
+  ): IRankedCandidate {
     const explanations: IRecommendationExplanation[] = [];
+    const flags = RecommendationConfig.getFlags();
 
-    // 1. Base Match (Max 25)
+    // 1. Base Match
     let baseMatch = 0;
     const userBranch = (profile.branch || '').toLowerCase();
     const eligibleBranches = (opportunity.eligibleBranches || []).map((b) => b.toLowerCase());
@@ -61,7 +66,7 @@ export class ScoringEngine {
         baseMatch += 3;
       }
     }
-    baseMatch = Math.min(baseMatch, ScoringWeights.baseMatch);
+    baseMatch = Math.min(baseMatch, weights.baseMatch);
 
     // 2. Interest Score (Max 20)
     let interest = 0;
@@ -95,7 +100,7 @@ export class ScoringEngine {
       });
     }
 
-    interest = Math.min(interest, ScoringWeights.interest);
+    interest = Math.min(interest, weights.interest);
 
     // 3. Career Stage (Max 10)
     let careerStage = 5;
@@ -116,7 +121,7 @@ export class ScoringEngine {
         careerStage = 10;
       }
     }
-    careerStage = Math.min(careerStage, ScoringWeights.careerStage);
+    careerStage = Math.min(careerStage, weights.careerStage);
 
     // 4. Difficulty Match (Max 10)
     let difficulty = 5;
@@ -142,7 +147,7 @@ export class ScoringEngine {
     } else {
       difficulty = 4;
     }
-    difficulty = Math.min(difficulty, ScoringWeights.difficulty);
+    difficulty = Math.min(difficulty, weights.difficulty);
 
     // 5. Availability Match (Max 5)
     let availability = 3;
@@ -157,7 +162,7 @@ export class ScoringEngine {
     } else if (userHours < 20 && commitment === 'FULL_TIME') {
       availability = 1;
     }
-    availability = Math.min(availability, ScoringWeights.availability);
+    availability = Math.min(availability, weights.availability);
 
     // 6. Remote Preference (Max 5)
     let remote = 3;
@@ -168,70 +173,78 @@ export class ScoringEngine {
     } else if (remotePref === false && !opportunity.remote) {
       remote = 5;
     }
-    remote = Math.min(remote, ScoringWeights.remote);
+    remote = Math.min(remote, weights.remote);
 
     // 7. Women Bonus (Max 5)
     let womenBonus = 0;
-    if (
-      (opportunity.womenFocused || opportunity.genderEligibility?.toUpperCase() === 'FEMALE') &&
-      profile.gender === 'FEMALE'
-    ) {
-      womenBonus = 5;
-      explanations.push({ type: 'womenBonus', message: 'Women-centric support initiative' });
+    if (flags.enableWomenBonus) {
+      if (
+        (opportunity.womenFocused || opportunity.genderEligibility?.toUpperCase() === 'FEMALE') &&
+        profile.gender === 'FEMALE'
+      ) {
+        womenBonus = 5;
+        explanations.push({ type: 'womenBonus', message: 'Women-centric support initiative' });
+      }
     }
-    womenBonus = Math.min(womenBonus, ScoringWeights.womenBonus);
+    womenBonus = Math.min(womenBonus, weights.womenBonus);
 
     // 8. Portfolio Value (Max 10)
     let portfolio = 0;
-    const valSum =
-      (opportunity.careerValPortfolio || 0) +
-      (opportunity.careerValResume || 0) +
-      (opportunity.careerValLearning || 0) +
-      (opportunity.careerValNetworking || 0) +
-      (opportunity.careerValExposure || 0);
-    // Max of valSum is 5 fields * 5 points each = 25 points. Scale 25 to 10 points.
-    portfolio = Math.round((valSum / 25) * 10);
-    if (portfolio >= 8) {
-      explanations.push({ type: 'portfolio', message: 'Strong resume and portfolio builder' });
+    if (flags.enablePortfolioBonus) {
+      const valSum =
+        (opportunity.careerValPortfolio || 0) +
+        (opportunity.careerValResume || 0) +
+        (opportunity.careerValLearning || 0) +
+        (opportunity.careerValNetworking || 0) +
+        (opportunity.careerValExposure || 0);
+      portfolio = Math.round((valSum / 25) * 10);
+      if (portfolio >= 8) {
+        explanations.push({ type: 'portfolio', message: 'Strong resume and portfolio builder' });
+      }
     }
-    portfolio = Math.min(portfolio, ScoringWeights.portfolio);
+    portfolio = Math.min(portfolio, weights.portfolio);
 
     // 9. Hidden Gem Bonus (Max 5)
     let hiddenGem = 0;
-    if (opportunity.hiddenGemScore) {
-      hiddenGem = Math.round(opportunity.hiddenGemScore / 20);
+    if (flags.enableHiddenGemBonus) {
+      if (opportunity.hiddenGemScore) {
+        hiddenGem = Math.round(opportunity.hiddenGemScore / 20);
+      }
+      if (hiddenGem >= 4) {
+        explanations.push({
+          type: 'hiddenGem',
+          message: 'Underrated gem with low applicant traffic',
+        });
+      }
     }
-    if (hiddenGem >= 4) {
-      explanations.push({
-        type: 'hiddenGem',
-        message: 'Underrated gem with low applicant traffic',
-      });
-    }
-    hiddenGem = Math.min(hiddenGem, ScoringWeights.hiddenGem);
+    hiddenGem = Math.min(hiddenGem, weights.hiddenGem);
 
     // 10. Deadline Urgency (Max 3)
     let deadline = 1;
-    const deadlineDays = opportunity.intelligence?.daysRemaining;
-    if (deadlineDays !== null && deadlineDays !== undefined) {
-      if (deadlineDays >= 0 && deadlineDays <= 3) {
-        deadline = 3;
-        explanations.push({ type: 'deadline', message: 'Deadline is approaching soon' });
-      } else if (deadlineDays > 3 && deadlineDays <= 7) {
+    if (flags.enableDeadlineBonus) {
+      const deadlineDays = opportunity.intelligence?.daysRemaining;
+      if (deadlineDays !== null && deadlineDays !== undefined) {
+        if (deadlineDays >= 0 && deadlineDays <= 3) {
+          deadline = 3;
+          explanations.push({ type: 'deadline', message: 'Deadline is approaching soon' });
+        } else if (deadlineDays > 3 && deadlineDays <= 7) {
+          deadline = 2;
+        }
+      } else if (opportunity.deadlineStatus === 'ROLLING') {
         deadline = 2;
       }
-    } else if (opportunity.deadlineStatus === 'ROLLING') {
-      deadline = 2;
     }
-    deadline = Math.min(deadline, ScoringWeights.deadline);
+    deadline = Math.min(deadline, weights.deadline);
 
     // 11. Confidence Bonus (Max 2)
     let confidence = 0;
-    const quality = opportunity.qualityScore || 50;
-    const trust = opportunity.trustScore || 50;
-    const aiConf = opportunity.confidence || 70;
-    // Scale avg (quality, trust, aiConf) 0-100 to 2 points
-    confidence = parseFloat((((quality + trust + aiConf) / 300) * 2).toFixed(2));
-    confidence = Math.min(confidence, ScoringWeights.confidence);
+    if (flags.enableConfidenceBonus) {
+      const quality = opportunity.qualityScore || 50;
+      const trust = opportunity.trustScore || 50;
+      const aiConf = opportunity.confidence || 70;
+      confidence = parseFloat((((quality + trust + aiConf) / 300) * 2).toFixed(2));
+    }
+    confidence = Math.min(confidence, weights.confidence);
 
     const finalScore = Math.round(
       baseMatch +
@@ -284,8 +297,10 @@ export class ScoringEngine {
   /**
    * Scores and stably ranks all candidate opportunities.
    */
-  static run(candidates: any[], profile: IProfile): IRankedCandidate[] {
-    const scored = candidates.map((c) => this.scoreOpportunity(c.opportunity || c, profile));
+  static run(candidates: any[], profile: IProfile, weights = ScoringWeights): IRankedCandidate[] {
+    const scored = candidates.map((c) =>
+      this.scoreOpportunity(c.opportunity || c, profile, weights),
+    );
 
     // Stably sort: Final Score DESC, then Trust DESC, then Quality DESC, then createdAt DESC
     return scored

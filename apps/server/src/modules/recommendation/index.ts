@@ -29,3 +29,10 @@ export { RecommendationDashboardService } from './dashboard/recommendation-dashb
 export { RecommendationStatusService } from './polling/recommendation-status.service';
 export { RecommendationSchedulerService } from './scheduler/recommendation-scheduler.service';
 export { RecommendationDto } from './api/recommendation.dto';
+export { RecommendationConfig } from './config/recommendation-config';
+export { ScoringExperimentsService } from './experiments/scoring-experiments.service';
+export { RecommendationAnalyticsService } from './analytics/recommendation-analytics.service';
+export { RecommendationQualityService } from './quality/recommendation-quality.service';
+export { RecommendationExplainabilityService } from './explainability/recommendation-explainability.service';
+export { RecommendationMetricsService } from './metrics/recommendation-metrics.service';
+export { RecommendationEventModel } from './analytics/recommendation-analytics.service';

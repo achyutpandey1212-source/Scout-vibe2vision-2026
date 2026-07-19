@@ -28,6 +28,12 @@ export interface IRecommendationMetadata {
   promptVersion: string;
   schemaVersion?: string;
   engineVersion?: string;
+  recommendationVersion?: string;
+  scoringVersion?: string;
+  experimentVersion?: string;
+  discoverySnapshotVersion?: string;
+  experimentGroup?: string;
+  qualityScore?: number;
   generationTimeMs: number;
   candidateCount: number;
   filteredCount: number;

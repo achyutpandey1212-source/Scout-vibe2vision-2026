@@ -8,6 +8,11 @@ import { PersonalizationService } from '../ai/personalization.service';
 import { RecommendationPackBuilder } from '../builder/recommendation-pack.builder';
 import { RecommendationRepository } from '../repository/recommendation.repository';
 import { RecommendationGenerationReason } from '../types/recommendation.types';
+import { RecommendationConfig } from '../config/recommendation-config';
+import { ScoringExperimentsService } from '../experiments/scoring-experiments.service';
+import { RecommendationQualityService } from '../quality/recommendation-quality.service';
+import { FallbackPersonalization } from '../ai/fallback-personalization';
+import { IAIPersonalizationMetadata, IAIPersonalizationResponse } from '../ai/ai.types';
 import mongoose from 'mongoose';
 
 export class BackgroundGenerationService {
@@ -74,10 +79,18 @@ export class BackgroundGenerationService {
     let initialCount = 0;
     let filteredCount = 0;
     let fallbackUsed = false;
+    let repairUsed = false;
     let success = false;
+    let aiLatency = 0;
+    let promptHashVal = '';
 
     try {
-      // 1. Retrieving
+      // 1. Assign Experiment Group and load configurations
+      const experimentGroup = ScoringExperimentsService.assignGroup(userId);
+      const flags = RecommendationConfig.getFlags();
+      const weights = RecommendationConfig.getWeights(experimentGroup);
+
+      // 2. Retrieving
       await RecommendationRepository.updateProgressPhase(packId, 'RETRIEVING');
       const rawCandidates = await CandidateRetrievalService.fetchActiveCandidates();
       initialCount = rawCandidates.length;
@@ -93,39 +106,71 @@ export class BackgroundGenerationService {
         userId: new mongoose.Types.ObjectId(userId),
       }).exec();
 
-      // 2. Filtering
+      // 3. Filtering
       await RecommendationRepository.updateProgressPhase(packId, 'FILTERING');
       const { pool } = HardFilterEngine.run(rawCandidates, profile);
       filteredCount = pool.length;
 
       const filteredOpps = pool.map((e) => e.opportunity);
 
-      // 3. Scoring
+      // 4. Scoring
       await RecommendationRepository.updateProgressPhase(packId, 'SCORING');
-      const scoredCandidates = ScoringEngine.run(filteredOpps, profile);
+      const scoredCandidates = ScoringEngine.run(filteredOpps, profile, weights);
 
-      // 4. Diversifying
+      // 5. Diversifying
       await RecommendationRepository.updateProgressPhase(packId, 'DIVERSIFYING');
-      const top5Candidates = DiversificationEngine.diversify(scoredCandidates, 5);
+      let top5Candidates = scoredCandidates.slice(0, 5);
+      if (flags.enableDiversification) {
+        top5Candidates = DiversificationEngine.diversify(scoredCandidates, 5);
+      }
 
-      // 5. Personalizing
+      // 6. Personalizing (skip if AI Personalization flag is disabled)
       await RecommendationRepository.updateProgressPhase(packId, 'PERSONALIZING');
-      const { response, metadata: aiMeta } = await PersonalizationService.personalize(
-        profile,
-        resume,
-        top5Candidates,
-      );
-      fallbackUsed = aiMeta.fallbackUsed;
 
-      // 6. Building Pack
+      let aiResponse: IAIPersonalizationResponse;
+      let aiMeta: IAIPersonalizationMetadata;
+
+      if (flags.enableAIPersonalization) {
+        const aiResult = await PersonalizationService.personalize(profile, resume, top5Candidates);
+        aiResponse = aiResult.response;
+        aiMeta = aiResult.metadata;
+        fallbackUsed = aiMeta.fallbackUsed;
+        repairUsed = aiMeta.repairUsed;
+        aiLatency = aiMeta.latencyMs;
+        promptHashVal = aiMeta.promptHash;
+      } else {
+        fallbackUsed = true;
+        aiResponse = FallbackPersonalization.generate(top5Candidates);
+        aiMeta = {
+          provider: 'local-fallback',
+          model: 'fallback',
+          latencyMs: 0,
+          promptVersion: 'N/A',
+          schemaVersion: 'N/A',
+          engineVersion: 'N/A',
+          fallbackUsed: true,
+          repairUsed: false,
+          promptLength: 0,
+          responseLength: 0,
+          promptHash: '',
+        };
+        promptHashVal = '';
+      }
+
+      // 7. Quality evaluation
+      const qualityScore = RecommendationQualityService.evaluatePack(top5Candidates);
+
+      // 8. Building Pack
       await RecommendationRepository.updateProgressPhase(packId, 'BUILDING_PACK');
       const finalPackFields = RecommendationPackBuilder.build(
         userId,
         profileHash,
         reason,
         top5Candidates,
-        response,
+        aiResponse,
         aiMeta,
+        experimentGroup,
+        qualityScore,
       );
 
       const durationMs = Date.now() - startTime;
@@ -139,60 +184,90 @@ export class BackgroundGenerationService {
       await RecommendationService.markReady(packId, finalPackFields);
       success = true;
 
-      // Print Background Audit Logs
-      this.logBackgroundSummary(
-        userId,
-        reason,
+      // Print Quality Report Logs
+      this.logQualityReport(
+        durationMs,
         initialCount,
         filteredCount,
-        top5Candidates.length,
+        top5Candidates,
+        aiLatency,
         fallbackUsed,
-        true,
-        durationMs,
+        repairUsed,
+        qualityScore,
       );
     } catch (err: any) {
       console.error(`[Recommendation] Worker failed for pack ${packId}:`, err.message);
       await RecommendationService.markFailed(packId).catch(() => {});
       const durationMs = Date.now() - startTime;
-      this.logBackgroundSummary(
-        userId,
-        reason,
+      this.logQualityReport(
+        durationMs,
         initialCount,
         filteredCount,
+        [],
         0,
         fallbackUsed,
-        false,
-        durationMs,
+        repairUsed,
+        0,
       );
     }
   }
 
   /**
-   * Logs generation summary.
+   * Logs quality report.
    */
-  private static logBackgroundSummary(
-    userId: string,
-    reason: string,
-    retrieved: number,
+  private static logQualityReport(
+    generationTime: number,
+    candidatePool: number,
     filtered: number,
-    topCandidates: number,
-    fallbackUsed: boolean,
-    completed: boolean,
-    durationMs: number,
+    top5: any[],
+    aiLatency: number,
+    fallback: boolean,
+    repair: boolean,
+    qualityScore: number,
   ): void {
-    console.log('\n===============================================');
-    console.log('Recommendation Generation');
-    console.log('===============================================');
-    console.log(`User: ${userId}`);
-    console.log(`Reason: ${reason}`);
-    console.log(`Status: ${completed ? 'SUCCESS' : 'FAILED'}`);
-    console.log(`\nCandidates Retrieved: ${retrieved}`);
-    console.log(`After Filters: ${filtered}`);
-    console.log(`Top Candidates: ${topCandidates}`);
-    console.log(`AI: ${fallbackUsed ? 'FALLBACK' : 'SUCCESS'}`);
-    console.log(`Pack: ${completed ? 'READY' : 'FAILED'}`);
-    console.log(`Duration: ${(durationMs / 1000).toFixed(1)} s`);
-    console.log('===============================================\n');
+    const scores = top5.map((c) => c.finalScore);
+    const topScore = scores.length > 0 ? Math.max(...scores) : 0;
+    const avgScore =
+      scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+
+    const hiddenGems = top5.map((c) => c.opportunity.hiddenGemScore || 0);
+    const avgHiddenGem =
+      hiddenGems.length > 0
+        ? Math.round(hiddenGems.reduce((a, b) => a + b, 0) / hiddenGems.length)
+        : 0;
+
+    const portfolios = top5.map((c) => {
+      const valSum =
+        (c.opportunity.careerValPortfolio || 0) +
+        (c.opportunity.careerValResume || 0) +
+        (c.opportunity.careerValLearning || 0) +
+        (c.opportunity.careerValNetworking || 0) +
+        (c.opportunity.careerValExposure || 0);
+      return Math.round((valSum / 25) * 10);
+    });
+    const avgPortfolio =
+      portfolios.length > 0
+        ? Math.round(portfolios.reduce((a, b) => a + b, 0) / portfolios.length)
+        : 0;
+
+    // Diversity: unique organizations size
+    const orgs = new Set(top5.map((c) => c.diversificationTags.organization));
+    const avgDiversity = top5.length > 0 ? Math.round((orgs.size / top5.length) * 10) : 0;
+
+    console.log('\n========== Recommendation Quality Report ==========');
+    console.log(`Generation Time: ${generationTime} ms`);
+    console.log(`Candidate Pool: ${candidatePool}`);
+    console.log(`Filtered: ${filtered}`);
+    console.log(`Top Score: ${topScore}`);
+    console.log(`Average Score: ${avgScore}`);
+    console.log(`Average Hidden Gem: ${avgHiddenGem}`);
+    console.log(`Average Portfolio Value: ${avgPortfolio}`);
+    console.log(`Average Diversity: ${avgDiversity} / 10`);
+    console.log(`AI Latency: ${aiLatency} ms`);
+    console.log(`Fallback: ${fallback ? 'Yes' : 'No'}`);
+    console.log(`Repair: ${repair ? 'Yes' : 'No'}`);
+    console.log(`Quality Score: ${qualityScore}`);
+    console.log('===========================================\n');
   }
 
   /**

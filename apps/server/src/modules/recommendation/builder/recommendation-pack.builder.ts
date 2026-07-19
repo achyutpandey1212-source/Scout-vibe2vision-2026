@@ -1,7 +1,7 @@
 import { IRankedCandidate } from '../types/scoring.types';
 import { IAIPersonalizationResponse, IAIPersonalizationMetadata } from '../ai/ai.types';
 import { IRecommendationPack, RecommendationGenerationReason } from '../types/recommendation.types';
-import { ENGINE_VERSION } from '../ai/ai.constants';
+import { ENGINE_VERSION, SCHEMA_VERSION } from '../ai/ai.constants';
 import mongoose from 'mongoose';
 
 export class RecommendationPackBuilder {
@@ -15,6 +15,9 @@ export class RecommendationPackBuilder {
     top5: IRankedCandidate[],
     aiResponse: IAIPersonalizationResponse,
     aiMetadata: IAIPersonalizationMetadata,
+    experimentGroup: string,
+    qualityScore: number,
+    discoverySnapshotVersion = 'DISCOVERY-v1',
     expiryHours = 24,
   ): Partial<IRecommendationPack> {
     const generatedAt = new Date();
@@ -53,8 +56,14 @@ export class RecommendationPackBuilder {
         provider: aiMetadata.provider,
         model: aiMetadata.model,
         promptVersion: aiMetadata.promptVersion,
-        schemaVersion: aiMetadata.schemaVersion,
-        engineVersion: aiMetadata.engineVersion,
+        schemaVersion: SCHEMA_VERSION,
+        engineVersion: ENGINE_VERSION,
+        recommendationVersion: ENGINE_VERSION,
+        scoringVersion: ENGINE_VERSION,
+        experimentVersion: 'EXP-v1',
+        discoverySnapshotVersion,
+        experimentGroup,
+        qualityScore,
         generationTimeMs: aiMetadata.latencyMs, // initially latency, will be updated to include full flow duration
         candidateCount: top5.length,
         filteredCount: top5.length,
