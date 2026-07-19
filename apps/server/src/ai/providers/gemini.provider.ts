@@ -34,6 +34,9 @@ export class GeminiProvider extends BaseProvider {
     if (options.maxTokens !== undefined) {
       body.generationConfig.maxOutputTokens = options.maxTokens;
     }
+    if (options.responseMimeType !== undefined) {
+      body.generationConfig.responseMimeType = options.responseMimeType;
+    }
 
     // Default timeout limit is 30s unless overridden
     const timeoutMs = options.timeoutMs ?? 30000;

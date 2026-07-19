@@ -20,38 +20,51 @@ export function safeParseJson<T = any>(text: string): T {
       .trim();
   }
 
-  // Replace backticks used as quotes for keys/values
+  // Tier 1: Immediate Parse
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch (initialErr) {
+    // Fail-soft: proceed to Tier 2 (lightweight repair)
+  }
+
+  // Tier 2: Extract First JSON Structure (handles preamble/postscript or trailing garbage)
+  const extracted = extractFirstJsonStructure(cleaned);
+  if (extracted !== null) {
+    try {
+      return JSON.parse(extracted) as T;
+    } catch (extractedErr) {
+      cleaned = extracted; // If it failed, use the extracted block for further fuzzy repairs
+    }
+  } else if (!cleaned.startsWith('{') && !cleaned.startsWith('[') && cleaned.includes(':')) {
+    cleaned = '{' + cleaned + '}';
+    try {
+      return JSON.parse(cleaned) as T;
+    } catch (wrapErr) {
+      // Proceed to Tier 3 fuzzy cleanup
+    }
+  }
+
+  // Tier 3: Fuzzy JSON Repair
+  // 3a. Replace backticks used as quotes for keys/values
   cleaned = cleaned.replace(/`([^`\n]+)`/g, '"$1"');
 
-  // Convert single quotes around keys/values to double quotes
+  // 3b. Convert single quotes around keys/values to double quotes
   cleaned = cleaned.replace(/'([a-zA-Z0-9_]+)'\s*:/g, '"$1":');
   cleaned = cleaned.replace(/:\s*'([^'\\]*(?:\\.[^'\\]*)*)'/g, ': "$1"');
   cleaned = cleaned.replace(/\[\s*'([^'\\]*(?:\\.[^'\\]*)*)'/g, '["$1"');
   cleaned = cleaned.replace(/,\s*'([^'\\]*(?:\\.[^'\\]*)*)'/g, ', "$1"');
 
-  cleaned = cleaned.trim();
-
-  // Extract the first complete JSON structure from the text.
-  // This handles cases where the model outputs preamble/postscript around the JSON,
-  // or where JSON.parse would fail due to trailing garbage.
-  const extracted = extractFirstJsonStructure(cleaned);
-  if (extracted !== null) {
-    cleaned = extracted;
-  } else if (!cleaned.startsWith('{') && !cleaned.startsWith('[') && cleaned.includes(':')) {
-    cleaned = '{' + cleaned + '}';
-  }
-
-  // Quote unquoted property names (e.g. {key: "value"} → {"key": "value"})
+  // 3c. Quote unquoted property names (e.g. {key: "value"} → {"key": "value"})
   cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":');
 
-  // Quote unquoted string values (e.g. "reason": CSIR CBRI. → "reason": "CSIR CBRI.")
+  // 3d. Quote unquoted string values (e.g. "reason": CSIR CBRI. → "reason": "CSIR CBRI.")
   cleaned = cleaned.replace(/:\s*(true|false|null|[a-zA-Z_][a-zA-Z0-9_\s.]*)/g, (match, value) => {
     if (value === 'true' || value === 'false' || value === 'null') return match;
     if (value.startsWith('"') || value.startsWith("'")) return match;
     return ': "' + value + '"';
   });
 
-  // Remove trailing commas in JSON object/array structures (invalid in strict JSON)
+  // 3e. Remove trailing commas in JSON object/array structures (invalid in strict JSON)
   cleaned = cleaned.replace(/,\s*([}\]])/g, '$1');
 
   return JSON.parse(cleaned) as T;

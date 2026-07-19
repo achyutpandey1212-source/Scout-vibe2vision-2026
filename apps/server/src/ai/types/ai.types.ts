@@ -28,6 +28,7 @@ export interface AIRequestOptions {
   maxTokens?: number;
   timeoutMs?: number;
   systemInstruction?: string;
+  responseMimeType?: string;
 }
 
 export interface AIStructuredRequestOptions<T> extends Omit<AIRequestOptions, 'prompt'> {

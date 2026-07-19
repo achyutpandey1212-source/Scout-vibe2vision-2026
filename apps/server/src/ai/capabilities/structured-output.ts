@@ -33,6 +33,7 @@ export async function generateStructuredResponse<T>(
   let attempts = 0;
   let currentPrompt = options.prompt;
   let lastResponseText = '';
+  const attemptLogs: { attempt: number; reason: string } = [] as any;
 
   const formatInstructions = `\n\nIMPORTANT: You must respond ONLY with a valid JSON object matching the expected schema. Do not include any chat preamble, postscript, or explanations. Just pure JSON.`;
 
@@ -50,6 +51,7 @@ export async function generateStructuredResponse<T>(
       maxTokens: options.maxTokens,
       systemInstruction: options.systemInstruction,
       timeoutMs: options.timeoutMs,
+      responseMimeType: 'application/json', // Enable native JSON generation (Task 4)
     });
 
     lastResponseText = response.text;
@@ -65,6 +67,17 @@ export async function generateStructuredResponse<T>(
       const validationResult = options.schema.safeParse(sanitizedData);
 
       if (validationResult.success) {
+        if (attempts > 1) {
+          console.log(`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AI Validation Recovered
+
+${(attemptLogs as any).map((al: any) => `Attempt ${al.attempt}\nReason:\n${al.reason}`).join('\n\n')}
+
+Final Result:
+SUCCESS on attempt ${attempts}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+        }
         return validationResult.data;
       }
 
@@ -75,12 +88,27 @@ export async function generateStructuredResponse<T>(
         lastResponseText,
       );
     } catch (parseOrValidationError: any) {
-      console.warn(
-        `[AI Layer] Schema validation failed on attempt ${attempts}/${maxSchemaAttempts}. Error: ${parseOrValidationError.message}`,
-      );
-      console.warn(`[AI Layer] Raw output (first 500 chars): ${lastResponseText.slice(0, 500)}`);
+      (attemptLogs as any).push({
+        attempt: attempts,
+        reason: parseOrValidationError.message,
+      });
 
       if (attempts >= maxSchemaAttempts) {
+        console.log(`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AI Validation Failed
+
+${(attemptLogs as any).map((al: any) => `Attempt ${al.attempt}\nReason:\n${al.reason}`).join('\n\n')}
+
+Final Result:
+FAILED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+
+        if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+          console.warn(
+            `[AI Layer] Raw output (first 500 chars): ${lastResponseText.slice(0, 500)}`,
+          );
+        }
         throw parseOrValidationError; // Re-throw if out of attempts
       }
 

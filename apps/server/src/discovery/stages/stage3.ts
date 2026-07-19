@@ -275,6 +275,7 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
           context: 'discovery',
           temperature: 0.1,
           systemInstruction: EXTRACTION_SYSTEM_INSTRUCTION,
+          responseMimeType: 'application/json',
         });
 
         latencyMs = Date.now() - startTime;
