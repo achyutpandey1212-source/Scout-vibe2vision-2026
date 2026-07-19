@@ -29,6 +29,10 @@ export interface IHealthThresholds {
 }
 
 export class RecommendationConfig {
+  private static mode: 'PRODUCTION' | 'DEVELOPMENT' | 'MAINTENANCE' = 'PRODUCTION';
+  private static modeChangedBy = 'System';
+  private static modeChangedAt = new Date();
+
   private static flags: IFeatureFlags = {
     enableWomenBonus: true,
     enableHiddenGemBonus: true,
@@ -87,7 +91,29 @@ export class RecommendationConfig {
     return experimentGroup === 'B' ? { ...this.weightsGroupB } : { ...this.weightsGroupA };
   }
 
+  static setWeights(experimentGroup: 'A' | 'B', updated: Partial<IScoringWeights>): void {
+    if (experimentGroup === 'B') {
+      this.weightsGroupB = { ...this.weightsGroupB, ...updated };
+    } else {
+      this.weightsGroupA = { ...this.weightsGroupA, ...updated };
+    }
+  }
+
   static getThresholds(): IHealthThresholds {
     return { ...this.healthThresholds };
+  }
+
+  static getMode() {
+    return {
+      mode: this.mode,
+      changedBy: this.modeChangedBy,
+      changedAt: this.modeChangedAt,
+    };
+  }
+
+  static setMode(mode: 'PRODUCTION' | 'DEVELOPMENT' | 'MAINTENANCE', operator: string) {
+    this.mode = mode;
+    this.modeChangedBy = operator;
+    this.modeChangedAt = new Date();
   }
 }

@@ -276,4 +276,109 @@ export class BackgroundGenerationService {
   static isGenerating(userId: string): boolean {
     return this.activeLocks.has(userId);
   }
+
+  /**
+   * Performs a sandbox pipeline dry run, returning intermediate outputs per phase.
+   */
+  static async runDryRun(userId: string, targetStage?: string, customWeights?: any): Promise<any> {
+    const startTime = Date.now();
+    const stages: any[] = [];
+    const runStage = async (name: string, fn: () => Promise<any> | any) => {
+      const stageStart = Date.now();
+      try {
+        const res = await fn();
+        stages.push({
+          name,
+          status: 'completed',
+          durationMs: Date.now() - stageStart,
+          output: res,
+        });
+        return res;
+      } catch (err: any) {
+        stages.push({
+          name,
+          status: 'failed',
+          durationMs: Date.now() - stageStart,
+          error: err.message,
+        });
+        throw err;
+      }
+    };
+
+    // 1. Retrieval
+    const rawCandidates = await runStage('Retrieval', async () => {
+      return await CandidateRetrievalService.fetchActiveCandidates();
+    });
+
+    if (targetStage === 'Retrieval') return { durationMs: Date.now() - startTime, stages };
+
+    // Fetch user profile and resume
+    const profile = await ProfileModel.findOne({
+      userId: new mongoose.Types.ObjectId(userId),
+    }).exec();
+    if (!profile) {
+      throw new Error('User profile not found. Complete onboarding first.');
+    }
+    const resume = await ResumeModel.findOne({
+      userId: new mongoose.Types.ObjectId(userId),
+    }).exec();
+
+    // 2. Hard Filters
+    const filterRes = await runStage('Hard Filters', () => {
+      return HardFilterEngine.run(rawCandidates, profile);
+    });
+
+    if (targetStage === 'Hard Filters') return { durationMs: Date.now() - startTime, stages };
+
+    // 3. Scoring
+    const experimentGroup = ScoringExperimentsService.assignGroup(userId);
+    const weights = customWeights || RecommendationConfig.getWeights(experimentGroup);
+    const scoredCandidates = await runStage('Scoring', () => {
+      const pool = filterRes.pool.map((e: any) => e.opportunity);
+      return ScoringEngine.run(pool, profile, weights);
+    });
+
+    if (targetStage === 'Scoring') return { durationMs: Date.now() - startTime, stages };
+
+    // 4. Diversification
+    const diversified = await runStage('Diversification', () => {
+      return DiversificationEngine.diversify(scoredCandidates, 5);
+    });
+
+    if (targetStage === 'Diversification') return { durationMs: Date.now() - startTime, stages };
+
+    // 5. AI Personalization
+    const aiPersonalized = await runStage('AI Personalization', async () => {
+      if (RecommendationConfig.getFlags().enableAIPersonalization) {
+        return await PersonalizationService.personalize(profile, resume, diversified);
+      } else {
+        return {
+          response: FallbackPersonalization.generate(diversified),
+          metadata: { provider: 'local-fallback', fallbackUsed: true },
+        };
+      }
+    });
+
+    if (targetStage === 'AI Personalization') return { durationMs: Date.now() - startTime, stages };
+
+    // 6. Build Pack
+    await runStage('Build Pack', () => {
+      const qualityScore = RecommendationQualityService.evaluatePack(diversified);
+      return RecommendationPackBuilder.build(
+        userId,
+        'dry-run-hash',
+        'ADMIN_FORCE' as any,
+        diversified,
+        aiPersonalized.response,
+        aiPersonalized.metadata,
+        experimentGroup,
+        qualityScore,
+      );
+    });
+
+    return {
+      durationMs: Date.now() - startTime,
+      stages,
+    };
+  }
 }
