@@ -80,6 +80,7 @@ const SourceRegistrySchema = new Schema<ISourceRegistryDocument>(
     nextCrawlAt: { type: Date, default: Date.now },
 
     consecutiveFailures: { type: Number, default: 0 },
+    consecutiveEmptyRuns: { type: Number, default: 0 },
 
     totalRuns: { type: Number, default: 0 },
     totalPagesCrawled: { type: Number, default: 0 },

@@ -298,9 +298,44 @@ export class Stage4QualityAcceptance implements IPipelineStage<
 
       const finalScore = Math.min(100, Math.max(0, score));
 
-      // 3. Decision Engine Track
+      // 3. Decision Engine Track with Smart Acceptance Rules (Phase H)
       let decision: 'ACCEPT' | 'REVIEW' | 'REJECT' = 'REJECT';
-      if (!isDataValid) {
+      const hasCoreSignal =
+        opp.applicationUrl &&
+        opp.applicationUrl.startsWith('http') &&
+        opp.organization &&
+        opp.organization.trim().length >= 2 &&
+        opp.title &&
+        opp.title.trim().length >= 3;
+
+      const isTargetTechRole = [
+        'intern',
+        'internship',
+        'software',
+        'sde',
+        'developer',
+        'engineer',
+        'backend',
+        'frontend',
+        'full stack',
+        'fullstack',
+        'ai',
+        'ml',
+        'machine learning',
+        'data science',
+        'devops',
+        'cloud',
+        'product',
+        'trainee',
+      ].some((kw) => (opp.title || '').toLowerCase().includes(kw));
+
+      if (isDataValid && hasCoreSignal && isTargetTechRole && finalScore >= 60) {
+        decision = 'ACCEPT';
+        positiveReasons.push(
+          'Smart Acceptance: High-value tech role with valid org & direct application link',
+        );
+        acceptedCount++;
+      } else if (!isDataValid) {
         decision = 'REJECT';
         rejectedCount++;
       } else if (finalScore >= acceptThreshold) {

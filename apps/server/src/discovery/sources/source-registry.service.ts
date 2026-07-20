@@ -201,13 +201,51 @@ class SourceRegistryService {
       },
     );
 
-    console.warn(
-      `[SourceRegistry] Immediate markFailed for ${cleanDomain} (consecutiveFailures: ${newFailureCount})`,
-    );
     if (shouldDeactivate) {
       console.warn(
         `[SourceRegistry] Source deactivated after 5 consecutive failures: ${cleanDomain}`,
       );
+    }
+  }
+
+  /**
+   * Records the yield outcome of a crawl run for a specific source domain (Phase K).
+   * Automatically deprioritizes domains with >= 3 consecutive empty runs,
+   * while boosting proven high-yielding domains.
+   */
+  async recordRunOutcome(domain: string, yieldCount: number): Promise<void> {
+    const cleanDomain = domain.toLowerCase().trim();
+    const source = await SourceRegistryModel.findOne({ domain: cleanDomain });
+    if (!source) return;
+
+    if (yieldCount > 0) {
+      const newTotal = (source.totalOpportunitiesFound || 0) + yieldCount;
+      const updates: any = {
+        consecutiveEmptyRuns: 0,
+        totalOpportunitiesFound: newTotal,
+      };
+
+      // Boost high-yielding sources
+      if (yieldCount >= 2 && source.priority !== 'critical') {
+        updates.priority = 'high';
+        updates.trustScore = Math.min(100, source.trustScore + 5);
+      }
+
+      await SourceRegistryModel.updateOne({ domain: cleanDomain }, { $set: updates });
+    } else {
+      const newEmptyCount = (source.consecutiveEmptyRuns || 0) + 1;
+      const updates: any = { consecutiveEmptyRuns: newEmptyCount };
+
+      // Automatically deprioritize consistently empty sources (Phase K)
+      if (newEmptyCount >= 3) {
+        updates.priority = 'low';
+        updates.crawlFrequency = 'monthly';
+        console.warn(
+          `[SourceRegistry] Automatically deprioritized low-yield domain ${cleanDomain} (${newEmptyCount} consecutive empty runs).`,
+        );
+      }
+
+      await SourceRegistryModel.updateOne({ domain: cleanDomain }, { $set: updates });
     }
   }
 

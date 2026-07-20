@@ -47,6 +47,7 @@ export interface ISourceRegistryEntry {
   nextCrawlAt: Date;
 
   consecutiveFailures: number;
+  consecutiveEmptyRuns?: number;
 
   totalRuns: number;
   totalPagesCrawled: number;

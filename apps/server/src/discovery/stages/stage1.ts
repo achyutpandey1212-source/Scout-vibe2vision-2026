@@ -114,19 +114,33 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
 
       switch (target.strategy) {
         case 'direct': {
-          // No Tavily — add homepage directly as candidate
-          const normalized = normalizeUrl(target.homepage);
-          if (!processedUrls.has(normalized)) {
-            processedUrls.add(normalized);
-            allCandidates.push({
-              url: target.homepage,
-              source: target.organization,
-              domain: target.domain,
-              query: `direct:${target.domain}`,
-              snippet: '',
-              score: target.trustScore / 10, // normalize 0–100 → 0–10 range
-              discoveredAt: now,
-            });
+          // Add homepage and deep career paths as candidate targets
+          const base = target.homepage.replace(/\/$/, '');
+          const paths = [
+            '',
+            '/careers',
+            '/jobs',
+            '/careers/openings',
+            '/work-with-us',
+            '/join-us',
+            '/careers/internships',
+          ];
+
+          for (const p of paths) {
+            const fullUrl = `${base}${p}`;
+            const normalized = normalizeUrl(fullUrl);
+            if (!processedUrls.has(normalized)) {
+              processedUrls.add(normalized);
+              allCandidates.push({
+                url: fullUrl,
+                source: target.organization,
+                domain: target.domain,
+                query: `direct:${target.domain}${p}`,
+                snippet: '',
+                score: target.trustScore / 10,
+                discoveredAt: now,
+              });
+            }
           }
           break;
         }
@@ -214,29 +228,37 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Builds 1–3 site-scoped Tavily queries for a source domain.
- * These are designed to surface opportunity-specific pages within the domain.
- */
 function buildSiteQueries(domain: string, context: DiscoveryContext): string[] {
-  const country = context.country || 'India';
   const queries: string[] = [];
-  const categories = context.categories || [];
+  const domainLower = domain.toLowerCase();
 
-  if (categories.includes('STARTUP_INTERNSHIPS')) {
-    queries.push(`site:${domain} intern startup careers 2026`);
-    queries.push(`site:${domain} "founding engineer" intern software`);
-    queries.push(`site:${domain} engineering internship frontend backend`);
-  } else {
-    // Primary: opportunity-focused site search including new candidate keywords (Phase 8)
-    queries.push(`site:${domain} intern student program fellowship scholarship 2026`);
-
-    // Secondary: program/recruitment search targeting innovation, research, challenges, and portals
-    queries.push(`site:${domain} challenge innovation research project careers portal`);
-
-    // Tertiary: campus hiring / graduate programs
-    queries.push(`site:${domain} campus hiring graduate program recruitment ${country}`);
+  // 1. High-Yield ATS & Job Platform Domains
+  if (
+    domainLower.includes('ashbyhq.com') ||
+    domainLower.includes('lever.co') ||
+    domainLower.includes('greenhouse.io') ||
+    domainLower.includes('workable.com') ||
+    domainLower.includes('wellfound.com') ||
+    domainLower.includes('ycombinator.com')
+  ) {
+    queries.push(
+      `site:${domain} intern OR internship India Bangalore Gurgaon Pune Hyderabad Remote 2026`,
+    );
+    queries.push(
+      `site:${domain} "Software Engineer" OR "SDE" OR "AI" OR "Backend" OR "Frontend" intern`,
+    );
+    queries.push(`site:${domain} "Full Stack" OR "ML" OR "DevOps" OR "Data Science" internship`);
+    return queries;
   }
+
+  // 2. Standard Company Domains
+  queries.push(
+    `site:${domain} intern OR internship OR "SDE Intern" OR "Software Engineering Intern" 2026`,
+  );
+  queries.push(
+    `site:${domain} "careers" OR "jobs" OR "openings" software AI backend frontend fullstack`,
+  );
+  queries.push(`site:${domain} "campus hiring" OR "graduate program" OR "trainee" India Remote`);
 
   return queries;
 }

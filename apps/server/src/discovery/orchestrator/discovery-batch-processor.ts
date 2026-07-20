@@ -212,8 +212,10 @@ Duration:     ${(durationMs / 1000).toFixed(1)} s
           pagesCrawled: data.pages.length,
           opportunitiesFound: data.oppsCount,
         });
+        await sourceRegistryService.recordRunOutcome(dom, data.oppsCount);
       } else {
         await sourceRegistryService.markFailed(dom);
+        await sourceRegistryService.recordRunOutcome(dom, 0);
       }
     }
   }
