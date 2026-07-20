@@ -1,0 +1,4 @@
+export const QUERY_ENGINE_CONFIG = {
+  MAX_QUERIES_PER_SOURCE: 40,
+  DEFAULT_COUNTRY: 'India',
+};

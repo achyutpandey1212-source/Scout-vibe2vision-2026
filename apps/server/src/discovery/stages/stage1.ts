@@ -4,6 +4,7 @@ import { crawlSchedulerService } from '../sources/crawl-scheduler.service';
 import { TavilyClient } from '../search/tavily.client';
 import { normalizeUrl } from '../search/search-orchestrator';
 import { CrawlTarget, ISourceRegistryEntry } from '../sources/source-registry.types';
+import { generateQueries } from '../query-engine/query-generator';
 
 export interface CandidateURL {
   url: string;
@@ -146,10 +147,11 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
         }
 
         case 'search': {
-          // Generate site-scoped queries and run Tavily
-          const queries = buildSiteQueries(target.domain, context);
+          // Generate persona-driven, ranked queries using the new query-engine
+          const rankedQueries = generateQueries(target.domain);
+          const queries = rankedQueries.map((q) => q.query);
           console.log(
-            `[Stage 1] [${target.organization}] Running ${queries.length} site-scoped Tavily queries...`,
+            `[Stage 1] [${target.organization}] Running ${queries.length} recruiter-quality query-engine searches...`,
           );
 
           for (const query of queries) {
@@ -224,41 +226,4 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
 
     return allCandidates;
   }
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function buildSiteQueries(domain: string, context: DiscoveryContext): string[] {
-  const queries: string[] = [];
-  const domainLower = domain.toLowerCase();
-
-  // 1. High-Yield ATS & Job Platform Domains
-  if (
-    domainLower.includes('ashbyhq.com') ||
-    domainLower.includes('lever.co') ||
-    domainLower.includes('greenhouse.io') ||
-    domainLower.includes('workable.com') ||
-    domainLower.includes('wellfound.com') ||
-    domainLower.includes('ycombinator.com')
-  ) {
-    queries.push(
-      `site:${domain} intern OR internship India Bangalore Gurgaon Pune Hyderabad Remote 2026`,
-    );
-    queries.push(
-      `site:${domain} "Software Engineer" OR "SDE" OR "AI" OR "Backend" OR "Frontend" intern`,
-    );
-    queries.push(`site:${domain} "Full Stack" OR "ML" OR "DevOps" OR "Data Science" internship`);
-    return queries;
-  }
-
-  // 2. Standard Company Domains
-  queries.push(
-    `site:${domain} intern OR internship OR "SDE Intern" OR "Software Engineering Intern" 2026`,
-  );
-  queries.push(
-    `site:${domain} "careers" OR "jobs" OR "openings" software AI backend frontend fullstack`,
-  );
-  queries.push(`site:${domain} "campus hiring" OR "graduate program" OR "trainee" India Remote`);
-
-  return queries;
 }
