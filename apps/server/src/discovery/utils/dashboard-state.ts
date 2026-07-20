@@ -41,6 +41,11 @@ export interface DashboardState {
     status: 'idle' | 'running' | 'paused' | 'completed';
     pauseReason?: string;
   };
+
+  // Phase 3 Opportunity Intelligence metrics
+  goldOpportunitiesDetected?: number;
+  averageQualityScore?: number;
+  companyExpansionsCount?: number;
 }
 
 class DashboardStateManager {
@@ -66,6 +71,9 @@ class DashboardStateManager {
     crawlCurrentlyCrawling: [],
     crawlCompleted: 0,
     crawlFailed: 0,
+    goldOpportunitiesDetected: 0,
+    averageQualityScore: 0,
+    companyExpansionsCount: 0,
   };
 
   private constructor() {}
@@ -110,6 +118,9 @@ class DashboardStateManager {
       crawlCurrentlyCrawling: [],
       crawlCompleted: 0,
       crawlFailed: 0,
+      goldOpportunitiesDetected: 0,
+      averageQualityScore: 0,
+      companyExpansionsCount: 0,
     };
   }
 }

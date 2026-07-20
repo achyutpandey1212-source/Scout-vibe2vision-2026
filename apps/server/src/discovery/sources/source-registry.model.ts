@@ -72,7 +72,13 @@ const SourceRegistrySchema = new Schema<ISourceRegistryDocument>(
 
     discoveredBy: {
       type: String,
-      enum: ['seed', 'weekly-discovery', 'affiliate-extraction', 'manual'] satisfies DiscoveredBy[],
+      enum: [
+        'seed',
+        'weekly-discovery',
+        'affiliate-extraction',
+        'manual',
+        'company-graph-expansion',
+      ] satisfies DiscoveredBy[],
       required: true,
     },
     discoveredAt: { type: Date, default: Date.now },
@@ -86,6 +92,12 @@ const SourceRegistrySchema = new Schema<ISourceRegistryDocument>(
     totalPagesCrawled: { type: Number, default: 0 },
     totalOpportunitiesFound: { type: Number, default: 0 },
     opportunityDensity: { type: Number, default: 0 },
+
+    historicalYield: { type: Number, default: 0 },
+    acceptedCount: { type: Number, default: 0 },
+    savedCount: { type: Number, default: 0 },
+    yieldScore: { type: Number, default: 0 },
+    rollingAverage: { type: Number, default: 0 },
 
     sourceTier: {
       type: String,

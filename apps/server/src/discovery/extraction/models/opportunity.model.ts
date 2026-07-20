@@ -93,6 +93,11 @@ const OpportunitySchema = new Schema<IOpportunity>(
       stipendPresent: { type: Boolean, default: false },
     },
 
+    opportunityScore: { type: Number, default: 0, index: true },
+    goldOpportunity: { type: Boolean, default: false, index: true },
+    scoreBreakdown: { type: Schema.Types.Mixed, default: {} },
+    companyTier: { type: Number, default: 3, index: true },
+
     workMode: {
       type: String,
       enum: ['REMOTE', 'HYBRID', 'ONSITE', null],

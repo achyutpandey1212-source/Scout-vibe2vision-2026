@@ -486,6 +486,7 @@ export class Stage5Persistence implements IPipelineStage<
     };
 
     // Update dashboard metrics
+    const goldCount = candidates.filter((o) => o.goldOpportunity).length;
     DashboardStateInstance.updateState({
       isRunning: false,
       currentStage: 'IDLE',
@@ -493,6 +494,9 @@ export class Stage5Persistence implements IPipelineStage<
       updated: DashboardStateInstance.getState().updated + updated,
       archived: DashboardStateInstance.getState().archived + archived,
       failures: DashboardStateInstance.getState().failures + failures,
+      goldOpportunitiesDetected:
+        (DashboardStateInstance.getState().goldOpportunitiesDetected || 0) + goldCount,
+      averageQualityScore: averageQuality,
     });
 
     return runAnalytics;

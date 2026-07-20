@@ -1,5 +1,8 @@
 import { Opportunity } from '../extraction/types/opportunity.types';
 import { OpportunityModel } from '../extraction/models/opportunity.model';
+import { GoldOpportunityDetector } from '../intelligence/gold-opportunity-detector';
+import { OpportunityScorer } from '../intelligence/opportunity-score';
+import { CompanyExpander } from '../intelligence/company-expander';
 
 export class OpportunityRepository {
   /**
@@ -18,6 +21,18 @@ export class OpportunityRepository {
       try {
         const titleLower = opp.title?.trim().toLowerCase();
         const orgLower = opp.organization?.trim().toLowerCase();
+
+        // Compute opportunity intelligence scores & tiering
+        const detection = GoldOpportunityDetector.detect(
+          opp.organization || '',
+          opp.sourceDomain || '',
+        );
+        const score = OpportunityScorer.score(opp, detection.tier);
+
+        opp.goldOpportunity = detection.isGold;
+        opp.companyTier = detection.tier;
+        opp.opportunityScore = score.overall;
+        opp.scoreBreakdown = score.signals;
 
         // 1. Query existing record by source URL, application link, or exact title + organization
         const existing = await OpportunityModel.findOne({
@@ -42,6 +57,11 @@ export class OpportunityRepository {
           };
           await OpportunityModel.create(newDoc);
           inserted++;
+
+          // Async trigger related company expansions for accepted Tier 1/2 gold companies
+          if (detection.isGold) {
+            CompanyExpander.expand(detection.company).catch(() => {});
+          }
         } else {
           // Record exists: Merge fields to keep the richest metadata
           let changed = false;

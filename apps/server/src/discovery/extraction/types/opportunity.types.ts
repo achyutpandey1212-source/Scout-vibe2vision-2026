@@ -138,6 +138,10 @@ export interface Opportunity {
   hiddenGemScore?: number;
   sourceAuthority?: number;
   recommendationTags?: string[];
+  opportunityScore?: number;
+  goldOpportunity?: boolean;
+  scoreBreakdown?: any;
+  companyTier?: number;
   careerStages?: string[];
   domains?: string[];
   difficulty?: string;

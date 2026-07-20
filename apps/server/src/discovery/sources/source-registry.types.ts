@@ -2,7 +2,8 @@
 
 export type CrawlFrequency = 'daily' | 'weekly' | 'monthly';
 export type CrawlStrategy = 'direct' | 'search' | 'sitemap' | 'rss';
-export type DiscoveredBy = 'seed' | 'weekly-discovery' | 'affiliate-extraction' | 'manual';
+export type DiscoveredBy =
+  'seed' | 'weekly-discovery' | 'affiliate-extraction' | 'manual' | 'company-graph-expansion';
 export type SourcePriority = 'critical' | 'high' | 'medium' | 'low';
 
 export type SourceType =
@@ -53,6 +54,12 @@ export interface ISourceRegistryEntry {
   totalPagesCrawled: number;
   totalOpportunitiesFound: number;
   opportunityDensity: number;
+
+  historicalYield?: number;
+  acceptedCount?: number;
+  savedCount?: number;
+  yieldScore?: number;
+  rollingAverage?: number;
 
   sourceTier: SourceTier;
   discoveryValue: number;

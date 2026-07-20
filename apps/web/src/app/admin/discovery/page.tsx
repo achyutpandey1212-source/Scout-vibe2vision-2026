@@ -1002,9 +1002,40 @@ export default function AdminDiscoveryControlCenter() {
                 </div>
               </div>
 
+              {/* E. OPPORTUNITY QUALITY INTELLIGENCE */}
+              <div className="border border-neutral-900 bg-neutral-950 p-6 rounded space-y-4">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-xs uppercase tracking-wider font-semibold text-neutral-500 font-mono flex items-center gap-1.5">
+                    <Sparkles className="h-4 w-4 text-emerald-400 animate-pulse" />
+                    Opportunity Quality Intelligence
+                  </h2>
+                  <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-900 px-2 py-0.5 rounded font-mono font-bold">
+                    Phase 3
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-4 font-mono text-[11px]">
+                  <div className="p-3 bg-neutral-900/40 border border-neutral-850 rounded">
+                    <span className="text-neutral-500 block text-[10px] uppercase">
+                      Gold Opportunities
+                    </span>
+                    <span className="text-xl font-bold text-emerald-400 mt-1 block">
+                      {status?.goldOpportunitiesDetected || 0}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-neutral-900/40 border border-neutral-850 rounded">
+                    <span className="text-neutral-500 block text-[10px] uppercase">
+                      Average Quality Score
+                    </span>
+                    <span className="text-xl font-bold text-neutral-200 mt-1 block">
+                      {status?.averageQualityScore || 0} / 100
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               {/* D. DISCOVERY CONVERSION FUNNEL */}
               <div className="border border-neutral-900 bg-neutral-950 p-6 rounded space-y-4">
-                <h2 className="text-xs uppercase tracking-wider font-semibold text-neutral-500 font-mono">
+                <h2 className="text-xs uppercase tracking-wider font-semibold text-neutral-550 font-mono">
                   Opportunity Discovery Funnel (Conversion Metrics)
                 </h2>
 
