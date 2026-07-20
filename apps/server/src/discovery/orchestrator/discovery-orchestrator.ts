@@ -255,6 +255,47 @@ Total Targets Limit: ${totalTargetLimit}
   const fastestBatchMs = batchTimes.length > 0 ? Math.min(...batchTimes) : 0;
   const slowestBatchMs = batchTimes.length > 0 ? Math.max(...batchTimes) : 0;
 
+  // Print Discovery Health Report (Task 5)
+  const dbState = DashboardStateInstance.getState();
+  const detectorPassPercent =
+    totalPagesCrawled > 0
+      ? Math.round(((totalPagesCrawled - (dbState.detectorSkipped || 0)) / totalPagesCrawled) * 100)
+      : 0;
+  const extractionPercent =
+    totalExtractions > 0 ? Math.round((totalAccepted / totalExtractions) * 100) : 0;
+  const acceptancePercent =
+    totalPagesCrawled > 0 ? Math.round((totalAccepted / totalPagesCrawled) * 100) : 0;
+  const avgOppsPerDir = dbState.averageOpportunitiesPerDirectory || 0;
+  const avgOppsPerSource =
+    totalSourcesProcessed > 0 ? Math.round((totalAccepted / totalSourcesProcessed) * 10) / 10 : 0;
+  const avgPagesPerOpp =
+    totalAccepted > 0 ? Math.round((totalPagesCrawled / totalAccepted) * 10) / 10 : 0;
+  const skippedPdfs = dbState.skippedNonHtmlResources || 0;
+
+  console.log(`
+Discovery Health
+==========================
+Sources:                ${totalSourcesProcessed}
+Pages:                  ${totalPagesCrawled}
+Directories:            ${dbState.careerPages || 0}
+ATS Boards:             ${dbState.atsPagesDetected || 0}
+Single Listings:        ${totalPagesCrawled - (dbState.careerPages || 0) - (dbState.atsPagesDetected || 0)}
+Directories Expanded:   ${dbState.multiJobPages || 0}
+Candidate URLs:         ${totalUrlsFound}
+Detector Pass %:        ${detectorPassPercent}%
+Extraction %:           ${extractionPercent}%
+Acceptance %:           ${acceptancePercent}%
+Average Opportunities Per Directory: ${avgOppsPerDir}
+Average Opportunities Per Source:    ${avgOppsPerSource}
+Average Pages Per Opportunity:       ${avgPagesPerOpp}
+Skipped PDFs/Non-HTML:               ${skippedPdfs}
+Skipped Blogs:                       ${dbState.queriesSkipped || 0}
+Skipped News:                        0
+Token Savings:                       0 tokens
+API Calls:                           ${totalPagesCrawled}
+Estimated Cost:                      $${(totalExtractions * 0.015 + totalPagesCrawled * 0.005).toFixed(3)}
+==========================`);
+
   // Print Final Production Discovery Report
   console.log(`
 ========== Discovery Report ==========

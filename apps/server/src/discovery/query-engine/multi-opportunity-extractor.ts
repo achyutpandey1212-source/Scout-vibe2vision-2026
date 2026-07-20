@@ -9,6 +9,7 @@ export class MultiOpportunityExtractor {
     const candidates: OpportunityCandidate[] = [];
     const seenUrls = new Set<string>();
 
+    // Parse standard markdown links [Anchor Text](URL)
     const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
     let match;
 
@@ -24,7 +25,11 @@ export class MultiOpportunityExtractor {
         jobUrlLower.includes('lever.co/') ||
         jobUrlLower.includes('ashbyhq.com/') ||
         jobUrlLower.includes('workable.com/') ||
-        jobUrlLower.includes('smartrecruiters.com/');
+        jobUrlLower.includes('smartrecruiters.com/') ||
+        jobUrlLower.includes('jobvite.com/') ||
+        jobUrlLower.includes('wellfound.com/') ||
+        jobUrlLower.includes('bamboohr.com/') ||
+        jobUrlLower.includes('recruitee.com/');
 
       const hasJobKeyword =
         isAtsLink ||
@@ -35,10 +40,12 @@ export class MultiOpportunityExtractor {
         jobUrlLower.includes('/openings/') ||
         jobUrlLower.includes('/opportunity/') ||
         jobUrlLower.includes('/opportunities/') ||
-        jobUrlLower.includes('/careers-openings/');
+        jobUrlLower.includes('/careers-openings/') ||
+        jobUrlLower.includes('/requisitions/');
 
       const isTechnicalInternshipTitle =
         title.toLowerCase().includes('intern') ||
+        title.toLowerCase().includes('co-op') ||
         title.toLowerCase().includes('sde') ||
         title.toLowerCase().includes('developer') ||
         title.toLowerCase().includes('engineer') ||
@@ -60,7 +67,9 @@ export class MultiOpportunityExtractor {
         jobUrlLower.includes('software') ||
         jobUrlLower.includes('sde') ||
         jobUrlLower.includes('developer') ||
-        jobUrlLower.includes('engineer');
+        jobUrlLower.includes('engineer') ||
+        jobUrlLower.includes('co-op') ||
+        jobUrlLower.includes('coop');
 
       if (
         hasJobKeyword &&

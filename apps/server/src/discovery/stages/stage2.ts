@@ -7,7 +7,6 @@ import { normalizeUrl } from '../search/search-orchestrator';
 import { DashboardStateInstance } from '../utils/dashboard-state';
 import { AffiliateExtractor } from '../sources/affiliate-extractor';
 import { OpportunityDiscoveryRouter } from '../query-engine/opportunity-discovery-router';
-import { ATSDetector } from '../query-engine/ats-detector';
 import { ATSParser } from '../query-engine/ats-parser/ats-parser';
 import { MultiOpportunityExtractor } from '../query-engine/multi-opportunity-extractor';
 import { CrawlBudgetManager } from '../query-engine/crawl-budget-manager';
@@ -19,7 +18,7 @@ export interface CrawledPage {
   url: string;
   title: string;
   markdown: string;
-  metadata: any;
+  metadata: unknown;
   fetchMethod: 'firecrawl' | 'cache' | 'snippet' | 'skipped';
   crawlStatus: 'SUCCESS' | 'FAILED' | 'SKIPPED' | 'BLOCKED';
   crawlTime: number; // In milliseconds
@@ -42,7 +41,7 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
    */
   async execute(
     candidates: CandidateURL[],
-    options?: { maxExtractions?: number },
+    _options?: { maxExtractions?: number },
   ): Promise<CrawledPage[]> {
     console.log(
       `[Stage 2] Initializing classification and prioritized crawling for ${candidates.length} candidates...`,
@@ -66,14 +65,7 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
     const processedUrls = new Set<string>(queue.map((c) => normalizeUrl(c.url)));
     const budgetManager = new CrawlBudgetManager();
 
-    // Telemetry and Metrics
-    let totalCrawlTime = 0;
-    let firecrawlCalls = 0;
-    let cacheHits = 0;
-    let snippetFallbacks = 0;
-    let skippedCount = 0;
     let failedCount = 0;
-    let tokensSaved = 0;
     let atsPagesCount = 0;
     let careerPagesCount = 0;
     let multiJobPagesCount = 0;
@@ -119,15 +111,14 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
         const cacheKey = `firecrawl:${normalized}`;
 
         const route = OpportunityDiscoveryRouter.route(candidate.url);
-        if (route === 'ATS_JOB') atsPagesCount++;
-        else if (route === 'CAREER_PAGE') careerPagesCount++;
+        if (route === 'ATS_DIRECTORY' || route === 'SINGLE_OPPORTUNITY') atsPagesCount++;
+        else if (route === 'MULTI_OPPORTUNITY_DIRECTORY') careerPagesCount++;
 
         // Pre-crawl scoring
         const preScore = CandidateScorer.scoreCandidate(candidate.url);
 
         // A. Strategy: SKIP
         if (plan.decision === 'SKIP' || preScore.score < 20) {
-          skippedCount++;
           if (plan.reason === 'SKIPPED_NON_HTML_RESOURCE') {
             DashboardStateInstance.updateState({
               skippedNonHtmlResources:
@@ -152,15 +143,12 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
         let cachedContent: string | null = null;
         try {
           cachedContent = await redisClient.get(cacheKey);
-        } catch (cacheErr: any) {
-          console.error(
-            `[Stage 2] [Cache Error] Failed reading Redis for ${candidate.url}:`,
-            cacheErr.message,
-          );
+        } catch {
+          console.error(`[Stage 2] [Cache Error] Failed reading Redis for ${candidate.url}:`);
         }
 
         let rawMarkdown = '';
-        let cleanMetadata: Record<string, any> = {};
+        let cleanMetadata: Record<string, unknown> = {};
         let fetchMethod: 'firecrawl' | 'cache' | 'snippet' = 'cache';
         let crawlStatus: 'SUCCESS' | 'FAILED' | 'BLOCKED' = 'SUCCESS';
         let duration = 0;
@@ -169,8 +157,6 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
           try {
             const parsed = JSON.parse(cachedContent);
             duration = Date.now() - startTime;
-            cacheHits++;
-            tokensSaved += Math.round(parsed.markdown.length / 4);
             rawMarkdown = parsed.markdown;
             cleanMetadata = parsed.metadata || {};
             fetchMethod = 'cache';
@@ -182,13 +168,10 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
         // C. Strategy: Scrape with rate-limited Firecrawl
         if (!cachedContent && plan.decision === 'USE_FIRECRAWL') {
           try {
-            firecrawlCalls++;
             const scrapeResponse = await this.firecrawlClient.scrape(candidate.url);
             duration = Date.now() - startTime;
-            totalCrawlTime += duration;
 
             rawMarkdown = scrapeResponse.data?.markdown || '';
-
             // Validate content
             const validation = CrawlPlanner.validateContent(rawMarkdown);
             if (!validation.valid) {
@@ -216,7 +199,7 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
               domain: new URL(candidate.url).hostname,
             };
 
-            const cleanValue = (val: any): any => {
+            const cleanValue = (val: unknown): unknown => {
               if (Array.isArray(val)) {
                 if (val.length === 0) return undefined;
                 return cleanValue(val[0]);
@@ -244,11 +227,8 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
                   timestamp: new Date().toISOString(),
                 }),
               );
-            } catch (cacheSetErr: any) {
-              console.error(
-                `[Stage 2] [Cache Error] Failed writing cache for ${candidate.url}:`,
-                cacheSetErr.message,
-              );
+            } catch {
+              console.error(`[Stage 2] [Cache Error] Failed writing cache for ${candidate.url}:`);
             }
 
             try {
@@ -262,18 +242,16 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
             }
 
             fetchMethod = 'firecrawl';
-          } catch (crawlErr: any) {
-            duration = Date.now() - startTime;
-            totalCrawlTime += duration;
+          } catch (crawlErr: unknown) {
             failedCount++;
 
             let type = 'NETWORK';
-            const isBlocked = crawlErr.message && crawlErr.message.includes('BLOCKED');
+            const message = crawlErr instanceof Error ? crawlErr.message : String(crawlErr);
+            const isBlocked = message.includes('BLOCKED');
             if (isBlocked) type = 'BLOCKED';
-            else if (crawlErr.message.includes('401')) type = 'INVALID_API_KEY';
-            else if (crawlErr.message.includes('429')) type = 'RATE_LIMIT';
-            else if (crawlErr.message.includes('timeout') || crawlErr.message.includes('timed out'))
-              type = 'TIMEOUT';
+            else if (message.includes('401')) type = 'INVALID_API_KEY';
+            else if (message.includes('429')) type = 'RATE_LIMIT';
+            else if (message.includes('timeout') || message.includes('timed out')) type = 'TIMEOUT';
 
             trackFailure(type);
 
@@ -295,7 +273,6 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
 
         // D. Strategy: Snippet Fallback
         if (!cachedContent && plan.decision === 'USE_SNIPPET') {
-          snippetFallbacks++;
           duration = Date.now() - startTime;
           rawMarkdown = candidate.snippet || '';
           cleanMetadata = { domain: new URL(candidate.url).hostname };
@@ -304,9 +281,6 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
 
         // E. Eligibility, Freshness & Content Signals Filters (Pre-AI)
         if (crawlStatus === 'SUCCESS' && rawMarkdown.length > 10) {
-          const postScore = CandidateScorer.scoreContent(preScore, rawMarkdown);
-
-          // 1. Geography check
           const eligibility = EligibilityFilter.isEligible(rawMarkdown);
           if (!eligibility.eligible) {
             console.log(
@@ -329,8 +303,9 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
 
         // F. Dynamic ATS & Multi-Opportunity Link Extraction Hook
         if (crawlStatus === 'SUCCESS' && rawMarkdown.length > 10) {
-          const isAtsPage = route === 'ATS_JOB';
-          const isCareerPage = route === 'CAREER_PAGE';
+          const isAtsPage = route === 'ATS_DIRECTORY' || route === 'SINGLE_OPPORTUNITY';
+          const isCareerPage =
+            route === 'MULTI_OPPORTUNITY_DIRECTORY' || route === 'PORTFOLIO_DIRECTORY';
 
           if (isAtsPage || isCareerPage) {
             const extracted = ATSParser.parse(rawMarkdown, candidate.url, candidate.source).concat(
@@ -341,7 +316,7 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
               multiJobPagesCount++;
               jobsExtractedCount += extracted.length;
               console.log(
-                `[Stage 2] [Opportunity Discovery] Discovered ${extracted.length} child jobs on ${candidate.url}`,
+                `[Crawl Diagnostics] Page: ${candidate.url} | Type: ${route} | Candidates Extracted: ${extracted.length}`,
               );
 
               for (const job of extracted) {
@@ -370,7 +345,15 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
                 const scoreB = CandidateScorer.scoreCandidate(b.url).score;
                 return scoreB - scoreA;
               });
+            } else {
+              console.log(
+                `[Crawl Diagnostics] Page: ${candidate.url} | Type: ${route} | Candidates Extracted: 0`,
+              );
             }
+          } else {
+            console.log(
+              `[Crawl Diagnostics] Page: ${candidate.url} | Type: ${route} | Candidates Extracted: 0`,
+            );
           }
         }
 
@@ -402,16 +385,21 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
       );
     }
 
+    const avgOppsPerDir =
+      multiJobPagesCount > 0 ? Math.round((jobsExtractedCount / multiJobPagesCount) * 10) / 10 : 0;
+
     // Update global dashboard state metrics with Phase 2 yields
     DashboardStateInstance.updateState({
       crawlCompleted: completedCount,
       pagesCrawled: DashboardStateInstance.getState().pagesCrawled + results.length,
-      ...({
+      skippedNonHtmlResources: DashboardStateInstance.getState().skippedNonHtmlResources || 0,
+      averageOpportunitiesPerDirectory: avgOppsPerDir,
+      ...{
         atsPagesDetected: atsPagesCount,
         careerPages: careerPagesCount,
         multiJobPages: multiJobPagesCount,
         jobsExtractedWithoutAI: jobsExtractedCount,
-      } as any),
+      },
     });
 
     return results;

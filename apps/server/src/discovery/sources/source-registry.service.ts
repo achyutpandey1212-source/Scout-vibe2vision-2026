@@ -236,13 +236,40 @@ class SourceRegistryService {
       const newEmptyCount = (source.consecutiveEmptyRuns || 0) + 1;
       const updates: any = { consecutiveEmptyRuns: newEmptyCount };
 
-      // Automatically deprioritize consistently empty sources (Phase K)
-      if (newEmptyCount >= 3) {
-        updates.priority = 'low';
+      const totalAccepted = source.totalOpportunitiesFound || 0;
+      const avgQuality = source.averageOpportunityQuality || 0;
+      const discoveryVal = source.discoveryValue || 50;
+
+      if (newEmptyCount >= 5) {
+        const hasHighHistoricalValue = totalAccepted > 10 || avgQuality > 75 || discoveryVal > 70;
+
+        if (hasHighHistoricalValue) {
+          if (source.priority === 'critical') {
+            updates.priority = 'high';
+          } else if (source.priority === 'high') {
+            updates.priority = 'medium';
+          } else {
+            updates.priority = 'low';
+          }
+          updates.crawlFrequency = 'monthly';
+          console.log(
+            `[SourceRegistry] Source deprioritized: ${cleanDomain}. Reason: High historical value but temporary low yield. (${newEmptyCount} empty runs)`,
+          );
+        } else {
+          updates.priority = 'low';
+          updates.crawlFrequency = 'monthly';
+          updates.isActive = false;
+          console.warn(
+            `[SourceRegistry] Source deactivated: ${cleanDomain}. Reason: Low historical yield and consecutive failures. (${newEmptyCount} empty runs)`,
+          );
+        }
+      } else if (newEmptyCount >= 3) {
+        if (source.priority === 'critical') {
+          updates.priority = 'high';
+        } else {
+          updates.priority = 'low';
+        }
         updates.crawlFrequency = 'monthly';
-        console.warn(
-          `[SourceRegistry] Automatically deprioritized low-yield domain ${cleanDomain} (${newEmptyCount} consecutive empty runs).`,
-        );
       }
 
       await SourceRegistryModel.updateOne({ domain: cleanDomain }, { $set: updates });

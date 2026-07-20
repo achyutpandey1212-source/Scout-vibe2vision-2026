@@ -53,6 +53,10 @@ export interface DashboardState {
   atsUrlsFound?: number;
   searchBudgetSaved?: number;
   skippedNonHtmlResources?: number;
+  atsPagesDetected?: number;
+  careerPages?: number;
+  multiJobPages?: number;
+  jobsExtractedWithoutAI?: number;
 }
 
 class DashboardStateManager {
@@ -86,6 +90,11 @@ class DashboardStateManager {
     atsUrlsFound: 0,
     searchBudgetSaved: 0,
     skippedNonHtmlResources: 0,
+    atsPagesDetected: 0,
+    careerPages: 0,
+    multiJobPages: 0,
+    jobsExtractedWithoutAI: 0,
+    averageOpportunitiesPerDirectory: 0,
   };
 
   private constructor() {}
@@ -138,6 +147,11 @@ class DashboardStateManager {
       atsUrlsFound: 0,
       searchBudgetSaved: 0,
       skippedNonHtmlResources: 0,
+      atsPagesDetected: 0,
+      careerPages: 0,
+      multiJobPages: 0,
+      jobsExtractedWithoutAI: 0,
+      averageOpportunitiesPerDirectory: 0,
     };
   }
 }
