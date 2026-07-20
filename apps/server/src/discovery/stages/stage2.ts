@@ -6,6 +6,11 @@ import { redis } from '../../config/redis';
 import { normalizeUrl } from '../search/search-orchestrator';
 import { DashboardStateInstance } from '../utils/dashboard-state';
 import { AffiliateExtractor } from '../sources/affiliate-extractor';
+import { OpportunityDiscoveryRouter } from '../query-engine/opportunity-discovery-router';
+import { ATSDetector } from '../query-engine/ats-detector';
+import { ATSParser } from '../query-engine/ats-parser/ats-parser';
+import { MultiOpportunityExtractor } from '../query-engine/multi-opportunity-extractor';
+import { CrawlBudgetManager } from '../query-engine/crawl-budget-manager';
 
 export interface CrawledPage {
   url: string;
@@ -35,6 +40,26 @@ export interface CrawlAnalytics {
   failuresByType: Record<string, number>;
 }
 
+function getRoutePriority(url: string): number {
+  const route = OpportunityDiscoveryRouter.route(url);
+  switch (route) {
+    case 'ATS_JOB':
+      return 100;
+    case 'CAREER_PAGE':
+      return 80;
+    case 'PORTFOLIO_PAGE':
+      return 60;
+    case 'HOMEPAGE':
+      return 40;
+    case 'UNKNOWN':
+      return 20;
+    case 'BLOG':
+    case 'DOCUMENTATION':
+    default:
+      return -10;
+  }
+}
+
 export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPage[]> {
   private readonly firecrawlClient: FirecrawlClient;
 
@@ -44,17 +69,29 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
 
   /**
    * Executes Stage 2: Intelligent Crawling & Content Acquisition
-   * Implements an adaptive concurrency queue to process all discovered candidate URLs.
+   * Implements candidate routing, ATS/Multi-Opportunity parsing, prioritization, and safety budgeting.
    */
   async execute(
     candidates: CandidateURL[],
     options?: { maxExtractions?: number },
   ): Promise<CrawledPage[]> {
     console.log(
-      `[Stage 2] Starting adaptive queue content acquisition for ${candidates.length} candidates...`,
+      `[Stage 2] Initializing classification and prioritized crawling for ${candidates.length} candidates...`,
     );
     const redisClient = redis.getClient();
     const results: CrawledPage[] = [];
+
+    // Filter out low-value pages (blogs/docs) and prioritize candidates
+    const queue = candidates
+      .filter((c) => {
+        const route = OpportunityDiscoveryRouter.route(c.url);
+        return route !== 'BLOG' && route !== 'DOCUMENTATION';
+      })
+      .sort((a, b) => getRoutePriority(b.url) - getRoutePriority(a.url));
+
+    const totalCount = queue.length;
+    const processedUrls = new Set<string>(queue.map((c) => normalizeUrl(c.url)));
+    const budgetManager = new CrawlBudgetManager();
 
     // Telemetry and Metrics
     let totalCrawlTime = 0;
@@ -64,6 +101,11 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
     let skippedCount = 0;
     let failedCount = 0;
     let tokensSaved = 0;
+    let atsPagesCount = 0;
+    let careerPagesCount = 0;
+    let multiJobPagesCount = 0;
+    let jobsExtractedCount = 0;
+
     const failuresByType: Record<string, number> = {};
 
     const trackFailure = (type: string) => {
@@ -75,8 +117,6 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
     const concurrency = concurrencyRaw ? parseInt(concurrencyRaw, 10) : 2;
     console.log(`[Stage 2] Running adaptive crawling with queue concurrency: ${concurrency}`);
 
-    const queue = [...candidates];
-    const totalCount = queue.length;
     let completedCount = 0;
     let batchNumber = 0;
 
@@ -105,6 +145,10 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
         const normalized = normalizeUrl(candidate.url);
         const cacheKey = `firecrawl:${normalized}`;
 
+        const route = OpportunityDiscoveryRouter.route(candidate.url);
+        if (route === 'ATS_JOB') atsPagesCount++;
+        else if (route === 'CAREER_PAGE') careerPagesCount++;
+
         // A. Strategy: SKIP
         if (plan.decision === 'SKIP') {
           skippedCount++;
@@ -122,7 +166,7 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
           };
         }
 
-        // B. Strategy: Redis cache hit check
+        // B. Strategy: Redis cache check
         let cachedContent: string | null = null;
         try {
           cachedContent = await redisClient.get(cacheKey);
@@ -133,39 +177,35 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
           );
         }
 
+        let rawMarkdown = '';
+        let cleanMetadata: Record<string, any> = {};
+        let fetchMethod: 'firecrawl' | 'cache' | 'snippet' = 'cache';
+        const crawlStatus: 'SUCCESS' | 'FAILED' | 'BLOCKED' = 'SUCCESS';
+        let duration = 0;
+
         if (cachedContent) {
           try {
             const parsed = JSON.parse(cachedContent);
-            const duration = Date.now() - startTime;
+            duration = Date.now() - startTime;
             cacheHits++;
             tokensSaved += Math.round(parsed.markdown.length / 4);
-
-            return {
-              url: candidate.url,
-              title: candidate.source,
-              markdown: parsed.markdown,
-              metadata: parsed.metadata || {},
-              fetchMethod: 'cache' as const,
-              crawlStatus: 'SUCCESS' as const,
-              crawlTime: duration,
-              tokenEstimate: Math.round(parsed.markdown.length / 4),
-              source: candidate.source,
-              crawlReason: 'Fresh content exists in Redis cache.',
-            };
+            rawMarkdown = parsed.markdown;
+            cleanMetadata = parsed.metadata || {};
+            fetchMethod = 'cache';
           } catch {
-            // Fall through to scraping on parse error
+            cachedContent = null;
           }
         }
 
         // C. Strategy: Scrape with rate-limited Firecrawl
-        if (plan.decision === 'USE_FIRECRAWL') {
+        if (!cachedContent && plan.decision === 'USE_FIRECRAWL') {
           try {
             firecrawlCalls++;
             const scrapeResponse = await this.firecrawlClient.scrape(candidate.url);
-            const duration = Date.now() - startTime;
+            duration = Date.now() - startTime;
             totalCrawlTime += duration;
 
-            const rawMarkdown = scrapeResponse.data?.markdown || '';
+            rawMarkdown = scrapeResponse.data?.markdown || '';
 
             // Validate content
             const validation = CrawlPlanner.validateContent(rawMarkdown);
@@ -189,13 +229,11 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
               };
             }
 
-            // Cache successfully scraped page
             const rawMetadata = scrapeResponse.data?.metadata || {};
-            const cleanMetadata: Record<string, any> = {
+            cleanMetadata = {
               domain: new URL(candidate.url).hostname,
             };
 
-            // Recursively flatten arrays and convert array-wrapped elements to primitive string values
             const cleanValue = (val: any): any => {
               if (Array.isArray(val)) {
                 if (val.length === 0) return undefined;
@@ -211,14 +249,13 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
               }
             }
 
-            // Guarantee description and language defaults exist
             if (!cleanMetadata.description) cleanMetadata.description = '';
             if (!cleanMetadata.language) cleanMetadata.language = 'en';
 
             try {
               await redisClient.setex(
                 cacheKey,
-                86400, // 24 Hours TTL
+                86400,
                 JSON.stringify({
                   markdown: rawMarkdown,
                   metadata: cleanMetadata,
@@ -232,9 +269,6 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
               );
             }
 
-            // ── Organic Growth Hook ───────────────────────────────────────────
-            // Extract partner/affiliate domains and queue for weekly discovery.
-            // Fire-and-forget: errors here never affect Stage 2 output.
             try {
               const sourceDomain = new URL(candidate.url).hostname;
               const affiliates = AffiliateExtractor.extract(rawMarkdown, sourceDomain);
@@ -242,24 +276,12 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
                 AffiliateExtractor.queue(affiliates, sourceDomain).catch(() => {});
               }
             } catch {
-              // Silently ignore extraction errors
+              // Ignored
             }
-            // ─────────────────────────────────────────────────────────────────
 
-            return {
-              url: candidate.url,
-              title: candidate.source,
-              markdown: rawMarkdown,
-              metadata: cleanMetadata,
-              fetchMethod: 'firecrawl' as const,
-              crawlStatus: 'SUCCESS' as const,
-              crawlTime: duration,
-              tokenEstimate: Math.round(rawMarkdown.length / 4),
-              source: candidate.source,
-              crawlReason: plan.reason,
-            };
+            fetchMethod = 'firecrawl';
           } catch (crawlErr: any) {
-            const duration = Date.now() - startTime;
+            duration = Date.now() - startTime;
             totalCrawlTime += duration;
             failedCount++;
 
@@ -290,17 +312,66 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
         }
 
         // D. Strategy: Snippet Fallback
-        snippetFallbacks++;
-        const duration = Date.now() - startTime;
+        if (!cachedContent && plan.decision === 'USE_SNIPPET') {
+          snippetFallbacks++;
+          duration = Date.now() - startTime;
+          rawMarkdown = candidate.snippet || '';
+          cleanMetadata = { domain: new URL(candidate.url).hostname };
+          fetchMethod = 'snippet';
+        }
+
+        // E. Dynamic ATS & Multi-Opportunity Link Extraction Hook
+        if (crawlStatus === 'SUCCESS' && rawMarkdown.length > 10) {
+          const isAtsPage = route === 'ATS_JOB';
+          const isCareerPage = route === 'CAREER_PAGE';
+
+          if (isAtsPage || isCareerPage) {
+            const extracted = ATSParser.parse(rawMarkdown, candidate.url, candidate.source).concat(
+              MultiOpportunityExtractor.extract(rawMarkdown, candidate.url, candidate.source),
+            );
+
+            if (extracted.length > 0) {
+              multiJobPagesCount++;
+              jobsExtractedCount += extracted.length;
+              console.log(
+                `[Stage 2] [Opportunity Discovery] Discovered ${extracted.length} child jobs on ${candidate.url}`,
+              );
+
+              for (const job of extracted) {
+                const normJobUrl = normalizeUrl(job.url);
+                if (!processedUrls.has(normJobUrl)) {
+                  processedUrls.add(normJobUrl);
+
+                  if (budgetManager.canVisitCareerPage()) {
+                    budgetManager.recordCareerPageVisit();
+                    queue.push({
+                      url: job.url,
+                      source: job.source,
+                      domain: candidate.domain,
+                      query: `discovered:${candidate.url}`,
+                      snippet: '',
+                      score: candidate.score,
+                      discoveredAt: new Date().toISOString(),
+                    });
+                  }
+                }
+              }
+
+              // Resort queue to bubble up the new direct job URLs immediately
+              queue.sort((a, b) => getRoutePriority(b.url) - getRoutePriority(a.url));
+            }
+          }
+        }
+
         return {
           url: candidate.url,
           title: candidate.source,
-          markdown: candidate.snippet || '',
-          metadata: { domain: new URL(candidate.url).hostname },
-          fetchMethod: 'snippet' as const,
-          crawlStatus: 'SUCCESS' as const,
+          markdown: rawMarkdown,
+          metadata: cleanMetadata,
+          fetchMethod,
+          crawlStatus,
           crawlTime: duration,
-          tokenEstimate: Math.round((candidate.snippet || '').length / 4),
+          tokenEstimate: Math.round(rawMarkdown.length / 4),
           source: candidate.source,
           crawlReason: plan.reason,
         };
@@ -320,44 +391,19 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
       );
     }
 
-    // Generate Final Analytics
-    const avgCrawl = firecrawlCalls > 0 ? Math.round(totalCrawlTime / firecrawlCalls) : 0;
-    const analytics: CrawlAnalytics = {
-      candidatesReceived: candidates.length,
-      firecrawlCalls,
-      cacheHits,
-      snippetFallback: snippetFallbacks,
-      skipped: skippedCount,
-      failed: failedCount,
-      avgCrawlTime: avgCrawl / 1000,
-      tokensSaved,
-      firecrawlCreditsSaved: cacheHits + snippetFallbacks,
-      failuresByType,
-    };
-
+    // Update global dashboard state metrics with Phase 2 yields
     DashboardStateInstance.updateState({
-      pagesCrawled: results.filter((r) => r.crawlStatus === 'SUCCESS').length,
-      crawlQueueRemaining: 0,
-      crawlCurrentlyCrawling: [],
+      crawlCompleted: completedCount,
+      pagesCrawled: DashboardStateInstance.getState().pagesCrawled + results.length,
+      // Custom extra props for Phase 2 can be passed to extend state
+      ...({
+        atsPagesDetected: atsPagesCount,
+        careerPages: careerPagesCount,
+        multiJobPages: multiJobPagesCount,
+        jobsExtractedWithoutAI: jobsExtractedCount,
+      } as any),
     });
 
-    this.printReport(analytics);
     return results;
-  }
-
-  private printReport(stats: CrawlAnalytics): void {
-    console.log(`
-========== Stage 2 Adaptive Crawl Report ==========
-Total Candidates Received:   ${stats.candidatesReceived}
-Firecrawl API Scrapings:     ${stats.firecrawlCalls}
-Redis Cache Hits:            ${stats.cacheHits}
-Snippet Fallback Events:     ${stats.snippetFallback}
-Skipped URLs:                ${stats.skipped}
-Failed URLs:                 ${stats.failed}
-Avg Crawl Latency:           ${stats.avgCrawlTime.toFixed(2)}s
-Estimated Tokens Saved:      ${stats.tokensSaved}
-Firecrawl Credits Saved:     ${stats.firecrawlCreditsSaved}
-Failures Breakdown:          ${JSON.stringify(stats.failuresByType)}
-===================================================`);
   }
 }
