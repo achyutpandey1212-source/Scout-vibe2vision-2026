@@ -11,6 +11,9 @@ import { ATSDetector } from '../query-engine/ats-detector';
 import { ATSParser } from '../query-engine/ats-parser/ats-parser';
 import { MultiOpportunityExtractor } from '../query-engine/multi-opportunity-extractor';
 import { CrawlBudgetManager } from '../query-engine/crawl-budget-manager';
+import { CandidateScorer } from '../query-engine/candidate-scorer';
+import { EligibilityFilter } from '../query-engine/eligibility-filter';
+import { FreshnessFilter } from '../query-engine/freshness-filter';
 
 export interface CrawledPage {
   url: string;
@@ -27,39 +30,6 @@ export interface CrawledPage {
   query?: string;
 }
 
-export interface CrawlAnalytics {
-  candidatesReceived: number;
-  firecrawlCalls: number;
-  cacheHits: number;
-  snippetFallback: number;
-  skipped: number;
-  failed: number;
-  avgCrawlTime: number;
-  tokensSaved: number;
-  firecrawlCreditsSaved: number;
-  failuresByType: Record<string, number>;
-}
-
-function getRoutePriority(url: string): number {
-  const route = OpportunityDiscoveryRouter.route(url);
-  switch (route) {
-    case 'ATS_JOB':
-      return 100;
-    case 'CAREER_PAGE':
-      return 80;
-    case 'PORTFOLIO_PAGE':
-      return 60;
-    case 'HOMEPAGE':
-      return 40;
-    case 'UNKNOWN':
-      return 20;
-    case 'BLOG':
-    case 'DOCUMENTATION':
-    default:
-      return -10;
-  }
-}
-
 export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPage[]> {
   private readonly firecrawlClient: FirecrawlClient;
 
@@ -69,7 +39,6 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
 
   /**
    * Executes Stage 2: Intelligent Crawling & Content Acquisition
-   * Implements candidate routing, ATS/Multi-Opportunity parsing, prioritization, and safety budgeting.
    */
   async execute(
     candidates: CandidateURL[],
@@ -81,13 +50,17 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
     const redisClient = redis.getClient();
     const results: CrawledPage[] = [];
 
-    // Filter out low-value pages (blogs/docs) and prioritize candidates
+    // Prioritize candidates based on CandidateScorer
     const queue = candidates
       .filter((c) => {
-        const route = OpportunityDiscoveryRouter.route(c.url);
-        return route !== 'BLOG' && route !== 'DOCUMENTATION';
+        const scoreObj = CandidateScorer.scoreCandidate(c.url);
+        return scoreObj.pageType !== 'BLOG' && scoreObj.pageType !== 'DOCUMENTATION';
       })
-      .sort((a, b) => getRoutePriority(b.url) - getRoutePriority(a.url));
+      .sort((a, b) => {
+        const scoreA = CandidateScorer.scoreCandidate(a.url).score;
+        const scoreB = CandidateScorer.scoreCandidate(b.url).score;
+        return scoreB - scoreA;
+      });
 
     const totalCount = queue.length;
     const processedUrls = new Set<string>(queue.map((c) => normalizeUrl(c.url)));
@@ -149,8 +122,11 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
         if (route === 'ATS_JOB') atsPagesCount++;
         else if (route === 'CAREER_PAGE') careerPagesCount++;
 
+        // Pre-crawl scoring
+        const preScore = CandidateScorer.scoreCandidate(candidate.url);
+
         // A. Strategy: SKIP
-        if (plan.decision === 'SKIP') {
+        if (plan.decision === 'SKIP' || preScore.score < 20) {
           skippedCount++;
           return {
             url: candidate.url,
@@ -180,7 +156,7 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
         let rawMarkdown = '';
         let cleanMetadata: Record<string, any> = {};
         let fetchMethod: 'firecrawl' | 'cache' | 'snippet' = 'cache';
-        const crawlStatus: 'SUCCESS' | 'FAILED' | 'BLOCKED' = 'SUCCESS';
+        let crawlStatus: 'SUCCESS' | 'FAILED' | 'BLOCKED' = 'SUCCESS';
         let duration = 0;
 
         if (cachedContent) {
@@ -320,7 +296,32 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
           fetchMethod = 'snippet';
         }
 
-        // E. Dynamic ATS & Multi-Opportunity Link Extraction Hook
+        // E. Eligibility, Freshness & Content Signals Filters (Pre-AI)
+        if (crawlStatus === 'SUCCESS' && rawMarkdown.length > 10) {
+          const postScore = CandidateScorer.scoreContent(preScore, rawMarkdown);
+
+          // 1. Geography check
+          const eligibility = EligibilityFilter.isEligible(rawMarkdown);
+          if (!eligibility.eligible) {
+            console.log(
+              `[Stage 2] [Filter Rejected] ${candidate.url} (Geo-restricted: ${eligibility.reason})`,
+            );
+            crawlStatus = 'FAILED';
+            rawMarkdown = '';
+          } else {
+            // 2. Freshness check
+            const freshness = FreshnessFilter.isFresh(rawMarkdown);
+            if (!freshness.fresh) {
+              console.log(
+                `[Stage 2] [Filter Rejected] ${candidate.url} (Expired/Past year: ${freshness.reason})`,
+              );
+              crawlStatus = 'FAILED';
+              rawMarkdown = '';
+            }
+          }
+        }
+
+        // F. Dynamic ATS & Multi-Opportunity Link Extraction Hook
         if (crawlStatus === 'SUCCESS' && rawMarkdown.length > 10) {
           const isAtsPage = route === 'ATS_JOB';
           const isCareerPage = route === 'CAREER_PAGE';
@@ -358,7 +359,11 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
               }
 
               // Resort queue to bubble up the new direct job URLs immediately
-              queue.sort((a, b) => getRoutePriority(b.url) - getRoutePriority(a.url));
+              queue.sort((a, b) => {
+                const scoreA = CandidateScorer.scoreCandidate(a.url).score;
+                const scoreB = CandidateScorer.scoreCandidate(b.url).score;
+                return scoreB - scoreA;
+              });
             }
           }
         }
@@ -395,7 +400,6 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
     DashboardStateInstance.updateState({
       crawlCompleted: completedCount,
       pagesCrawled: DashboardStateInstance.getState().pagesCrawled + results.length,
-      // Custom extra props for Phase 2 can be passed to extend state
       ...({
         atsPagesDetected: atsPagesCount,
         careerPages: careerPagesCount,
