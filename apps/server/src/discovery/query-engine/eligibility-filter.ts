@@ -6,7 +6,7 @@ export class EligibilityFilter {
   static isEligible(text: string): { eligible: boolean; reason?: string } {
     const lower = text.toLowerCase();
 
-    // 1. Negative patterns (explicit restrictions)
+    // Explicit geoblocking rules
     const negatives = [
       'us citizen only',
       'united states citizen',
@@ -21,6 +21,14 @@ export class EligibilityFilter {
       'visa sponsorship not available',
       'no visa sponsorship',
       'does not offer visa sponsorship',
+      'must be authorized to work in the united states',
+      'must be authorized to work in us',
+      'us only',
+      'canada only',
+      'uk only',
+      'europe only',
+      'citizens only',
+      'permanent residents only',
     ];
 
     for (const neg of negatives) {
@@ -29,7 +37,7 @@ export class EligibilityFilter {
       }
     }
 
-    // 2. Positive patterns (India hubs or remote)
+    // Positive indicators (India hubs or Remote)
     const positives = [
       'india',
       'remote',

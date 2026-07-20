@@ -142,6 +142,8 @@ export interface Opportunity {
   goldOpportunity?: boolean;
   scoreBreakdown?: any;
   companyTier?: number;
+  rejectionReason?: string;
+  query?: string;
   careerStages?: string[];
   domains?: string[];
   difficulty?: string;

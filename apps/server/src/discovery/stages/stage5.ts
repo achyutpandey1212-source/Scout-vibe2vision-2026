@@ -6,6 +6,8 @@ import { DashboardStateInstance } from '../utils/dashboard-state';
 import { Types } from 'mongoose';
 import { OpportunityEnrichmentPipeline } from './enrichment-pipeline';
 import { CanonicalUrlResolver } from '../utils/canonical-url-resolver';
+import { OpportunityValidator } from '../intelligence/opportunity-validator';
+import { YieldEngine, YieldAggregationResult } from '../intelligence/yield-engine';
 
 export interface RunAnalytics {
   startedAt: Date;
@@ -74,10 +76,41 @@ export class Stage5Persistence implements IPipelineStage<
 
     DashboardStateInstance.updateState({ currentStage: 'STAGE_5_PERSISTENCE' });
 
-    // 1. Acceptance Filter: filter out REJECT status items
-    const candidates = opportunities.filter(
-      (o) => o.decision === 'ACCEPT' || o.decision === 'REVIEW',
-    );
+    // Validate each opportunity using the unified validator
+    const queryMetrics = new Map<string, YieldAggregationResult>();
+    const validatedOpps: QualityEvaluatedOpportunity[] = [];
+
+    for (const opp of opportunities) {
+      const validation = OpportunityValidator.validate(opp);
+
+      const queryKey = opp.query || 'unknown';
+      if (!queryMetrics.has(queryKey)) {
+        queryMetrics.set(queryKey, { pagesCrawled: 1, acceptedCount: 0, savedCount: 0 });
+      }
+      const qStat = queryMetrics.get(queryKey)!;
+
+      if (validation.accepted) {
+        opp.decision = 'ACCEPT';
+        opp.opportunityScore = validation.score;
+        opp.scoreBreakdown = validation.signals;
+        opp.goldOpportunity = validation.isGold;
+        opp.companyTier = validation.companyTier;
+        qStat.acceptedCount++;
+        validatedOpps.push(opp);
+      } else if (validation.review) {
+        opp.decision = 'REVIEW';
+        opp.opportunityScore = validation.score;
+        opp.scoreBreakdown = validation.signals;
+        opp.goldOpportunity = validation.isGold;
+        opp.companyTier = validation.companyTier;
+        validatedOpps.push(opp);
+      } else {
+        opp.decision = 'REJECT';
+        opp.rejectionReason = validation.rejectionReasonCode;
+      }
+    }
+
+    const candidates = validatedOpps;
     const rejectedCount = opportunities.filter((o) => o.decision === 'REJECT').length;
     const acceptedCount = opportunities.filter((o) => o.decision === 'ACCEPT').length;
     const reviewCount = opportunities.filter((o) => o.decision === 'REVIEW').length;
@@ -484,6 +517,16 @@ export class Stage5Persistence implements IPipelineStage<
       cacheHits: options?.cacheHits || 0,
       failures,
     };
+
+    // Record run yields in bulk
+    try {
+      const sourceDomain = opportunities[0]?.sourceDomain || '';
+      if (sourceDomain) {
+        await YieldEngine.recordRunYield(sourceDomain, queryMetrics);
+      }
+    } catch (yieldErr: any) {
+      console.warn(`[Stage 5] Yield engine update failed:`, yieldErr.message);
+    }
 
     // Update dashboard metrics
     const goldCount = candidates.filter((o) => o.goldOpportunity).length;

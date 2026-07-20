@@ -378,6 +378,7 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
             latencyMs,
             extractionVersion: EXTRACTION_VERSION,
           },
+          query: (page as any).query,
         };
 
         // 4. Validate output schema consistency

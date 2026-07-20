@@ -1,8 +1,8 @@
 export class FreshnessFilter {
   /**
-   * Evaluates listing text for expired years, application closed flags, or past deadlines pre-AI.
+   * Evaluates listing text for expired keywords or past deadlines.
    */
-  static isFresh(text: string): { fresh: boolean; reason?: string } {
+  static isFresh(text: string, deadlineStr?: string | null): { fresh: boolean; reason?: string } {
     const lower = text.toLowerCase();
 
     // 1. Negative expiration indicators
@@ -17,6 +17,9 @@ export class FreshnessFilter {
       'deadline passed',
       'application deadline has passed',
       'this job is no longer active',
+      'registration closed',
+      'archived',
+      'closed on',
     ];
 
     for (const indicator of closedIndicators) {
@@ -25,23 +28,22 @@ export class FreshnessFilter {
       }
     }
 
-    // 2. Closed dates/past years
-    const currentYear = new Date().getFullYear();
-    const pastYears = [2022, 2023, 2024, 2025].filter((y) => y < currentYear);
+    // 2. Validate deadline date if explicitly parsed/available
+    if (deadlineStr) {
+      try {
+        const deadlineDate = new Date(deadlineStr);
+        if (!isNaN(deadlineDate.getTime())) {
+          const now = new Date();
+          // Reset hours to compare dates only
+          now.setHours(0, 0, 0, 0);
+          deadlineDate.setHours(0, 0, 0, 0);
 
-    for (const year of pastYears) {
-      const patternSummer = `summer ${year}`;
-      const patternFall = `fall ${year}`;
-      const patternSpring = `spring ${year}`;
-      const patternInternship = `${year} internship`;
-
-      if (
-        lower.includes(patternSummer) ||
-        lower.includes(patternFall) ||
-        lower.includes(patternSpring) ||
-        lower.includes(patternInternship)
-      ) {
-        return { fresh: false, reason: `Listing refers to past year target: ${year}` };
+          if (deadlineDate.getTime() < now.getTime()) {
+            return { fresh: false, reason: `Extracted deadline (${deadlineStr}) is in the past` };
+          }
+        }
+      } catch {
+        // Ignored
       }
     }
 

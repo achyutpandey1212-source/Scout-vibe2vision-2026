@@ -97,6 +97,8 @@ const OpportunitySchema = new Schema<IOpportunity>(
     goldOpportunity: { type: Boolean, default: false, index: true },
     scoreBreakdown: { type: Schema.Types.Mixed, default: {} },
     companyTier: { type: Number, default: 3, index: true },
+    rejectionReason: { type: String, default: null, index: true },
+    query: { type: String, default: null, index: true },
 
     workMode: {
       type: String,
