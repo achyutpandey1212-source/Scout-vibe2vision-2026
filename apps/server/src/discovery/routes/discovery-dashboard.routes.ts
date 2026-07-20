@@ -7,6 +7,9 @@ import { SourceDiscoveryEngine } from '../sources/source-discovery.engine';
 import { SourceRegistryModel } from '../sources/source-registry.model';
 import { ACTIVE_SOURCE_CATEGORIES, CANONICAL_TARGET_AUDIENCE } from '@scout/shared';
 import mongoose from 'mongoose';
+import fs from 'fs';
+import path from 'path';
+import { getCapturedLogs } from '../utils/logger-capture';
 
 const router = Router();
 
@@ -193,10 +196,6 @@ router.post('/run-affiliates', async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, error: { message: err.message } });
   }
 });
-
-import fs from 'fs';
-import path from 'path';
-import { getCapturedLogs } from '../utils/logger-capture';
 
 /**
  * GET metrics: Returns charts and dynamic diversity metrics data for the dashboard
