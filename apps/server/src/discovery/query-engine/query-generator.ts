@@ -147,8 +147,36 @@ export async function generateQueries(domain: string): Promise<RankedQuery[]> {
     console.warn(`[Query Engine] Failed to fetch historical query yields: ${err.message}`);
   }
 
+  // Determine Max Queries based on source tier (A = 20, B = 12, C = 8)
+  let sourceTier = 'C';
+  try {
+    const { SourceRegistryModel } = await import('../sources/source-registry.model');
+    const registryEntry = await SourceRegistryModel.findOne({
+      domain: domain.toLowerCase().trim(),
+    }).lean();
+    if (registryEntry) {
+      sourceTier = registryEntry.sourceTier || 'C';
+    } else {
+      if (ecosystem.priority === 'critical' || ecosystem.priority === 'high') {
+        sourceTier = 'A';
+      } else if (ecosystem.priority === 'medium') {
+        sourceTier = 'B';
+      }
+    }
+  } catch {
+    if (ecosystem.priority === 'critical' || ecosystem.priority === 'high') {
+      sourceTier = 'A';
+    } else if (ecosystem.priority === 'medium') {
+      sourceTier = 'B';
+    }
+  }
+
+  let maxQueries = 8;
+  if (sourceTier === 'A') maxQueries = 20;
+  else if (sourceTier === 'B') maxQueries = 12;
+
   // Diversify to ensure multi-disciplinary domain coverage without single-persona saturation
-  const diversified = diversifyQueries(rawQueries, QUERY_ENGINE_CONFIG.MAX_QUERIES_PER_SOURCE);
+  const diversified = diversifyQueries(rawQueries, maxQueries);
 
   // Sort descending by final query rank
   return diversified.sort((a, b) => b.priorityScore - a.priorityScore);

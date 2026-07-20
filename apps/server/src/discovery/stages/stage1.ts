@@ -147,34 +147,145 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
         }
 
         case 'search': {
-          // Generate persona-driven, ranked queries using the new query-engine
-          const rankedQueries = await generateQueries(target.domain);
-          const queries = rankedQueries.map((q) => q.query);
+          const { OpportunityQueryPlanner } =
+            await import('../query-engine/opportunity-query-planner');
+          const { redis: redisConf } = await import('../../config/redis');
+          const redisClient = redisConf.getClient();
+
+          const { queries, tier } = await OpportunityQueryPlanner.plan(target.domain, target);
           console.log(
-            `[Stage 1] [${target.organization}] Running ${queries.length} recruiter-quality query-engine searches...`,
+            `[Stage 1] [${target.organization}] Running ${queries.length} recruiter-quality query-engine searches (Tier: ${tier})...`,
           );
 
-          for (const query of queries) {
-            try {
-              const response = await tavilyClient.search(query, 5);
-              for (const result of response.results) {
-                const normalized = normalizeUrl(result.url);
-                if (processedUrls.has(normalized)) continue;
-                processedUrls.add(normalized);
+          let goodJobUrlsCount = 0;
+          const TARGET_GOOD_URLS = 15;
 
-                allCandidates.push({
-                  url: result.url,
-                  source: target.organization,
-                  domain: target.domain,
-                  query,
-                  snippet: result.content || '',
-                  score: target.trustScore / 10,
-                  discoveredAt: now,
-                });
+          // Track skipped queries for dashboard metrics
+          let queriesSkipped = 0;
+
+          for (const q of queries) {
+            // Early stopping condition
+            if (goodJobUrlsCount >= TARGET_GOOD_URLS) {
+              console.log(
+                `[Stage 1] [${target.organization}] Early stopping triggered: Found ${goodJobUrlsCount} good job URLs.`,
+              );
+              queriesSkipped += queries.length - queries.indexOf(q);
+              break;
+            }
+
+            const query = q.query;
+            const cacheKey = `tavily:search:${Buffer.from(query).toString('base64')}`;
+            let resultsList: any[] = [];
+
+            // A. Check Redis Cache for queries run within the last 24 hours
+            try {
+              const cached = await redisClient.get(cacheKey);
+              if (cached) {
+                resultsList = JSON.parse(cached);
               }
             } catch (err: any) {
-              console.error(`[Stage 1] Tavily search failed for "${query}": ${err.message}`);
+              console.warn(`[Stage 1] Redis search cache read failed: ${err.message}`);
             }
+
+            // B. Call Tavily if not cached
+            if (resultsList.length === 0) {
+              try {
+                const response = await tavilyClient.search(query, 5);
+                resultsList = response.results || [];
+                if (resultsList.length > 0) {
+                  await redisClient.setex(cacheKey, 86400, JSON.stringify(resultsList)); // Cache for 1 day
+                }
+              } catch (err: any) {
+                console.error(`[Stage 1] Tavily search failed for "${query}": ${err.message}`);
+                continue;
+              }
+            } else {
+              // Track saved queries
+              DashboardStateInstance.updateState({
+                ...({
+                  searchBudgetSaved: (DashboardStateInstance.getState() as any).searchBudgetSaved
+                    ? (DashboardStateInstance.getState() as any).searchBudgetSaved + 1
+                    : 1,
+                } as any),
+              });
+            }
+
+            // C. Filter results by Hard URL pattern preference
+            for (const result of resultsList) {
+              const url = result.url.toLowerCase();
+
+              // Penalize and skip low-value subpaths
+              const hasPenalizedPattern =
+                url.includes('/blog/') ||
+                url.includes('/blogs/') ||
+                url.includes('/news/') ||
+                url.includes('/press/') ||
+                url.includes('/about/') ||
+                url.includes('/privacy/') ||
+                url.includes('/events/') ||
+                url.includes('/docs/') ||
+                url.includes('/documentation/');
+
+              if (hasPenalizedPattern) continue;
+
+              const normalized = normalizeUrl(result.url);
+              if (processedUrls.has(normalized)) continue;
+              processedUrls.add(normalized);
+
+              // Detect if it is an ATS or career path
+              const isATS =
+                url.includes('greenhouse.io') ||
+                url.includes('lever.co') ||
+                url.includes('ashbyhq.com') ||
+                url.includes('workable.com');
+
+              const isDirectJob =
+                url.includes('/jobs/') ||
+                url.includes('/careers/') ||
+                url.includes('/intern/') ||
+                url.includes('/internship/');
+
+              if (isATS || isDirectJob) {
+                goodJobUrlsCount++;
+              }
+
+              // Update dashboard stats
+              DashboardStateInstance.updateState({
+                ...({
+                  atsUrlsFound: (DashboardStateInstance.getState() as any).atsUrlsFound
+                    ? (DashboardStateInstance.getState() as any).atsUrlsFound + (isATS ? 1 : 0)
+                    : isATS
+                      ? 1
+                      : 0,
+                  directUrlsFound: (DashboardStateInstance.getState() as any).directUrlsFound
+                    ? (DashboardStateInstance.getState() as any).directUrlsFound +
+                      (isDirectJob ? 1 : 0)
+                    : isDirectJob
+                      ? 1
+                      : 0,
+                } as any),
+              });
+
+              allCandidates.push({
+                url: result.url,
+                source: target.organization,
+                domain: target.domain,
+                query,
+                snippet: result.content || '',
+                score: target.trustScore / 10,
+                discoveredAt: now,
+              });
+            }
+          }
+
+          if (queriesSkipped > 0) {
+            DashboardStateInstance.updateState({
+              ...({
+                queriesSkipped: (DashboardStateInstance.getState() as any).queriesSkipped
+                  ? (DashboardStateInstance.getState() as any).queriesSkipped + queriesSkipped
+                  : queriesSkipped,
+              } as any),
+            });
           }
           break;
         }

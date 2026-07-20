@@ -46,6 +46,12 @@ export interface DashboardState {
   goldOpportunitiesDetected?: number;
   averageQualityScore?: number;
   companyExpansionsCount?: number;
+
+  // Phase 1 Precision Queries metrics
+  queriesSkipped?: number;
+  directUrlsFound?: number;
+  atsUrlsFound?: number;
+  searchBudgetSaved?: number;
 }
 
 class DashboardStateManager {
@@ -74,6 +80,10 @@ class DashboardStateManager {
     goldOpportunitiesDetected: 0,
     averageQualityScore: 0,
     companyExpansionsCount: 0,
+    queriesSkipped: 0,
+    directUrlsFound: 0,
+    atsUrlsFound: 0,
+    searchBudgetSaved: 0,
   };
 
   private constructor() {}
@@ -121,6 +131,10 @@ class DashboardStateManager {
       goldOpportunitiesDetected: 0,
       averageQualityScore: 0,
       companyExpansionsCount: 0,
+      queriesSkipped: 0,
+      directUrlsFound: 0,
+      atsUrlsFound: 0,
+      searchBudgetSaved: 0,
     };
   }
 }

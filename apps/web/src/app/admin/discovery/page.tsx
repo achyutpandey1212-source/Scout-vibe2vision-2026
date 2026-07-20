@@ -1033,6 +1033,53 @@ export default function AdminDiscoveryControlCenter() {
                 </div>
               </div>
 
+              {/* F. QUERY INTELLIGENCE & PRECISION METRICS */}
+              <div className="border border-neutral-900 bg-neutral-950 p-6 rounded space-y-4">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-xs uppercase tracking-wider font-semibold text-neutral-500 font-mono flex items-center gap-1.5">
+                    <Search className="h-4 w-4 text-blue-400" />
+                    Precision Query Intelligence
+                  </h2>
+                  <span className="text-[10px] bg-blue-950 text-blue-400 border border-blue-900 px-2 py-0.5 rounded font-mono font-bold">
+                    Phase 1
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-4 font-mono text-[11px]">
+                  <div className="p-3 bg-neutral-900/40 border border-neutral-850 rounded">
+                    <span className="text-neutral-500 block text-[10px] uppercase">
+                      Queries Skipped (Budget)
+                    </span>
+                    <span className="text-lg font-bold text-neutral-200 mt-1 block">
+                      {status?.queriesSkipped || 0}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-neutral-900/40 border border-neutral-850 rounded">
+                    <span className="text-neutral-500 block text-[10px] uppercase">
+                      Search Budget Saved
+                    </span>
+                    <span className="text-lg font-bold text-emerald-400 mt-1 block">
+                      {status?.searchBudgetSaved || 0} searches
+                    </span>
+                  </div>
+                  <div className="p-3 bg-neutral-900/40 border border-neutral-850 rounded">
+                    <span className="text-neutral-500 block text-[10px] uppercase">
+                      ATS Listings Found
+                    </span>
+                    <span className="text-lg font-bold text-neutral-200 mt-1 block">
+                      {status?.atsUrlsFound || 0}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-neutral-900/40 border border-neutral-850 rounded">
+                    <span className="text-neutral-500 block text-[10px] uppercase">
+                      Direct Job URLs Found
+                    </span>
+                    <span className="text-lg font-bold text-neutral-200 mt-1 block">
+                      {status?.directUrlsFound || 0}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               {/* D. DISCOVERY CONVERSION FUNNEL */}
               <div className="border border-neutral-900 bg-neutral-950 p-6 rounded space-y-4">
                 <h2 className="text-xs uppercase tracking-wider font-semibold text-neutral-550 font-mono">
