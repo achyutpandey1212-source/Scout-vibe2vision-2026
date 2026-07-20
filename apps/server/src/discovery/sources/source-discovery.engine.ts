@@ -285,91 +285,25 @@ Batches: ${cfg.totalBatches} × ${cfg.batchSize} queries = ${totalQueries} total
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // STEP 4: Process affiliate queue (organic growth — zero extra Tavily calls)
+    // STEP 4: Process affiliate queue (streaming batch pipeline — Phase 4)
     // ──────────────────────────────────────────────────────────────────────────
 
-    const affiliateDomains = await AffiliateExtractor.drainQueue();
-    let affiliateDomainsProcessed = 0;
+    const { AffiliateQueueProcessor } = await import('./affiliate-queue-processor');
+    const affiliateProcessor = new AffiliateQueueProcessor();
+    const affiliateSummaries = await affiliateProcessor.processQueue();
 
-    if (affiliateDomains.length > 0) {
-      console.log(
-        `\n[Source Discovery Engine] Step 4: Processing ${affiliateDomains.length} affiliate domains...`,
-      );
+    const affiliateDomainsProcessed = affiliateSummaries.reduce(
+      (sum, s) => sum + s.urlsProcessed,
+      0,
+    );
+    const affiliateApproved = affiliateSummaries.reduce((sum, s) => sum + s.approvedCount, 0);
+    const affiliateRejected = affiliateSummaries.reduce((sum, s) => sum + s.rejectedCount, 0);
+    const affiliateDuplicates = affiliateSummaries.reduce((sum, s) => sum + s.duplicateCount, 0);
 
-      for (const domain of affiliateDomains) {
-        // Skip if already registered (race condition guard)
-        const exists = await sourceRegistryService.domainExists(domain);
-        if (exists) {
-          duplicateSources++;
-          continue;
-        }
-
-        const normDomain = domain.toLowerCase().trim();
-        if (seenInRun.has(normDomain)) {
-          duplicateSources++;
-          console.log(`[Source Discovery] Skipped in-run duplicate affiliate: ${domain}`);
-          continue;
-        }
-        seenInRun.add(normDomain);
-
-        affiliateDomainsProcessed++;
-        domainsEvaluated++;
-
-        const outcome = await this.evaluateDomain(domain, domain, '');
-        if (outcome.kind === 'approved') {
-          const result = outcome.evaluation;
-          domainsApproved++;
-          confidenceSamples.push(result.confidence);
-          try {
-            await sourceRegistryService.upsertSource({
-              domain,
-              organization: domain,
-              homepage: `https://${domain}`,
-              sourceType: (result.suggestedSourceType || 'Other') as SourceType,
-              category: result.suggestedCategory as SourceCategory,
-              strategy: (result.suggestedStrategy || 'direct') as CrawlStrategy,
-              crawlFrequency: (result.suggestedCrawlFrequency || 'weekly') as CrawlFrequency,
-              trustScore: result.suggestedTrustScore ?? 60,
-              priority: (result.suggestedPriority || 'medium') as SourcePriority,
-              ecosystemType: mapSourceTypeToEcosystemType(result.suggestedSourceType) as any,
-              confidence: result.confidence,
-              reason: result.reason,
-              verifiedByAIAt: new Date(),
-              lastVerifiedAt: new Date(),
-              discoveredBy: 'affiliate-extraction',
-              defaultTags: [],
-              isActive: true,
-            });
-            console.log(
-              `[Source Discovery Engine] ✅ Affiliate approved: ${domain} (${result.suggestedCategory})`,
-            );
-          } catch (err: any) {
-            console.error(
-              `[Source Discovery Engine] Failed to upsert affiliate ${domain}: ${err.message}`,
-            );
-          }
-        } else if (outcome.kind === 'rejected') {
-          domainsRejected++;
-          confidenceSamples.push(outcome.evaluation.confidence);
-          console.log(
-            `[Source Discovery] Rejected Source\n` +
-              `  Domain:    ${domain}\n` +
-              `  Reason:    ${outcome.evaluation.reason || 'Not an opportunity source.'}\n` +
-              `  Confidence: ${outcome.evaluation.confidence ?? 'N/A'}%`,
-          );
-        } else if (outcome.kind === 'invalid') {
-          invalidResponses++;
-          console.warn(
-            `[Source Discovery] Invalid response for affiliate ${domain}: ${outcome.error}`,
-          );
-        } else if (outcome.kind === 'aiError') {
-          providerFailures++;
-          console.error(
-            `[Source Discovery] Provider failure for affiliate ${domain}: ${outcome.error}`,
-          );
-        }
-      }
-    }
+    domainsEvaluated += affiliateDomainsProcessed;
+    domainsApproved += affiliateApproved;
+    domainsRejected += affiliateRejected;
+    duplicateSources += affiliateDuplicates;
 
     const durationMs = Date.now() - startTime;
     const averageConfidence =

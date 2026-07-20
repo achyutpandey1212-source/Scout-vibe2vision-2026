@@ -217,5 +217,29 @@ router.get('/queue/depth', async (_req: Request, res: Response) => {
   }
 });
 
+// ─── POST /api/discovery/sources/queue/process ────────────────────────────────
+/**
+ * Triggers streaming batch processing of the affiliate queue.
+ */
+router.post('/queue/process', async (req: Request, res: Response) => {
+  try {
+    const { batchSize } = req.body;
+    const { AffiliateQueueProcessor } = await import('../sources/affiliate-queue-processor');
+    const processor = new AffiliateQueueProcessor();
+
+    // Trigger processing
+    processor.processQueue({ batchSize }).catch((err) => {
+      console.error('[Route] Background Affiliate Processor failed:', err);
+    });
+
+    return res.json({
+      success: true,
+      message: 'Affiliate Queue Streaming Processor started in background.',
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: { message: err.message } });
+  }
+});
+
 export const sourceRegistryRouter = router;
 export default sourceRegistryRouter;

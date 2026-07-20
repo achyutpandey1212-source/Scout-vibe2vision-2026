@@ -165,28 +165,28 @@ router.post('/run-weekly', (req, res: Response) => {
 });
 
 /**
- * POST run-affiliates: Runs affiliate queue evaluation manually
- */
-router.post('/run-affiliates', async (req, res: Response) => {
+// ─── POST run-affiliates: Runs streaming affiliate queue processor ───
+router.post('/run-affiliates', async (req: Request, res: Response) => {
   try {
-    const engine = new SourceDiscoveryEngine();
-    // Run engine with 0 Tavily batches to force only processing queued affiliates
+    const { batchSize } = req.body;
+    const { AffiliateQueueProcessor } = await import('../sources/affiliate-queue-processor');
+    const processor = new AffiliateQueueProcessor();
     const startedAt = new Date().toISOString();
-    engine
-      .run({ totalBatches: 0, batchSize: 0 })
-      .then((report) => {
+
+    processor
+      .processQueue({ batchSize })
+      .then((summaries) => {
         console.log(
-          `[Dashboard Server] Manual affiliate evaluation finished. ` +
-            `Approved: ${report.domainsApproved}, Duration: ${report.durationMs}ms`,
+          `[Dashboard Server] Streaming affiliate processor completed ${summaries.length} batches.`,
         );
       })
       .catch((err) => {
-        console.error(`[Dashboard Server] Manual affiliate evaluation failed: ${err.message}`);
+        console.error(`[Dashboard Server] Streaming affiliate processor failed: ${err.message}`);
       });
 
     return res.json({
       success: true,
-      message: 'Affiliate evaluation started in background.',
+      message: 'Streaming Affiliate Queue processor started in background.',
       data: { startedAt },
     });
   } catch (err: any) {

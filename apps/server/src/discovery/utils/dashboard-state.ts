@@ -27,6 +27,20 @@ export interface DashboardState {
   crawlCurrentlyCrawling?: string[];
   crawlCompleted?: number;
   crawlFailed?: number;
+
+  // Phase 4 Affiliate Queue Streaming State fields
+  affiliateQueueState?: {
+    totalPending: number;
+    batchSize: number;
+    estimatedBatches: number;
+    currentCursor: number;
+    progressPercentage: number;
+    currentBatch: number;
+    processed: number;
+    remaining: number;
+    status: 'idle' | 'running' | 'paused' | 'completed';
+    pauseReason?: string;
+  };
 }
 
 class DashboardStateManager {

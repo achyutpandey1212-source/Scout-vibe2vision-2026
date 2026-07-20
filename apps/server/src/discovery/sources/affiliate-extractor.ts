@@ -147,8 +147,37 @@ export class AffiliateExtractor {
   }
 
   /**
+   * Reads all queued domains without draining or modifying the queue.
+   */
+  static async getQueueItems(): Promise<string[]> {
+    try {
+      const redisClient = redis.getClient();
+      return await redisClient.smembers(AFFILIATE_QUEUE_KEY);
+    } catch (err: any) {
+      console.error(`[AffiliateExtractor] Failed to fetch queue items: ${err.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Removes specific processed domains from the Redis queue immediately.
+   */
+  static async removeFromQueue(domains: string[]): Promise<number> {
+    if (!domains || domains.length === 0) return 0;
+    try {
+      const redisClient = redis.getClient();
+      const removed = await redisClient.srem(AFFILIATE_QUEUE_KEY, ...domains);
+      console.log(`[AffiliateExtractor] Removed ${removed} processed domains from affiliate queue`);
+      return removed;
+    } catch (err: any) {
+      console.error(`[AffiliateExtractor] Failed to remove domains from queue: ${err.message}`);
+      return 0;
+    }
+  }
+
+  /**
    * Drains the affiliate queue from Redis and returns all queued domains.
-   * Called by the weekly Source Discovery Engine.
+   * Called by legacy routines.
    */
   static async drainQueue(): Promise<string[]> {
     try {
