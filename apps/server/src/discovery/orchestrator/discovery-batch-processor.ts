@@ -218,6 +218,68 @@ Duration:     ${(durationMs / 1000).toFixed(1)} s
         await sourceRegistryService.recordRunOutcome(dom, 0);
       }
     }
+
+    // ─── Query Yield Tracking ────────────────────────────────────────────────
+    try {
+      const { QueryYieldModel } = await import('../query-engine/query-yield.model');
+      const queryStats = new Map<string, { runs: number; accepted: number }>();
+
+      // 1. Register runs for all unique query candidates executed in current batch
+      for (const candidate of candidates) {
+        const q = candidate.query;
+        if (!q || q.startsWith('direct:') || q.startsWith('sitemap:') || q.startsWith('rss:')) {
+          continue;
+        }
+        if (!queryStats.has(q)) {
+          queryStats.set(q, { runs: 1, accepted: 0 });
+        }
+      }
+
+      // 2. Count opportunity yields (where decision === 'ACCEPT')
+      for (const opp of evaluatedOpps) {
+        if (opp.decision !== 'ACCEPT') continue;
+        const oppUrl = opp.opportunityUrl || opp.sourceUrl || '';
+        const match = candidates.find((c) => c.url === oppUrl);
+        if (
+          match &&
+          match.query &&
+          !match.query.startsWith('direct:') &&
+          !match.query.startsWith('sitemap:') &&
+          !match.query.startsWith('rss:')
+        ) {
+          const stat = queryStats.get(match.query);
+          if (stat) {
+            stat.accepted++;
+          } else {
+            queryStats.set(match.query, { runs: 1, accepted: 1 });
+          }
+        }
+      }
+
+      // 3. Write yield updates in bulk to MongoDB
+      const bulkOps = Array.from(queryStats.entries()).map(([query, stats]) => ({
+        updateOne: {
+          filter: { query },
+          update: {
+            $inc: {
+              runs: stats.runs,
+              opportunitiesAccepted: stats.accepted,
+            },
+            $set: { lastRunAt: new Date() },
+          },
+          upsert: true,
+        },
+      }));
+
+      if (bulkOps.length > 0) {
+        await QueryYieldModel.bulkWrite(bulkOps);
+        console.log(
+          `[Batch Controller] Persisted yield updates for ${bulkOps.length} search queries.`,
+        );
+      }
+    } catch (err: any) {
+      console.error('[Batch Controller] Failed to update query success tracker:', err);
+    }
   }
 
   private async persistRawPagesCompatibility(crawledPages: CrawledPage[]): Promise<void> {

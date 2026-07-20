@@ -81,10 +81,12 @@ function calculateQueryPriority(
   return Math.min(100, Math.max(0, score));
 }
 
+import { QueryYieldModel } from './query-yield.model';
+
 /**
  * Generates ranked, diversified, and deduplicated queries for a target domain.
  */
-export function generateQueries(domain: string): RankedQuery[] {
+export async function generateQueries(domain: string): Promise<RankedQuery[]> {
   const ecosystem = findEcosystemForDomain(domain);
   const rawQueries: RankedQuery[] = [];
   const seenNormKeys = new Set<string>();
@@ -123,6 +125,26 @@ export function generateQueries(domain: string): RankedQuery[] {
         }
       }
     }
+  }
+
+  // Fetch historical yields in bulk to apply priority boosts
+  try {
+    const queryStrings = rawQueries.map((q) => q.query);
+    const yieldStats = await QueryYieldModel.find({ query: { $in: queryStrings } }).lean();
+    const yieldMap = new Map<string, number>();
+
+    for (const stat of yieldStats) {
+      yieldMap.set(stat.query, stat.yieldRate || 0);
+    }
+
+    for (const q of rawQueries) {
+      const historicalYield = yieldMap.get(q.query) || 0;
+      // Boost priority score proportionally to yield rate (max +30 boost for yield >= 3.0)
+      const yieldBoost = Math.min(30, Math.round(historicalYield * 10));
+      q.priorityScore = Math.min(100, q.priorityScore + yieldBoost);
+    }
+  } catch (err: any) {
+    console.warn(`[Query Engine] Failed to fetch historical query yields: ${err.message}`);
   }
 
   // Diversify to ensure multi-disciplinary domain coverage without single-persona saturation

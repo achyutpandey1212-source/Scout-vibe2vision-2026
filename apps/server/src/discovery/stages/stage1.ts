@@ -148,7 +148,7 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
 
         case 'search': {
           // Generate persona-driven, ranked queries using the new query-engine
-          const rankedQueries = generateQueries(target.domain);
+          const rankedQueries = await generateQueries(target.domain);
           const queries = rankedQueries.map((q) => q.query);
           console.log(
             `[Stage 1] [${target.organization}] Running ${queries.length} recruiter-quality query-engine searches...`,

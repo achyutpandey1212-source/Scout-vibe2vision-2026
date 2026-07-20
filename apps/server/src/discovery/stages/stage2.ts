@@ -19,6 +19,7 @@ export interface CrawledPage {
   source: string;
   crawlReason: string;
   failureReason?: string;
+  query?: string;
 }
 
 export interface CrawlAnalytics {
@@ -307,7 +308,11 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
 
       // Await concurrently running requests for current batch before moving next
       const batchResults = await Promise.all(batchPromises);
-      results.push(...batchResults);
+      const mappedResults = batchResults.map((res, index) => ({
+        ...res,
+        query: currentBatch[index]?.query,
+      }));
+      results.push(...mappedResults);
 
       completedCount += batchResults.length;
       console.log(
