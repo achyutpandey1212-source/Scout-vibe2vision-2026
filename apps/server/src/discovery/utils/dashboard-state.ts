@@ -52,6 +52,7 @@ export interface DashboardState {
   directUrlsFound?: number;
   atsUrlsFound?: number;
   searchBudgetSaved?: number;
+  skippedNonHtmlResources?: number;
 }
 
 class DashboardStateManager {
@@ -84,6 +85,7 @@ class DashboardStateManager {
     directUrlsFound: 0,
     atsUrlsFound: 0,
     searchBudgetSaved: 0,
+    skippedNonHtmlResources: 0,
   };
 
   private constructor() {}
@@ -135,6 +137,7 @@ class DashboardStateManager {
       directUrlsFound: 0,
       atsUrlsFound: 0,
       searchBudgetSaved: 0,
+      skippedNonHtmlResources: 0,
     };
   }
 }

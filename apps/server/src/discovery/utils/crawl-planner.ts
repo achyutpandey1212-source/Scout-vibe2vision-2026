@@ -51,10 +51,21 @@ export class CrawlPlanner {
     const urlLower = candidate.url.toLowerCase();
 
     // 1. Check for blacklisted file extensions
-    if (BLACKLISTED_EXTENSIONS.some((ext) => urlLower.endsWith(ext))) {
+    if (
+      BLACKLISTED_EXTENSIONS.some((ext) => urlLower.endsWith(ext)) ||
+      urlLower.includes('.pdf') ||
+      urlLower.includes('.doc') ||
+      urlLower.includes('.docx') ||
+      urlLower.includes('.ppt') ||
+      urlLower.includes('.pptx') ||
+      urlLower.includes('.xls') ||
+      urlLower.includes('.xlsx') ||
+      urlLower.includes('.zip') ||
+      urlLower.includes('.rar')
+    ) {
       return {
         decision: 'SKIP',
-        reason: 'URL points to an unsupported file type or media asset.',
+        reason: 'SKIPPED_NON_HTML_RESOURCE',
       };
     }
 

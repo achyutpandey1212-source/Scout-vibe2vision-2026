@@ -128,6 +128,12 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
         // A. Strategy: SKIP
         if (plan.decision === 'SKIP' || preScore.score < 20) {
           skippedCount++;
+          if (plan.reason === 'SKIPPED_NON_HTML_RESOURCE') {
+            DashboardStateInstance.updateState({
+              skippedNonHtmlResources:
+                (DashboardStateInstance.getState().skippedNonHtmlResources || 0) + 1,
+            });
+          }
           return {
             url: candidate.url,
             title: candidate.source,

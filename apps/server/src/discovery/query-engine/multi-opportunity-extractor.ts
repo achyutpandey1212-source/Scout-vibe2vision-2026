@@ -19,7 +19,15 @@ export class MultiOpportunityExtractor {
 
       if (seenUrls.has(jobUrlLower)) continue;
 
+      const isAtsLink =
+        jobUrlLower.includes('greenhouse.io/') ||
+        jobUrlLower.includes('lever.co/') ||
+        jobUrlLower.includes('ashbyhq.com/') ||
+        jobUrlLower.includes('workable.com/') ||
+        jobUrlLower.includes('smartrecruiters.com/');
+
       const hasJobKeyword =
+        isAtsLink ||
         jobUrlLower.includes('/job/') ||
         jobUrlLower.includes('/jobs/') ||
         jobUrlLower.includes('/careers/') ||
@@ -38,10 +46,30 @@ export class MultiOpportunityExtractor {
         title.toLowerCase().includes('placement') ||
         title.toLowerCase().includes('fellow');
 
-      if (hasJobKeyword && isTechnicalInternshipTitle && title.length > 3) {
+      const isActionTitle =
+        title.toLowerCase() === 'apply' ||
+        title.toLowerCase() === 'apply now' ||
+        title.toLowerCase() === 'view' ||
+        title.toLowerCase() === 'view details' ||
+        title.toLowerCase() === 'learn more' ||
+        title.toLowerCase().includes('position') ||
+        title.toLowerCase().includes('role');
+
+      const urlHasRelevance =
+        jobUrlLower.includes('intern') ||
+        jobUrlLower.includes('software') ||
+        jobUrlLower.includes('sde') ||
+        jobUrlLower.includes('developer') ||
+        jobUrlLower.includes('engineer');
+
+      if (
+        hasJobKeyword &&
+        (isTechnicalInternshipTitle || (isActionTitle && urlHasRelevance)) &&
+        title.length > 2
+      ) {
         seenUrls.add(jobUrlLower);
         candidates.push({
-          title,
+          title: isTechnicalInternshipTitle ? title : `Opportunity opening at ${source}`,
           url: jobUrl,
           source,
         });
