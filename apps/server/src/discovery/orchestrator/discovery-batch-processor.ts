@@ -207,7 +207,7 @@ Duration:     ${(durationMs / 1000).toFixed(1)} s
 
     for (const [dom, data] of domainMap.entries()) {
       const hasSuccessfulPage = data.pages.some((p) => p.crawlStatus === 'SUCCESS');
-      if (hasSuccessfulPage || data.pages.length > 0) {
+      if (hasSuccessfulPage) {
         await sourceRegistryService.markCrawled(dom, {
           pagesCrawled: data.pages.length,
           opportunitiesFound: data.oppsCount,
@@ -215,7 +215,7 @@ Duration:     ${(durationMs / 1000).toFixed(1)} s
         await sourceRegistryService.recordRunOutcome(dom, data.oppsCount);
       } else {
         await sourceRegistryService.markFailed(dom);
-        await sourceRegistryService.recordRunOutcome(dom, 0);
+        // Avoid calling recordRunOutcome on crawl failure/crash to protect yield metrics
       }
     }
 

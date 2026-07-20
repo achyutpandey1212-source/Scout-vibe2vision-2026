@@ -5,6 +5,7 @@ import { TavilyClient } from '../search/tavily.client';
 import { normalizeUrl } from '../search/search-orchestrator';
 import { CrawlTarget, ISourceRegistryEntry } from '../sources/source-registry.types';
 import { generateQueries } from '../query-engine/query-generator';
+import { DashboardStateInstance } from '../utils/dashboard-state';
 
 export interface CandidateURL {
   url: string;
