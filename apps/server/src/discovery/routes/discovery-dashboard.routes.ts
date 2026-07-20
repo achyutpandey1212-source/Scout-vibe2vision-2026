@@ -41,24 +41,30 @@ router.get('/status', async (req, res: Response) => {
   let affiliateQueueDepth = 0;
   let sourcesDueToday = 0;
   let sourcesCrawledToday = 0;
+  let retryQueueStats = { totalPending: 0, readyToRetry: 0, lastRetryAt: null as Date | null };
 
   try {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    const [totalCount, activeCount, queueDepth, dueCount, crawledToday] = await Promise.all([
-      SourceRegistryModel.countDocuments(),
-      SourceRegistryModel.countDocuments({ isActive: true }),
-      AffiliateExtractor.getQueueDepth(),
-      SourceRegistryModel.countDocuments({ isActive: true, nextCrawlAt: { $lte: new Date() } }),
-      SourceRegistryModel.countDocuments({ isActive: true, lastCrawledAt: { $gte: todayStart } }),
-    ]);
+    const { AffiliateRetryQueue } = await import('../sources/affiliate-retry-queue');
+
+    const [totalCount, activeCount, queueDepth, dueCount, crawledToday, retryStats] =
+      await Promise.all([
+        SourceRegistryModel.countDocuments(),
+        SourceRegistryModel.countDocuments({ isActive: true }),
+        AffiliateExtractor.getQueueDepth(),
+        SourceRegistryModel.countDocuments({ isActive: true, nextCrawlAt: { $lte: new Date() } }),
+        SourceRegistryModel.countDocuments({ isActive: true, lastCrawledAt: { $gte: todayStart } }),
+        AffiliateRetryQueue.getStats(),
+      ]);
 
     registrySize = totalCount;
     activeSources = activeCount;
     affiliateQueueDepth = queueDepth;
     sourcesDueToday = dueCount;
     sourcesCrawledToday = crawledToday;
+    retryQueueStats = retryStats;
   } catch (err) {
     console.error('[Dashboard Route] Failed to fetch registry status metrics:', err);
   }
@@ -75,6 +81,7 @@ router.get('/status', async (req, res: Response) => {
         sourcesDueToday,
         sourcesCrawledToday,
         remainingToday: Math.max(0, sourcesDueToday - sourcesCrawledToday),
+        retryQueue: retryQueueStats,
       },
     },
   });
@@ -168,7 +175,8 @@ router.post('/run-weekly', (req, res: Response) => {
 });
 
 /**
-// ─── POST run-affiliates: Runs streaming affiliate queue processor ───
+ * POST run-affiliates: Runs streaming affiliate queue processor
+ */
 router.post('/run-affiliates', async (req: Request, res: Response) => {
   try {
     const { batchSize } = req.body;
@@ -190,6 +198,37 @@ router.post('/run-affiliates', async (req: Request, res: Response) => {
     return res.json({
       success: true,
       message: 'Streaming Affiliate Queue processor started in background.',
+      data: { startedAt },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: { message: err.message } });
+  }
+});
+
+/**
+ * POST run-affiliate-retries: Triggers processing of ready items in the retry queue
+ */
+router.post('/run-affiliate-retries', async (req: Request, res: Response) => {
+  try {
+    const { batchSize } = req.body;
+    const { AffiliateRetryProcessor } = await import('../sources/affiliate-retry-processor');
+    const processor = new AffiliateRetryProcessor();
+    const startedAt = new Date().toISOString();
+
+    processor
+      .processRetryQueue({ batchSize })
+      .then((summaries) => {
+        console.log(
+          `[Dashboard Server] Affiliate Retry Processor completed ${summaries.length} batches.`,
+        );
+      })
+      .catch((err) => {
+        console.error(`[Dashboard Server] Affiliate Retry Processor failed: ${err.message}`);
+      });
+
+    return res.json({
+      success: true,
+      message: 'Affiliate Retry Processor started in background.',
       data: { startedAt },
     });
   } catch (err: any) {

@@ -8,6 +8,13 @@ export interface IAffiliateCheckpoint {
   approvedCount: number;
   rejectedCount: number;
   duplicateCount: number;
+  processedThisRun?: number;
+  remainingQueue?: number;
+  retryQueueSize?: number;
+  aiCallsUsed?: number;
+  maxDomains?: number;
+  maxAiCalls?: number;
+  estimatedRunsRemaining?: number;
   updatedAt: Date;
 }
 
@@ -26,6 +33,13 @@ const AffiliateCheckpointSchema = new Schema<IAffiliateCheckpointDocument>(
     approvedCount: { type: Number, default: 0 },
     rejectedCount: { type: Number, default: 0 },
     duplicateCount: { type: Number, default: 0 },
+    processedThisRun: { type: Number, default: 0 },
+    remainingQueue: { type: Number, default: 0 },
+    retryQueueSize: { type: Number, default: 0 },
+    aiCallsUsed: { type: Number, default: 0 },
+    maxDomains: { type: Number, default: 200 },
+    maxAiCalls: { type: Number, default: 500 },
+    estimatedRunsRemaining: { type: Number, default: 0 },
     updatedAt: { type: Date, default: Date.now },
   },
   {

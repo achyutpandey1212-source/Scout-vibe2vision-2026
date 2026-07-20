@@ -2,6 +2,8 @@ import { AffiliateExtractor } from './affiliate-extractor';
 import { sourceRegistryService } from './source-registry.service';
 import { AffiliateCheckpointModel } from './affiliate-checkpoint.model';
 import { DashboardStateInstance } from '../utils/dashboard-state';
+import { AffiliateBudgetManager } from './affiliate-budget-manager';
+import { AffiliateRetryQueue } from './affiliate-retry-queue';
 import { generateStructuredResponse } from '../../ai/capabilities/structured-output';
 import { sanitizeAiOutput } from './ai-output-sanitizer';
 import { buildDomainEvaluatorPrompt } from './source-discovery.prompt';
@@ -69,6 +71,7 @@ export interface AffiliateBatchSummary {
   approvedCount: number;
   rejectedCount: number;
   duplicateCount: number;
+  requeuedCount: number;
   registryAdded: number;
   remainingQueue: number;
   durationMs: number;
@@ -162,7 +165,8 @@ export class AffiliateQueueProcessor {
   }
 
   /**
-   * Evaluates a single candidate domain with adaptive confidence thresholds.
+   * Evaluates a single candidate domain.
+   * Differentiates transient provider failures from permanent evaluation/parser errors.
    */
   private async evaluateDomain(domain: string): Promise<DomainEvaluationOutcome> {
     const override = this.getReputationOverride(domain);
@@ -211,20 +215,34 @@ export class AffiliateQueueProcessor {
       }
       return { kind: 'rejected', evaluation: result as AIDomainEvaluationRejected };
     } catch (err: any) {
-      const isInfra = err?.name !== 'AISchemaValidationError';
-      if (isInfra) {
-        return { kind: 'aiError', error: err.message };
+      const errMessage = err?.message || String(err);
+      // Differentiate transient provider errors (rate limit 429, quota, 503, timeout) from permanent parser errors
+      const isTransient =
+        errMessage.includes('429') ||
+        errMessage.includes('quota') ||
+        errMessage.includes('503') ||
+        errMessage.includes('timeout') ||
+        errMessage.includes('rate limit') ||
+        err?.name !== 'AISchemaValidationError';
+
+      if (isTransient) {
+        return { kind: 'aiError', error: errMessage };
       }
-      return { kind: 'invalid', error: err.message };
+      return { kind: 'invalid', error: errMessage };
     }
   }
 
   /**
-   * Executes the streaming batch pipeline for the affiliate queue.
+   * Executes the budget-aware streaming batch pipeline for the affiliate queue.
    */
-  async processQueue(options?: { batchSize?: number }): Promise<AffiliateBatchSummary[]> {
+  async processQueue(options?: {
+    batchSize?: number;
+    maxDomainsPerRun?: number;
+    maxAiCallsPerRun?: number;
+  }): Promise<AffiliateBatchSummary[]> {
     const batchSizeRaw = process.env.AFFILIATE_BATCH_SIZE;
     const batchSize = options?.batchSize || (batchSizeRaw ? parseInt(batchSizeRaw, 10) : 25);
+    const budgetManager = new AffiliateBudgetManager(options);
     const startTime = Date.now();
 
     // 1. Fetch or initialize persistent checkpoint
@@ -248,16 +266,17 @@ export class AffiliateQueueProcessor {
 
     const summaries: AffiliateBatchSummary[] = [];
     let isQueueActive = true;
-    let batchIndex = 0;
 
     console.log(`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[Affiliate Processor V4] Starting Streaming Batch Pipeline
-Batch Size: ${batchSize} (Config: AFFILIATE_BATCH_SIZE)
+[Affiliate Processor V5] Starting Budget-Aware Streaming Pipeline
+Batch Size:           ${batchSize} (Config: AFFILIATE_BATCH_SIZE)
+Max Domains Per Run:  ${budgetManager.getStats().maxDomainsPerRun} (Config: AFFILIATE_MAX_DOMAINS_PER_RUN)
+Max AI Calls:         ${budgetManager.getStats().maxAiCallsPerRun} (Config: AFFILIATE_MAX_AI_CALLS)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
-    while (isQueueActive) {
-      // Fetch current queue items from Redis
+    while (isQueueActive && budgetManager.canContinue()) {
+      budgetManager.incrementBatch();
       const currentQueue = await AffiliateExtractor.getQueueItems();
       const totalPending = currentQueue.length;
 
@@ -271,7 +290,6 @@ Batch Size: ${batchSize} (Config: AFFILIATE_BATCH_SIZE)
         break;
       }
 
-      batchIndex++;
       const totalBatches = Math.ceil(totalPending / batchSize);
       const batchDomains = currentQueue.slice(0, batchSize);
       const batchStart = Date.now();
@@ -279,22 +297,29 @@ Batch Size: ${batchSize} (Config: AFFILIATE_BATCH_SIZE)
       let batchApproved = 0;
       let batchRejected = 0;
       let batchDuplicates = 0;
+      let batchRequeued = 0;
       let batchRegistryAdded = 0;
-      let isPausedByError = false;
 
-      // Arrays for batch execution
       const processedInBatch: string[] = [];
 
       for (const domain of batchDomains) {
-        // Skip duplicate check against MongoDB registry
+        if (!budgetManager.canContinue()) {
+          console.log(`[Affiliate Processor] Run budget limit reached during batch processing.`);
+          break;
+        }
+
+        // Check duplicate against MongoDB registry
         const exists = await sourceRegistryService.domainExists(domain);
         if (exists) {
           batchDuplicates++;
           processedInBatch.push(domain);
+          budgetManager.recordProcessed();
           continue;
         }
 
+        budgetManager.recordAICall();
         const outcome = await this.evaluateDomain(domain);
+
         if (outcome.kind === 'approved') {
           const res = outcome.evaluation;
           batchApproved++;
@@ -321,35 +346,46 @@ Batch Size: ${batchSize} (Config: AFFILIATE_BATCH_SIZE)
           } catch (err: any) {
             console.error(`[Affiliate Processor] Failed to upsert ${domain}: ${err.message}`);
           }
+          processedInBatch.push(domain);
+          budgetManager.recordProcessed();
         } else if (outcome.kind === 'rejected' || outcome.kind === 'invalid') {
           batchRejected++;
+          // Permanent rejection or invalid structure -> remove permanently from queue
+          processedInBatch.push(domain);
+          budgetManager.recordProcessed();
         } else if (outcome.kind === 'aiError') {
+          // Transient AI Provider failure -> Enqueue in Retry Queue and remove from main queue
+          batchRequeued++;
+          await AffiliateRetryQueue.enqueue(domain, outcome.error);
+          processedInBatch.push(domain);
+          budgetManager.recordProcessed();
           console.warn(
-            `[Affiliate Processor] AI Provider error evaluating ${domain}: ${outcome.error}`,
+            `[Affiliate Processor] Transient provider failure for ${domain}. Moved to Retry Queue.`,
           );
-          isPausedByError = true;
-          break;
         }
-
-        processedInBatch.push(domain);
       }
 
-      // Immediate Removal of processed items from Redis queue
+      // Immediate Removal of processed items from main Redis queue
       if (processedInBatch.length > 0) {
         await AffiliateExtractor.removeFromQueue(processedInBatch);
       }
 
       const durationMs = Date.now() - batchStart;
       const remainingCount = Math.max(0, totalPending - processedInBatch.length);
+      const retryStats = await AffiliateRetryQueue.getStats();
 
-      // Accumulate totals into MongoDB checkpoint immediately
+      // Accumulate totals into MongoDB checkpoint
       const newTotalProcessed = checkpoint.totalProcessed + processedInBatch.length;
       const newApproved = checkpoint.approvedCount + batchApproved;
       const newRejected = checkpoint.rejectedCount + batchRejected;
       const newDuplicates = checkpoint.duplicateCount + batchDuplicates;
       const lastUrl = processedInBatch[processedInBatch.length - 1] || checkpoint.lastProcessedUrl;
 
-      const newStatus = isPausedByError ? 'paused' : remainingCount === 0 ? 'completed' : 'running';
+      const isBudgetFinished = !budgetManager.canContinue();
+      const newStatus =
+        remainingCount === 0 ? 'completed' : isBudgetFinished ? 'paused' : 'running';
+      const budgetStats = budgetManager.getStats();
+      const estimatedRunsRemaining = Math.ceil(remainingCount / budgetStats.maxDomainsPerRun);
 
       await AffiliateCheckpointModel.updateOne(
         { key: 'affiliate_queue_checkpoint' },
@@ -360,6 +396,13 @@ Batch Size: ${batchSize} (Config: AFFILIATE_BATCH_SIZE)
             approvedCount: newApproved,
             rejectedCount: newRejected,
             duplicateCount: newDuplicates,
+            processedThisRun: budgetStats.domainsProcessed,
+            remainingQueue: remainingCount,
+            retryQueueSize: retryStats.totalPending,
+            aiCallsUsed: budgetStats.aiCallsUsed,
+            maxDomains: budgetStats.maxDomainsPerRun,
+            maxAiCalls: budgetStats.maxAiCallsPerRun,
+            estimatedRunsRemaining,
             lastProcessedUrl: lastUrl,
             updatedAt: new Date(),
           },
@@ -374,12 +417,13 @@ Batch Size: ${batchSize} (Config: AFFILIATE_BATCH_SIZE)
       checkpoint.lastProcessedUrl = lastUrl;
 
       const summary: AffiliateBatchSummary = {
-        batchNumber: batchIndex,
+        batchNumber: budgetStats.batchCount,
         totalBatches,
         urlsProcessed: processedInBatch.length,
         approvedCount: batchApproved,
         rejectedCount: batchRejected,
         duplicateCount: batchDuplicates,
+        requeuedCount: batchRequeued,
         registryAdded: batchRegistryAdded,
         remainingQueue: remainingCount,
         durationMs,
@@ -389,8 +433,8 @@ Batch Size: ${batchSize} (Config: AFFILIATE_BATCH_SIZE)
 
       // Emit Progress to Dashboard State
       const progressPercentage =
-        newTotalProcessed + remainingCount > 0
-          ? Math.round((newTotalProcessed / (newTotalProcessed + remainingCount)) * 100)
+        budgetStats.domainsProcessed + remainingCount > 0
+          ? Math.round((budgetStats.domainsProcessed / budgetStats.maxDomainsPerRun) * 100)
           : 100;
 
       DashboardStateInstance.updateState({
@@ -399,36 +443,31 @@ Batch Size: ${batchSize} (Config: AFFILIATE_BATCH_SIZE)
           batchSize,
           estimatedBatches: Math.ceil(remainingCount / batchSize),
           currentCursor: newTotalProcessed,
-          progressPercentage,
-          currentBatch: batchIndex,
+          progressPercentage: Math.min(100, progressPercentage),
+          currentBatch: budgetStats.batchCount,
           processed: newTotalProcessed,
           remaining: remainingCount,
           status: newStatus as any,
-          pauseReason: isPausedByError ? 'AI Quota / Infrastructure Failure' : undefined,
+          pauseReason: isBudgetFinished ? 'Run budget limit reached' : undefined,
         },
       });
 
       // Concise Batch Console Log
       console.log(`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Affiliate Batch ${batchIndex} / ${totalBatches}
+Affiliate Batch ${budgetStats.batchCount} / ${totalBatches}
 
-URLs:            ${summary.urlsProcessed}
-Approved:        ${summary.approvedCount}
-Rejected:        ${summary.rejectedCount}
-Duplicates:      ${summary.duplicateCount}
-Registry Added:  ${summary.registryAdded}
-Remaining:       ${summary.remainingQueue}
-Duration:        ${(summary.durationMs / 1000).toFixed(1)} s
+URLs:              ${summary.urlsProcessed}
+Approved:          ${summary.approvedCount}
+Rejected:          ${summary.rejectedCount}
+Duplicates:        ${summary.duplicateCount}
+Retry Queued:      ${summary.requeuedCount}
+Registry Added:    ${summary.registryAdded}
+Processed Run:     ${budgetStats.domainsProcessed} / ${budgetStats.maxDomainsPerRun}
+Remaining Queue:   ${summary.remainingQueue}
+Retry Queue Size:  ${retryStats.totalPending}
+Duration:          ${(summary.durationMs / 1000).toFixed(1)} s
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-
-      // If paused due to provider quota, stop loop cleanly
-      if (isPausedByError) {
-        console.warn(
-          `[Affiliate Processor] Paused queue processing due to provider errors. Checkpoint saved.`,
-        );
-        break;
-      }
     }
 
     const totalDurationMs = Date.now() - startTime;
@@ -437,30 +476,34 @@ Duration:        ${(summary.durationMs / 1000).toFixed(1)} s
       batchTimes.length > 0
         ? Math.round(batchTimes.reduce((a, b) => a + b, 0) / batchTimes.length)
         : 0;
-    const fastestBatchMs = batchTimes.length > 0 ? Math.min(...batchTimes) : 0;
-    const slowestBatchMs = batchTimes.length > 0 ? Math.max(...batchTimes) : 0;
 
     const totalProcessedRun = summaries.reduce((sum, s) => sum + s.urlsProcessed, 0);
     const totalApprovedRun = summaries.reduce((sum, s) => sum + s.approvedCount, 0);
     const totalRejectedRun = summaries.reduce((sum, s) => sum + s.rejectedCount, 0);
     const totalDuplicatesRun = summaries.reduce((sum, s) => sum + s.duplicateCount, 0);
+    const totalRetryQueuedRun = summaries.reduce((sum, s) => sum + s.requeuedCount, 0);
     const totalRegistryRun = summaries.reduce((sum, s) => sum + s.registryAdded, 0);
     const finalRemaining = await AffiliateExtractor.getQueueDepth();
+    const retryStats = await AffiliateRetryQueue.getStats();
+    const budgetStats = budgetManager.getStats();
+    const estimatedRunsLeft = Math.ceil(finalRemaining / budgetStats.maxDomainsPerRun);
 
     // Print Final Summary Telemetry Report
     console.log(`
 ========== Affiliate Queue Report ==========
-Queue Size:           ${totalProcessedRun + finalRemaining}
-Processed:            ${totalProcessedRun}
-Approved:             ${totalApprovedRun}
-Rejected:             ${totalRejectedRun}
-Duplicates:           ${totalDuplicatesRun}
-Registry Added:       ${totalRegistryRun}
-Remaining:            ${finalRemaining}
-Average Batch Time:   ${(avgBatchMs / 1000).toFixed(1)}s
-Fastest Batch:        ${(fastestBatchMs / 1000).toFixed(1)}s
-Slowest Batch:        ${(slowestBatchMs / 1000).toFixed(1)}s
-Total Runtime:        ${(totalDurationMs / 1000).toFixed(1)}s
+Run Budget:             ${budgetStats.maxDomainsPerRun}
+Processed:              ${totalProcessedRun} / ${budgetStats.maxDomainsPerRun}
+Approved:               ${totalApprovedRun}
+Rejected:               ${totalRejectedRun}
+Duplicates:             ${totalDuplicatesRun}
+Retry Queued:           ${totalRetryQueuedRun}
+Registry Added:         ${totalRegistryRun}
+Remaining Queue:        ${finalRemaining}
+Retry Queue Size:       ${retryStats.totalPending}
+AI Calls Used:          ${budgetStats.aiCallsUsed}
+Estimated Runs Left:    ${estimatedRunsLeft}
+Average Batch Time:     ${(avgBatchMs / 1000).toFixed(1)}s
+Total Runtime:          ${(totalDurationMs / 1000).toFixed(1)}s
 ============================================`);
 
     return summaries;

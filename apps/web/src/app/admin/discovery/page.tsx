@@ -253,6 +253,23 @@ export default function AdminDiscoveryControlCenter() {
     }
   };
 
+  const handleStartRetryQueue = async () => {
+    try {
+      setWeeklyLogs((prev) => [
+        ...prev,
+        `[${new Date().toLocaleTimeString()}] Triggering manual affiliate retry queue evaluation...`,
+      ]);
+      await axios.post(
+        `${apiHost}/api/v1/discovery/dashboard/run-affiliate-retries`,
+        {},
+        { withCredentials: true },
+      );
+      fetchState();
+    } catch (err: any) {
+      alert(err.response?.data?.error?.message || 'Failed to evaluate retry queue.');
+    }
+  };
+
   const handleStopDaily = async () => {
     try {
       await axios.post(`${apiHost}/api/v1/discovery/dashboard/stop`, {}, { withCredentials: true });
@@ -1384,6 +1401,16 @@ export default function AdminDiscoveryControlCenter() {
                     <RefreshCcw className="h-3.5 w-3.5" />
                     <span>
                       Evaluate Affiliate Queue ({status?.registry?.affiliateQueueDepth || 0})
+                    </span>
+                  </button>
+                  <button
+                    onClick={handleStartRetryQueue}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 border border-amber-500/30 hover:bg-amber-500/10 text-amber-300 text-xs font-semibold rounded cursor-pointer transition-colors"
+                  >
+                    <RefreshCcw className="h-3.5 w-3.5 text-amber-400" />
+                    <span>
+                      Retry Failed Queue ({status?.registry?.retryQueue?.readyToRetry || 0} /{' '}
+                      {status?.registry?.retryQueue?.totalPending || 0})
                     </span>
                   </button>
                 </div>

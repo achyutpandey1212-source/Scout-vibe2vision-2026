@@ -241,5 +241,19 @@ router.post('/queue/process', async (req: Request, res: Response) => {
   }
 });
 
+// ─── GET /api/discovery/sources/queue/retry-status ───────────────────────────
+/**
+ * Returns the status and metrics of the affiliate retry queue.
+ */
+router.get('/queue/retry-status', async (_req: Request, res: Response) => {
+  try {
+    const { AffiliateRetryQueue } = await import('../sources/affiliate-retry-queue');
+    const stats = await AffiliateRetryQueue.getStats();
+    return res.json({ success: true, data: stats });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: { message: err.message } });
+  }
+});
+
 export const sourceRegistryRouter = router;
 export default sourceRegistryRouter;
