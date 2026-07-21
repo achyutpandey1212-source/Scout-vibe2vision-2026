@@ -23,10 +23,10 @@ export class JobBoardExtractor {
     'devfolio.co': {
       details: [
         /\/hackathons\/[\w-]+/i,
-        /\/hiring\/[\w-]+/i,
+        /\/hackathon\/[\w-]+/i,
         /\/jobs\/[\w-]+/i,
         /\/opportunity\/[\w-]+/i,
-        /\/projects\/[\w-]+/i,
+        /\/hiring\/[\w-]+/i,
       ],
       listings: [/^\/$/i, /^\/hackathons$/i, /^\/jobs$/i],
     },
@@ -46,7 +46,13 @@ export class JobBoardExtractor {
       listings: [/^\/$/i, /\/jobs/i, /\/q-/i, /\/l-/i],
     },
     'glassdoor.co': {
-      details: [/\/job-listing\/[\w-]+/i, /\/job-details\/[\w-]+/i],
+      details: [
+        /\/job-listing\/[\w-]+/i,
+        /\/job-details\/[\w-]+/i,
+        /\/partner\/joblisting/i,
+        /\/jobs\//i,
+        /-job-/i,
+      ],
       listings: [/^\/$/i, /\/jobs/i, /\/job/i],
     },
     'internshala.com': {
@@ -170,6 +176,107 @@ export class JobBoardExtractor {
   }
 
   /**
+   * Scores discovered links using Step 3 Candidate scoring rules.
+   */
+  public static scoreCandidateLink(
+    urlStr: string,
+    linkText: string,
+    contextText: string,
+  ): { score: number; reasons: string[] } {
+    let score = 0;
+    const reasons: string[] = [];
+    const urlLower = urlStr.toLowerCase();
+    const textLower = linkText.toLowerCase();
+    const ctxLower = contextText.toLowerCase();
+
+    // Step 4: Asset check
+    if (this.isAssetUrl(urlStr)) {
+      return { score: -999, reasons: ['Asset URL/Extension matched'] };
+    }
+
+    // Opportunity keywords check
+    if (urlLower.includes('internship') || urlLower.includes('intern')) {
+      score += 40;
+      reasons.push('+40 URL contains internship/intern');
+    }
+    if (urlLower.includes('job') || urlLower.includes('careers') || urlLower.includes('vacancy')) {
+      score += 40;
+      reasons.push('+40 URL contains job/career');
+    }
+    if (urlLower.includes('hiring') || urlLower.includes('recruit')) {
+      score += 30;
+      reasons.push('+30 URL contains hiring/recruit');
+    }
+    if (urlLower.includes('apply')) {
+      score += 20;
+      reasons.push('+20 URL contains apply');
+    }
+
+    // Step 1: Platform specific pattern matches
+    try {
+      const url = new URL(urlStr);
+      const host = url.hostname.toLowerCase();
+      const path = url.pathname.toLowerCase();
+
+      for (const [domainKey, patterns] of Object.entries(this.DOMAIN_PATTERNS)) {
+        if (host.includes(domainKey)) {
+          for (const rx of patterns.details) {
+            if (rx.test(path) || rx.test(url.pathname + url.search)) {
+              score += 50;
+              reasons.push(`+50 Platform ${domainKey} match`);
+              break;
+            }
+          }
+        }
+      }
+    } catch {
+      // Ignored
+    }
+
+    // Step 2: Context / DOM-based scoring
+    const oppKeywords = [
+      'apply',
+      'internship',
+      'intern',
+      'job',
+      'hackathon',
+      'competition',
+      'hiring',
+      'register',
+      'apply now',
+      'stipend',
+      'salary',
+    ];
+    const hasOppKeywordInCtx = oppKeywords.some((kw) => ctxLower.includes(kw));
+    if (hasOppKeywordInCtx) {
+      score += 20;
+      reasons.push('+20 Context contains opportunity keywords');
+    }
+
+    const applyTexts = [
+      'apply',
+      'apply now',
+      'register',
+      'view details',
+      'learn more',
+      'apply link',
+    ];
+    const hasApplyText = applyTexts.some((at) => textLower.includes(at) || textLower === 'apply');
+    if (hasApplyText) {
+      score += 20;
+      reasons.push('+20 Button/link matches apply/register');
+    }
+
+    // Negative filters
+    if (urlLower.includes('/search') || urlLower.includes('/jobs-in-')) {
+      score -= 50;
+      reasons.push('-50 List page keyword matched');
+    }
+
+    return { score, reasons };
+  }
+
+  /**
    * Classifies url to enforce only queueing real opportunity pages.
    */
   public static classifyUrl(
@@ -190,7 +297,6 @@ export class JobBoardExtractor {
       const url = new URL(urlStr);
       const host = url.hostname.toLowerCase();
       const path = url.pathname.toLowerCase();
-      const search = url.search.toLowerCase();
 
       // Check pagination patterns
       const hasPageParam =
@@ -252,7 +358,6 @@ export class JobBoardExtractor {
             }
           }
 
-          // Lever specific fallback: lever detail pages have at least 2 segments
           if (domainKey === 'lever.co') {
             const segments = path.split('/').filter(Boolean);
             if (segments.length >= 2) {
@@ -260,7 +365,6 @@ export class JobBoardExtractor {
             }
           }
 
-          // Ashby specific fallback: ashby detail pages have jobs/id
           if (domainKey === 'ashbyhq.com') {
             const segments = path.split('/').filter(Boolean);
             if (segments.includes('jobs') && segments.length > segments.indexOf('jobs') + 1) {
@@ -348,123 +452,176 @@ export class JobBoardExtractor {
   }
 
   /**
-   * Extracts list of opportunities from job board page markdown.
+   * Extracts list of opportunities from job board page markdown using Layered Harvesting Strategy.
    */
   public static extractListings(markdown: string, url: string): ExtractedListing[] {
     const listings: ExtractedListing[] = [];
     const seenUrls = new Set<string>();
-    const sourceDomain = new URL(url).hostname.replace('www.', '');
+    const sourceDomain = this.getBoardIdentifier(url);
 
     const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
-    let match;
 
     let cardsFound = 0;
-    const candidateLinks: string[] = [];
-    const jobDetailUrls: string[] = [];
-    const listingUrls: string[] = [];
-    const externalUrls: string[] = [];
-    const rejectedUrls: string[] = [];
+    let cardsWithApplyButton = 0;
+    let cardsWithOpportunityKeywords = 0;
+    let linksExtracted = 0;
 
-    while ((match = linkRegex.exec(markdown)) !== null) {
-      cardsFound++;
-      const titleText = match[1].trim();
-      const rawUrl = match[2].trim();
+    const acceptedList: { url: string; score: number; reasons: string[] }[] = [];
+    const rejectedList: { url: string; score: number; reasons: string[] }[] = [];
+    const paginationUrls = new Set<string>();
 
-      let cleanUrlStr = rawUrl;
-      try {
-        const parsed = new URL(rawUrl);
-        const linkDomain = parsed.hostname.replace('www.', '');
-        if (
-          linkDomain !== sourceDomain &&
-          !linkDomain.endsWith('.' + sourceDomain) &&
-          !sourceDomain.endsWith('.' + linkDomain)
-        ) {
-          externalUrls.push(rawUrl);
-          continue;
-        }
-        cleanUrlStr = this.cleanUrl(rawUrl);
-      } catch {
-        rejectedUrls.push(rawUrl);
-        continue;
+    // Step 2: Context / DOM-based block scanning
+    const paragraphs = markdown.split(/\n\s*\n/);
+
+    for (const paragraph of paragraphs) {
+      const pLinks: { text: string; url: string }[] = [];
+      let linkMatch;
+      while ((linkMatch = linkRegex.exec(paragraph)) !== null) {
+        pLinks.push({ text: linkMatch[1].trim(), url: linkMatch[2].trim() });
       }
 
-      const cleanUrlLower = cleanUrlStr.toLowerCase();
-      candidateLinks.push(cleanUrlStr);
+      if (pLinks.length === 0) continue;
 
-      const classification = this.classifyUrl(cleanUrlStr);
+      cardsFound++;
+      const hasApply =
+        paragraph.toLowerCase().includes('apply') || paragraph.toLowerCase().includes('register');
+      if (hasApply) cardsWithApplyButton++;
 
-      if (classification === 'JOB_DETAIL') {
-        if (titleText.length > 2) {
-          const lowerTitle = titleText.toLowerCase();
-          const isGeneric =
-            lowerTitle === 'apply' ||
-            lowerTitle === 'apply now' ||
-            lowerTitle === 'view' ||
-            lowerTitle === 'view details' ||
-            lowerTitle === 'learn more' ||
-            lowerTitle.includes('sign in') ||
-            lowerTitle.includes('login') ||
-            lowerTitle.includes('cookie') ||
-            lowerTitle.includes('privacy') ||
-            lowerTitle.includes('terms');
+      const oppKeywords = [
+        'apply',
+        'internship',
+        'intern',
+        'job',
+        'hackathon',
+        'competition',
+        'hiring',
+        'stipend',
+        'salary',
+      ];
+      const hasKeywords = oppKeywords.some((kw) => paragraph.toLowerCase().includes(kw));
+      if (hasKeywords) cardsWithOpportunityKeywords++;
 
-          if (!isGeneric) {
-            jobDetailUrls.push(cleanUrlStr);
-            if (!seenUrls.has(cleanUrlLower)) {
-              seenUrls.add(cleanUrlLower);
-              listings.push({
-                title: titleText,
-                company: sourceDomain.split('.')[0],
-                listingUrl: cleanUrlStr,
-                location: 'Remote',
-                source: sourceDomain,
-              });
-            }
-          } else {
-            rejectedUrls.push(`${cleanUrlStr} (Reason: generic title)`);
+      for (const link of pLinks) {
+        linksExtracted++;
+        let cleanUrlStr = link.url;
+        try {
+          const parsed = new URL(link.url);
+          const linkDomain = parsed.hostname.replace('www.', '');
+
+          if (
+            linkDomain !== sourceDomain &&
+            !linkDomain.endsWith('.' + sourceDomain) &&
+            !sourceDomain.endsWith('.' + linkDomain)
+          ) {
+            rejectedList.push({
+              url: link.url,
+              score: -100,
+              reasons: ['External domain'],
+            });
+            continue;
+          }
+          cleanUrlStr = this.cleanUrl(link.url);
+        } catch {
+          rejectedList.push({
+            url: link.url,
+            score: -999,
+            reasons: ['Invalid URL'],
+          });
+          continue;
+        }
+
+        // Step 6: Pagination detection
+        const paginationRegex = /[?&](page|p|start|offset)=\d+/i;
+        if (paginationRegex.test(cleanUrlStr) || cleanUrlStr.includes('/page/')) {
+          paginationUrls.add(cleanUrlStr);
+        }
+
+        // Strict classification filter first
+        const classification = this.classifyUrl(cleanUrlStr);
+        const scoring = this.scoreCandidateLink(cleanUrlStr, link.text, paragraph);
+
+        if (classification !== 'JOB_DETAIL') {
+          rejectedList.push({
+            url: cleanUrlStr,
+            score: scoring.score - 100,
+            reasons: [
+              ...scoring.reasons,
+              `Classification is ${classification} (Must be JOB_DETAIL)`,
+            ],
+          });
+          continue;
+        }
+
+        if (scoring.score >= 30) {
+          acceptedList.push({
+            url: cleanUrlStr,
+            score: scoring.score,
+            reasons: scoring.reasons,
+          });
+
+          const cleanUrlLower = cleanUrlStr.toLowerCase();
+          if (!seenUrls.has(cleanUrlLower)) {
+            seenUrls.add(cleanUrlLower);
+            listings.push({
+              title: link.text,
+              company: sourceDomain.split('.')[0],
+              listingUrl: cleanUrlStr,
+              location: 'Remote',
+              source: sourceDomain,
+            });
           }
         } else {
-          rejectedUrls.push(`${cleanUrlStr} (Reason: title too short)`);
+          rejectedList.push({
+            url: cleanUrlStr,
+            score: scoring.score,
+            reasons: scoring.reasons,
+          });
         }
-      } else if (
-        classification === 'LISTING_BOARD' ||
-        classification === 'SEARCH_PAGE' ||
-        classification === 'PAGINATION'
-      ) {
-        listingUrls.push(cleanUrlStr);
-      } else {
-        rejectedUrls.push(`${cleanUrlStr} (Reason: ${classification})`);
       }
     }
 
-    // Print diagnostics
+    // Step 5: Platform debugging logs
     console.log(`
-[Harvesting Diagnostics] Domain: ${sourceDomain}
-Cards Found:                   ${cardsFound}
-Candidate Links:               ${candidateLinks.length}
-Job Detail URLs:               ${jobDetailUrls.length}
-Listing URLs:                  ${listingUrls.length}
-External URLs:                 ${externalUrls.length}
-Rejected Non-opportunity URLs: ${rejectedUrls.length}
+Platform:                        ${sourceDomain}
+Cards Found:                     ${cardsFound}
+Cards With Apply Button:         ${cardsWithApplyButton}
+Cards With Opportunity Keywords: ${cardsWithOpportunityKeywords}
+Links Extracted:                 ${linksExtracted}
+Links Accepted:                  ${acceptedList.length}
+Links Rejected:                  ${rejectedList.length}
 
-Example Accepted URLs (first 5):
+Pagination URLs Discovered (${paginationUrls.size}):
 ${
-  jobDetailUrls
+  Array.from(paginationUrls)
     .slice(0, 5)
-    .map((l) => ` - ${l}`)
+    .map((u) => ` - ${u}`)
     .join('\n') || 'None'
 }
 
-Example Rejected URLs (first 5):
+Top 5 Accepted URLs:
 ${
-  rejectedUrls
+  acceptedList
     .slice(0, 5)
-    .map((l) => ` - ${l}`)
+    .map(
+      (item) =>
+        ` - URL: ${item.url}\n   Score: ${item.score}\n   Reasons: ${item.reasons.join(', ')}`,
+    )
+    .join('\n') || 'None'
+}
+
+Top 5 Rejected URLs:
+${
+  rejectedList
+    .slice(0, 5)
+    .map(
+      (item) =>
+        ` - URL: ${item.url}\n   Score: ${item.score}\n   Reasons: ${item.reasons.join(', ')}`,
+    )
     .join('\n') || 'None'
 }
 `);
 
-    if (jobDetailUrls.length === 0) {
+    if (listings.length === 0) {
       console.log(`No opportunity detail pages discovered.`);
     }
 
