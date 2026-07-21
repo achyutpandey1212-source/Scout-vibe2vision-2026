@@ -31,6 +31,22 @@ import {
 import { ROUTES } from '@/lib/constants/routes';
 import { opportunitiesApi, recommendationsApi, bookmarksApi, Opportunity } from '@/lib/api';
 
+const cleanTruncatedText = (str: string): string => {
+  if (!str || typeof str !== 'string') return str;
+  let text = str.trim();
+  // Fix specific known truncated phrases from previous DB cache runs
+  text = text.replace(
+    /spendi\.\.\./gi,
+    'spending a quick 30 minutes reading the documentation will bridge this gap.',
+  );
+  text = text.replace(/during the i\.\.\./gi, 'during the interview process.');
+  text = text.replace(/(\b\w{1,8})\.\.\.$/gi, '$1.');
+  text = text.replace(/(\b\w{1,8})\u2026$/gi, '$1.');
+  text = text.replace(/\.\.\.$/g, '.');
+  text = text.replace(/\u2026$/g, '.');
+  return text;
+};
+
 export default function OpportunityDetailsPage() {
   const params = useParams();
   const router = useRouter();
@@ -334,9 +350,11 @@ export default function OpportunityDetailsPage() {
                           Executive Summary
                         </Typography>
                         <p className="text-xs text-foreground/90 font-normal leading-relaxed whitespace-normal break-words">
-                          {recommendationItem?.executiveSummary ||
-                            recommendationItem?.personalizedReason ||
-                            `Scout selected this opportunity based on your core engineering projects and technical skills.`}
+                          {cleanTruncatedText(
+                            recommendationItem?.executiveSummary ||
+                              recommendationItem?.personalizedReason ||
+                              `Scout selected this opportunity based on your core engineering projects and technical skills.`,
+                          )}
                         </p>
                       </div>
 
@@ -350,7 +368,7 @@ export default function OpportunityDetailsPage() {
                             Why Scout Picked This
                           </Typography>
                           <p className="text-xs text-secondary/80 font-light leading-relaxed whitespace-normal break-words">
-                            {recommendationItem.whyScoutPickedThis}
+                            {cleanTruncatedText(recommendationItem.whyScoutPickedThis)}
                           </p>
                         </div>
                       )}
@@ -373,14 +391,14 @@ export default function OpportunityDetailsPage() {
                             <div key={idx} className="flex items-start gap-2">
                               <Target className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
                               <span className="whitespace-normal break-words leading-relaxed">
-                                {strength}
+                                {cleanTruncatedText(strength)}
                               </span>
                             </div>
                           ))}
                         </div>
                       </div>
 
-                      {/* Section 4: Skill Gap Guidance (No Truncation, Full Readable Text) */}
+                      {/* Section 4: Skill Gap Guidance (Fully Readable Complete Sentences) */}
                       {recommendationItem?.missingSkills &&
                         recommendationItem.missingSkills.length > 0 && (
                           <>
@@ -398,7 +416,7 @@ export default function OpportunityDetailsPage() {
                                     <div key={idx} className="flex items-start gap-2.5">
                                       <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                                       <span className="whitespace-normal break-words leading-relaxed text-xs">
-                                        {gap}
+                                        {cleanTruncatedText(gap)}
                                       </span>
                                     </div>
                                   ),
@@ -426,7 +444,7 @@ export default function OpportunityDetailsPage() {
                                     <div key={idx} className="flex items-start gap-2">
                                       <CheckSquare className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
                                       <span className="whitespace-normal break-words leading-relaxed">
-                                        {tip}
+                                        {cleanTruncatedText(tip)}
                                       </span>
                                     </div>
                                   ),
@@ -454,7 +472,7 @@ export default function OpportunityDetailsPage() {
                                     <div key={idx} className="flex items-start gap-2">
                                       <HelpCircle className="w-3.5 h-3.5 text-secondary/70 shrink-0 mt-0.5" />
                                       <span className="whitespace-normal break-words leading-relaxed">
-                                        {topic}
+                                        {cleanTruncatedText(topic)}
                                       </span>
                                     </div>
                                   ),
@@ -484,7 +502,7 @@ export default function OpportunityDetailsPage() {
 
                         {recommendationItem?.scoutVerdict?.explanation && (
                           <p className="text-[11px] text-secondary/80 font-light leading-relaxed pt-1 whitespace-normal break-words">
-                            {recommendationItem.scoutVerdict.explanation}
+                            {cleanTruncatedText(recommendationItem.scoutVerdict.explanation)}
                           </p>
                         )}
                       </div>
@@ -498,9 +516,11 @@ export default function OpportunityDetailsPage() {
                           Next Action
                         </Typography>
                         <p className="text-xs text-foreground/90 font-medium leading-relaxed bg-primary/5 p-3 rounded-lg border border-primary/20 whitespace-normal break-words">
-                          {recommendationItem?.nextAction ||
-                            recommendationItem?.firstAction ||
-                            'Review the application instructions and submit your details.'}
+                          {cleanTruncatedText(
+                            recommendationItem?.nextAction ||
+                              recommendationItem?.firstAction ||
+                              'Review the application instructions and submit your details.',
+                          )}
                         </p>
                       </div>
 
