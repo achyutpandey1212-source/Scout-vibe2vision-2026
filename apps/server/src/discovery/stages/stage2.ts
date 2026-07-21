@@ -343,7 +343,12 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
 
         // F. Multi-Listing Job Board Detection & Extraction Guard
         if (crawlStatus === 'SUCCESS' && rawMarkdown.length > 10) {
+          const classification = JobBoardExtractor.classifyUrl(candidate.url);
           const isListingBoard = JobBoardExtractor.isBoardPage(candidate.url, rawMarkdown);
+
+          console.log(
+            `[Stage 2] [Board Detection] URL: ${candidate.url} | Class: ${classification} | isListingBoard: ${isListingBoard}`,
+          );
 
           if (isListingBoard) {
             const boardNormalized = JobBoardExtractor.getBoardIdentifier(candidate.url);
@@ -355,18 +360,34 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
               const rawListings = JobBoardExtractor.extractListings(rawMarkdown, candidate.url);
               listingsHarvestedCount += rawListings.length;
 
+              console.log(
+                `[Stage 2] [Harvesting] Domain: ${boardNormalized} | Matches found: ${rawListings.length}`,
+              );
+              if (rawListings.length > 0) {
+                console.log(
+                  `First 10 candidate hrefs:\n${rawListings
+                    .slice(0, 10)
+                    .map((l) => ` - ${l.listingUrl}`)
+                    .join('\n')}`,
+                );
+              }
+
               let uniqueAddedCount = 0;
               let discardedListingsCount = 0;
+              const queueBefore = opportunityQueue.length;
 
               for (const listing of rawListings) {
                 const cleanListingUrl = JobBoardExtractor.cleanUrl(listing.listingUrl);
                 const normListingUrl = normalizeUrl(cleanListingUrl);
 
                 // Fix 1 & 3: URL Classification & Queue growth protection
-                const classification = JobBoardExtractor.classifyUrl(cleanListingUrl);
-                if (classification !== 'JOB_DETAIL') {
+                const listingClassification = JobBoardExtractor.classifyUrl(cleanListingUrl);
+                if (listingClassification !== 'JOB_DETAIL') {
                   discardedListingsCount++;
                   listingUrlsDiscardedCount++;
+                  console.log(
+                    `[Stage 2] [Listing Discarded] URL: ${cleanListingUrl} | Class: ${listingClassification} | Reason: Not a JOB_DETAIL page`,
+                  );
                   continue;
                 }
 
@@ -393,15 +414,20 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
                 }
               }
 
+              const queueAfter = opportunityQueue.length;
+
               // Fix 6: Detailed Logging
               console.log(`
 Listing Board Detected
 Domain:                  ${boardNormalized}
+Reason Detected:         Known domain or listing structures matched
 Cards Found:             ${rawListings.length}
 Job Detail URLs:         ${uniqueAddedCount}
 Listing URLs Discarded:  ${discardedListingsCount}
 Duplicate URLs:          ${rawListings.length - uniqueAddedCount - discardedListingsCount}
 Queued:                  ${uniqueAddedCount}
+Queue Length Before:     ${queueBefore}
+Queue Length After:      ${queueAfter}
 `);
             } else {
               recursiveExpansionsPrevented++;
@@ -437,9 +463,9 @@ Queued:                  ${uniqueAddedCount}
 
                 for (const job of extracted) {
                   const normJobUrl = normalizeUrl(job.url);
-                  const classification = JobBoardExtractor.classifyUrl(job.url);
+                  const listingClassification = JobBoardExtractor.classifyUrl(job.url);
 
-                  if (classification === 'JOB_DETAIL' && !processedUrls.has(normJobUrl)) {
+                  if (listingClassification === 'JOB_DETAIL' && !processedUrls.has(normJobUrl)) {
                     processedUrls.add(normJobUrl);
 
                     if (budgetManager.canVisitCareerPage()) {
@@ -454,8 +480,11 @@ Queued:                  ${uniqueAddedCount}
                         discoveredAt: new Date().toISOString(),
                       });
                     }
-                  } else if (classification !== 'JOB_DETAIL') {
+                  } else if (listingClassification !== 'JOB_DETAIL') {
                     listingUrlsDiscardedCount++;
+                    console.log(
+                      `[Stage 2] [Listing Discarded] ATS candidate URL: ${job.url} | Class: ${listingClassification} | Reason: Not a JOB_DETAIL page`,
+                    );
                   }
                 }
               }
@@ -466,6 +495,9 @@ Queued:                  ${uniqueAddedCount}
         // Fix 4: Crawl Classification check for Stage 3 eligibility
         const pageClassification = JobBoardExtractor.classifyUrl(candidate.url);
         if (pageClassification !== 'JOB_DETAIL' && crawlStatus === 'SUCCESS') {
+          console.log(
+            `[Stage 2] [Skip AI Extraction] URL: ${candidate.url} | Class: ${pageClassification} | Reason: URL is not a JOB_DETAIL page`,
+          );
           crawlStatus = 'SKIPPED';
         }
 

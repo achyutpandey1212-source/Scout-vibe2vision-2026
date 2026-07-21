@@ -125,9 +125,7 @@ export class JobBoardExtractor {
         if (path.includes('/job-listing/') || path.includes('/job-details/')) {
           return 'JOB_DETAIL';
         }
-        if (path.includes('/jobs') || path.includes('/job/')) {
-          return 'LISTING_BOARD';
-        }
+        return 'LISTING_BOARD';
       }
 
       // Indeed
@@ -135,9 +133,7 @@ export class JobBoardExtractor {
         if (path.includes('/viewjob') || search.includes('jk=')) {
           return 'JOB_DETAIL';
         }
-        if (path.includes('/jobs') || path.includes('/q-') || path.includes('/l-')) {
-          return 'LISTING_BOARD';
-        }
+        return 'LISTING_BOARD';
       }
 
       // Internshala
@@ -145,28 +141,20 @@ export class JobBoardExtractor {
         if (path.includes('/internship/detail/') || path.includes('/job/detail/')) {
           return 'JOB_DETAIL';
         }
-        if (path.includes('/internships') || path.includes('/jobs')) {
-          return 'LISTING_BOARD';
-        }
+        return 'LISTING_BOARD';
       }
 
       // Unstop
       if (host.includes('unstop.com')) {
-        if (path.match(/\/jobs\/\w+-\d+/) || path.match(/\/internships\/\w+-\d+/)) {
+        if (path.match(/\/jobs\/[\w-]+-\d+/) || path.match(/\/internships\/[\w-]+-\d+/)) {
           return 'JOB_DETAIL';
         }
-        if (
-          path.includes('/jobs') ||
-          path.includes('/internships') ||
-          path.includes('/opportunities')
-        ) {
-          return 'LISTING_BOARD';
-        }
+        return 'LISTING_BOARD';
       }
 
       // Greenhouse
       if (host.includes('greenhouse.io')) {
-        if (path.includes('/jobs/') || path.match(/\/jobs\/\d+/)) {
+        if (path.match(/\/jobs\/\d+/)) {
           return 'JOB_DETAIL';
         }
         return 'LISTING_BOARD';
@@ -183,7 +171,31 @@ export class JobBoardExtractor {
 
       // Ashby
       if (host.includes('ashbyhq.com')) {
-        if (path.includes('/jobs/') || path.match(/\/jobs\/\d+/)) {
+        const segments = path.split('/').filter(Boolean);
+        if (segments.includes('jobs') && segments.length > segments.indexOf('jobs') + 1) {
+          return 'JOB_DETAIL';
+        }
+        return 'LISTING_BOARD';
+      }
+
+      // Wellfound
+      if (host.includes('wellfound.com')) {
+        if (path.includes('/jobs') || path.includes('/role') || path.includes('/company')) {
+          return 'LISTING_BOARD';
+        }
+      }
+
+      // Devfolio
+      if (host.includes('devfolio.co')) {
+        if (path.includes('/jobs/') || path.includes('/internships/')) {
+          return 'JOB_DETAIL';
+        }
+        return 'LISTING_BOARD';
+      }
+
+      // Hackerrank
+      if (host.includes('hackerrank.com')) {
+        if (path.includes('/jobs/') || path.includes('/careers/')) {
           return 'JOB_DETAIL';
         }
         return 'LISTING_BOARD';
@@ -227,20 +239,16 @@ export class JobBoardExtractor {
       u.includes('greenhouse.io') ||
       u.includes('lever.co') ||
       u.includes('ashbyhq.com') ||
-      u.includes('glassdoor.co');
+      u.includes('glassdoor.co') ||
+      u.includes('devfolio.co') ||
+      u.includes('hackerrank.com');
 
     if (isKnownJobBoard) {
       const classification = this.classifyUrl(url);
       if (classification === 'JOB_DETAIL') {
         return false;
       }
-      if (
-        classification === 'LISTING_BOARD' ||
-        classification === 'SEARCH_PAGE' ||
-        classification === 'PAGINATION'
-      ) {
-        return true;
-      }
+      return true; // Any non-JOB_DETAIL page on a known job board is by definition a LISTING_BOARD
     }
 
     // Heuristics: require multiple strong signals
@@ -304,6 +312,10 @@ export class JobBoardExtractor {
         isJobLink = cleanUrlLower.includes('/jobs/') || cleanUrlLower.includes('/internships/');
       } else if (sourceDomain.includes('wellfound.com')) {
         isJobLink = cleanUrlLower.includes('/jobs') || cleanUrlLower.includes('/company/');
+      } else if (sourceDomain.includes('devfolio.co')) {
+        isJobLink = cleanUrlLower.includes('/jobs/') || cleanUrlLower.includes('/internships/');
+      } else if (sourceDomain.includes('hackerrank.com')) {
+        isJobLink = cleanUrlLower.includes('/jobs/') || cleanUrlLower.includes('/careers/');
       } else if (
         sourceDomain.includes('greenhouse.io') ||
         sourceDomain.includes('lever.co') ||
