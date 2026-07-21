@@ -106,16 +106,87 @@ export class BackgroundGenerationService {
         userId: new mongoose.Types.ObjectId(userId),
       }).exec();
 
-      // 3. Filtering
+      // Stage 1: Candidate Snapshot Builder
+      const { CandidateSnapshotBuilder } =
+        await import('../../../recommendation/engine/candidate-snapshot');
+      const snapshotBuilder = new CandidateSnapshotBuilder();
+      const snapshot = snapshotBuilder.build(profile, resume);
+
+      // Stage 2A: Hard & Soft Candidate Filtering
       await RecommendationRepository.updateProgressPhase(packId, 'FILTERING');
-      const { pool } = HardFilterEngine.run(rawCandidates, profile);
-      filteredCount = pool.length;
+      const { OpportunityFilter } =
+        await import('../../../recommendation/engine/opportunity-filter');
+      const oppFilter = new OpportunityFilter();
+      const filterResult = oppFilter.filter(snapshot, rawCandidates);
+      filteredCount = filterResult.eligible.length;
 
-      const filteredOpps = pool.map((e) => e.opportunity);
-
-      // 4. Scoring
+      // Stage 2B: Deterministic Opportunity Scoring
       await RecommendationRepository.updateProgressPhase(packId, 'SCORING');
-      const scoredCandidates = ScoringEngine.run(filteredOpps, profile, weights);
+      const { RecommendationScorer } =
+        await import('../../../recommendation/engine/recommendation-score');
+      const oppScorer = new RecommendationScorer();
+      const scoredList = filterResult.eligible
+        .map((opp) => oppScorer.score(snapshot, opp))
+        .filter((res): res is NonNullable<typeof res> => res !== null)
+        .sort((a, b) => b.totalScore - a.totalScore);
+
+      // Top 40 Deterministic Candidates passed to LLM
+      const top40Candidates = scoredList.slice(0, 40);
+
+      // Print Recommendation Filtering Report
+      const scores = scoredList.map((s) => s.totalScore);
+      const avgScore =
+        scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+      const highestScore = scores.length > 0 ? Math.max(...scores) : 0;
+      const lowestScore = scores.length > 0 ? Math.min(...scores) : 0;
+      const topCandidate = scoredList[0];
+
+      console.log(`
+======================================
+Recommendation Filtering Report
+======================================
+
+Total Opportunities: ${initialCount}
+
+Rejected:
+Masters: ${filterResult.stats.rejectionReasons['REJECT_MASTER_PROGRAM'] || 0}
+Research: ${(filterResult.stats.rejectionReasons['REJECT_RESEARCH_ONLY'] || 0) + (filterResult.stats.rejectionReasons['REJECT_PHD'] || 0)}
+Senior: ${filterResult.stats.rejectionReasons['REJECT_SENIOR_ROLE'] || 0}
+Expired: ${filterResult.stats.rejectionReasons['REJECT_EXPIRED'] || 0}
+Location: 0
+Non Engineering: ${filterResult.stats.rejectionReasons['REJECT_NON_ENGINEERING'] || 0}
+
+Remaining: ${scoredList.length}
+
+Average Score: ${avgScore}
+
+Highest Score: ${highestScore}
+
+Lowest Score: ${lowestScore}
+
+Top Candidate:
+${topCandidate?.opportunity?.title || 'N/A'}
+${topCandidate?.opportunity?.organization || 'N/A'}
+
+Matched Projects:
+${topCandidate?.matchedProjects?.length ? topCandidate.matchedProjects.join('\n') : 'N/A'}
+
+Matched Skills:
+${topCandidate?.matchedSkills?.length ? topCandidate.matchedSkills.join('\n') : 'N/A'}
+
+======================================
+`);
+
+      // Adapt candidates for downstream pack builder
+      const scoredCandidates = top40Candidates.map((sc) => ({
+        opportunity: sc.opportunity,
+        score: sc.totalScore,
+        scoreBreakdown: sc.scoreBreakdown,
+        matchedSkills: sc.matchedSkills,
+        matchedProjects: sc.matchedProjects,
+        reasons: sc.reasons,
+        recommendationStrength: sc.recommendationStrength,
+      }));
 
       // 5. Diversifying
       await RecommendationRepository.updateProgressPhase(packId, 'DIVERSIFYING');
