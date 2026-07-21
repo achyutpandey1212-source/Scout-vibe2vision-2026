@@ -1,5 +1,6 @@
 import { IProfile } from '../../../profile/models/profile.model';
-import { IRankedCandidate } from '../types/scoring.types';
+import { CandidateSnapshotBuilder } from '../../../recommendation/engine/candidate-snapshot';
+import { ResumeContextBuilder } from '../../../recommendation/engine/resume-context-builder';
 import { PromptManager } from './prompt-manager';
 import { RecommendationAI } from './recommendation.ai';
 import { ResponseValidator } from './response-validator';
@@ -16,15 +17,20 @@ export class PersonalizationService {
   static async personalize(
     profile: IProfile,
     resume: any,
-    top5: IRankedCandidate[],
+    top5: any[],
   ): Promise<{ response: IAIPersonalizationResponse; metadata: IAIPersonalizationMetadata }> {
     const startTime = Date.now();
+    const snapshotBuilder = new CandidateSnapshotBuilder();
+    const snapshot = snapshotBuilder.build(profile, resume);
+    const resumeContextBuilder = new ResumeContextBuilder();
+    const resumeContext = resumeContextBuilder.build(snapshot);
+
     const prompt = PromptManager.buildPrompt(profile, resume, top5);
     const promptHash = PromptManager.hashPrompt(prompt);
     const systemInstruction = PromptManager.getSystemInstructions();
 
     let provider = 'gemini';
-    let model = 'gemini-3.5-flash'; // Default from config
+    let model = 'gemini-3.5-flash';
     let fallbackUsed = false;
     let repairUsed = false;
     let responseText = '';
@@ -65,11 +71,38 @@ export class PersonalizationService {
     // 3. Fallback mode
     if (!parsedResponse) {
       fallbackUsed = true;
-      parsedResponse = FallbackPersonalization.generate(top5);
+      parsedResponse = FallbackPersonalization.generate(top5, profile, resume);
       responseText = JSON.stringify(parsedResponse);
     }
 
     const latencyMs = Date.now() - startTime;
+
+    // Print Recommendation Personalization Report
+    const recValues = Object.values(parsedResponse.recommendationsBySlot || {});
+    const avgLen =
+      recValues.length > 0
+        ? Math.round(
+            recValues.reduce((acc, r) => acc + (r.personalizedReason || '').length, 0) /
+              recValues.length,
+          )
+        : 0;
+
+    console.log(`
+========================================
+Recommendation Personalization Report
+========================================
+
+Candidate Summary Size:      ${resumeContext.formattedContext.length} chars
+Projects Referenced:         ${resumeContext.topProjects.length}
+Experience Referenced:       ${resumeContext.experienceHighlights.length}
+Strongest Technologies:      ${resumeContext.topTechnologies.join(', ')}
+
+Prompt Length:               ${prompt.length} chars
+Response Length:             ${responseText.length} chars
+Average Recommendation Len:  ${avgLen} chars
+Fallback Engine Used:        ${fallbackUsed}
+
+========================================`);
 
     const metadata: IAIPersonalizationMetadata = {
       provider,

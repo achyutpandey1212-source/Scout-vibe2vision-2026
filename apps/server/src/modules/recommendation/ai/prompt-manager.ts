@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { IProfile } from '../../../profile/models/profile.model';
-import { IRankedCandidate } from '../types/scoring.types';
+import { CandidateSnapshotBuilder } from '../../../recommendation/engine/candidate-snapshot';
+import { ResumeContextBuilder } from '../../../recommendation/engine/resume-context-builder';
 import { PROMPT_VERSION } from './ai.constants';
 
 export class PromptManager {
@@ -12,98 +13,78 @@ export class PromptManager {
   }
 
   /**
-   * Returns the system instruction setting the model persona and operational rules.
+   * Returns system instructions establishing Scout's career mentor persona & strict guardrails.
    */
   static getSystemInstructions(): string {
-    return `You are refining recommendations already selected by Scout's deterministic engine. Your job is NOT to decide what the user should see. Your job is to explain why each recommendation matters and help the user take the first step.
-You must behave like a thoughtful mentor, not a search engine.
+    return `You are Scout, an experienced engineering career mentor who has carefully reviewed the candidate's actual resume and projects.
 
-Return ONLY a valid JSON object matching the requested schema. No markdown wrapping (do not use \`\`\`json block), no explanations outside the JSON structure.
+OPERATIONAL RULES:
+1. STRICT ANTI-HALLUCINATION: NEVER invent or mention projects, technologies, companies, or achievements that do NOT exist in the candidate's summary below. If evidence does not exist, explicitly state "No evidence found".
+2. DO NOT CHANGE RANKING: Ranking order is pre-computed and fixed. Focus 100% on personalization, mentoring, project evidence, and actionable advice.
+3. MENTOR FRAMEWORK FOR EACH RECOMMENDATION:
+   - Why You? Citing concrete evidence from their actual projects (e.g. "Because you built Scout using Redis and backend APIs...").
+   - Why This Opportunity? Growth / distributed systems / engineering exposure.
+   - What's Missing? Contextual skill gaps required by role that candidate lacks.
+   - First Action? Exactly ONE 30-minute actionable step (e.g. "Spend 30 minutes updating your Scout README to highlight backend architecture before applying").
+   - projectEvidence: Dedicated block explicitly comparing candidate's projects and naming the single strongest project proof for the role.
 
-JSON Schema format:
+Return ONLY a valid JSON object matching this schema:
 {
-  "todayMission": "Exactly one short sentence (max 120 chars) defining the daily focus.",
-  "aiSummary": "One paragraph (60-120 words) explaining why these opportunities were selected and overall guidance.",
+  "todayMission": "One concise sentence (max 120 chars) defining daily focus.",
+  "aiSummary": "A powerful 2-3 paragraph summary grounded in candidate's real project achievements (mentioning project names like Scout, Zenkai, etc.) beyond coursework.",
   "recommendationsBySlot": {
     "<slot_name>": {
-      "personalizedReason": "One paragraph (max 80 words) describing why this match is relevant. Cite user interests and details.",
-      "missingSkills": ["List of up to 3 missing skills if relevant, otherwise empty array"],
-      "firstAction": "Exactly one immediate, simple action item the student should take.",
-      "confidenceMessage": "A short, realistic, encouraging message."
+      "personalizedReason": "Mentoring explanation combining Why You, Why This Opportunity, What's Missing, and First Action.",
+      "projectEvidence": "Your <ProjectName> project demonstrates experience with <TechStack>. Those are directly relevant to this opportunity.",
+      "whyYou": "Why candidate matches citing project evidence.",
+      "whyCompany": "Why this opportunity provides growth for candidate.",
+      "whyNow": "Why apply now (deadline/momentum).",
+      "missingSkills": ["Up to 3 missing contextual skills"],
+      "firstAction": "Exactly one 30-minute actionable step.",
+      "confidenceMessage": "Encouraging mentor confidence note."
     }
   }
 }`;
   }
 
   /**
-   * Builds the prompt string combining user and candidate details.
+   * Builds the prompt string combining structured Resume Context and Top Opportunities.
    */
-  static buildPrompt(profile: IProfile, resume: any, top5: IRankedCandidate[]): string {
-    const profileSummary = {
-      fullName: profile.fullName || 'Student',
-      gender: profile.gender,
-      degree: profile.degree,
-      branch: profile.branch,
-      currentYear: profile.currentYear,
-      skills: [
-        ...(profile.technicalSkills || []),
-        ...(profile.softSkills || []),
-        ...(profile.tools || []),
-      ],
-      interestDomains: profile.interestDomains || [],
-      careerGoals: profile.careerGoals || [],
-      primaryMotivation: profile.primaryMotivation,
-      persona: profile.persona,
-    };
-
-    const resumeSummary = resume
-      ? {
-          skills: resume.skills || [],
-          certifications: resume.certifications || [],
-          achievements: resume.achievements || [],
-          education: (resume.education || []).map((edu: any) => ({
-            degree: edu.degree,
-            fieldOfStudy: edu.fieldOfStudy,
-          })),
-          experience: (resume.experience || []).map((exp: any) => ({
-            role: exp.role,
-            description: exp.description,
-          })),
-          projects: (resume.projects || []).map((proj: any) => ({
-            title: proj.title,
-            description: proj.description,
-          })),
-        }
-      : null;
+  static buildPrompt(profile: IProfile, resume: any, topCandidates: any[]): string {
+    const snapshotBuilder = new CandidateSnapshotBuilder();
+    const snapshot = snapshotBuilder.build(profile, resume);
+    const resumeContextBuilder = new ResumeContextBuilder();
+    const resumeContext = resumeContextBuilder.build(snapshot);
 
     const slotNames = ['perfectMatch', 'hiddenGem', 'stretchGoal', 'quickWin', 'confidenceBuilder'];
-    const candidatesDetails = top5.map((cand, idx) => {
+
+    const opportunityList = topCandidates.slice(0, 5).map((cand, idx) => {
       const slot = slotNames[idx] || `match_${idx}`;
+      const opp = cand.opportunity || cand;
       return {
         slot,
-        title: cand.opportunity.title,
-        organization: cand.opportunity.organization,
-        type: cand.opportunity.opportunityType,
-        description: cand.opportunity.summary || cand.opportunity.description.slice(0, 300) + '...',
-        eligibility: cand.opportunity.eligibility,
-        score: cand.finalScore,
-        explanations: cand.recommendationExplanations.map((e) => e.message),
+        title: opp.title,
+        organization: opp.organization,
+        type: opp.opportunityType,
+        description: opp.summary || (opp.description ? opp.description.slice(0, 300) : '') + '...',
+        skillsRequired: opp.skills || [],
+        score: cand.score || cand.finalScore || 85,
+        matchedSkills: cand.matchedSkills || [],
+        matchedProjects: cand.matchedProjects || [],
+        reasons: cand.reasons || [],
+        recommendationStrength: cand.recommendationStrength || 'strong',
       };
     });
 
-    const context = {
-      userProfile: profileSummary,
-      resume: resumeSummary,
-      recommendationCandidates: candidatesDetails,
-      promptVersion: PROMPT_VERSION,
-    };
+    return `Please generate personalized mentoring explanations for these opportunities using the candidate's structured resume context.
 
-    return `Please refine these matches for the student. Provide the mentoring explanations, today's mission, and final summary matching the requested schema.
+${resumeContext.formattedContext}
 
-Context Data:
-${JSON.stringify(context, null, 2)}
+========== Top Opportunities ==========
+${JSON.stringify(opportunityList, null, 2)}
+======================================
 
-Provide recommendationsBySlot matching the slots specified in the context above:
-${slotNames.slice(0, top5.length).join(', ')}`;
+Provide recommendationsBySlot matching the slots specified above:
+${slotNames.slice(0, Math.min(5, topCandidates.length)).join(', ')}`;
   }
 }

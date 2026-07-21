@@ -1,5 +1,9 @@
 export interface IAIPersonalizationItem {
   personalizedReason: string;
+  projectEvidence: string;
+  whyYou?: string;
+  whyCompany?: string;
+  whyNow?: string;
   missingSkills: string[];
   firstAction: string;
   confidenceMessage: string;
