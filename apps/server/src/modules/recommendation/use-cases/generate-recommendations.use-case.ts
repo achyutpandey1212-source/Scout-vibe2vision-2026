@@ -2,15 +2,28 @@ import { RecommendationService } from '../service/recommendation.service';
 import { BackgroundGenerationService } from '../generation/background-generation.service';
 import { IRecommendationPack, RecommendationGenerationReason } from '../types/recommendation.types';
 import { RecommendationSchedulerService } from '../scheduler/recommendation-scheduler.service';
+import { OnboardingGuard } from '../guard/onboarding-guard';
 
 export class GenerateRecommendationsUseCase {
   /**
-   * Thin orchestrator determining caching status, trigger locks, and enqueuing background tasks.
+   * Thin orchestrator determining onboarding gating, caching status, trigger locks, and enqueuing background tasks.
    */
   static async execute(
     userId: string,
     forcedReason?: RecommendationGenerationReason,
-  ): Promise<{ status: 'PENDING' | 'READY' | 'FAILED'; pack: IRecommendationPack | null }> {
+  ): Promise<{
+    status: 'PENDING' | 'READY' | 'FAILED' | 'ONBOARDING_REQUIRED';
+    pack: IRecommendationPack | null;
+  }> {
+    // 0. Onboarding Gating Guard: verify onboarding is completed before queueing or generating
+    const isCompleted = await OnboardingGuard.isOnboardingCompleted(userId);
+    if (!isCompleted) {
+      console.log(
+        `[Recommendation] Generation Skipped. Reason: Onboarding incomplete for user ${userId}`,
+      );
+      return { status: 'ONBOARDING_REQUIRED', pack: null };
+    }
+
     const latestPack = await RecommendationService.getLatestPack(userId);
 
     // 1. If currently generating, return PENDING immediately
@@ -42,7 +55,11 @@ export class GenerateRecommendationsUseCase {
       );
 
       // Trigger background generation asynchronously (non-blocking)
-      BackgroundGenerationService.trigger(userId, currentHash, triggerReason);
+      BackgroundGenerationService.trigger(
+        userId,
+        currentHash,
+        triggerReason as RecommendationGenerationReason,
+      );
 
       // Return status PENDING
       return { status: 'PENDING', pack: latestPack };

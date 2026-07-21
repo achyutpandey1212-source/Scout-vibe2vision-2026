@@ -41,6 +41,15 @@ export class RecommendationController {
       // Ensure we run the use-case first to check if cache invalidation/generation is needed
       const triggerRes = await GenerateRecommendationsUseCase.execute(userId);
 
+      if (triggerRes.status === 'ONBOARDING_REQUIRED') {
+        return res.status(200).json({
+          success: true,
+          status: 'ONBOARDING_REQUIRED',
+          data: null,
+          message: 'Complete onboarding to receive personalized recommendations.',
+        });
+      }
+
       // Retrieve Dashboard formatted DTO
       const result = await RecommendationDashboardService.getDashboardData(userId);
 

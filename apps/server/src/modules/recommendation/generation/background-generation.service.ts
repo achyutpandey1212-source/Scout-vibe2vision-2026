@@ -1,10 +1,5 @@
 import { ProfileModel, ResumeModel } from '../../../profile';
-import { RecommendationService } from '../service/recommendation.service';
 import { CandidateRetrievalService } from '../service/candidate-retrieval.service';
-import { HardFilterEngine } from '../engine/hard-filter.engine';
-import { ScoringEngine } from '../engine/scoring.engine';
-import { DiversificationEngine } from '../engine/diversification.engine';
-import { PersonalizationService } from '../ai/personalization.service';
 import { RecommendationPackBuilder } from '../builder/recommendation-pack.builder';
 import { RecommendationRepository } from '../repository/recommendation.repository';
 import { RecommendationGenerationReason } from '../types/recommendation.types';
@@ -12,66 +7,101 @@ import { RecommendationConfig } from '../config/recommendation-config';
 import { ScoringExperimentsService } from '../experiments/scoring-experiments.service';
 import { RecommendationQualityService } from '../quality/recommendation-quality.service';
 import { FallbackPersonalization } from '../ai/fallback-personalization';
+import { PersonalizationService } from '../ai/personalization.service';
 import { IAIPersonalizationMetadata, IAIPersonalizationResponse } from '../ai/ai.types';
+import { ENGINE_VERSION } from '../ai/ai.constants';
+import { OnboardingGuard } from '../guard/onboarding-guard';
 import mongoose from 'mongoose';
 
 export class BackgroundGenerationService {
-  // Global memory lock to track active generation tasks by userId
+  // Global memory locks to track active generation tasks and failed attempt cooldowns by userId
   private static activeLocks = new Set<string>();
+  private static failedLocks = new Map<string, number>();
+
+  static trigger(
+    userId: string,
+    profileHash?: string,
+    reason: RecommendationGenerationReason = RecommendationGenerationReason.DAILY_SCHEDULE,
+  ): Promise<{ packId: string; status: string }> {
+    return this.triggerGeneration(userId, reason);
+  }
 
   /**
    * Safe entry point to trigger background generation asynchronously.
    * Acquires a lock for the user, creates the GENERATING pack, and starts the worker thread.
    */
-  static async trigger(
+  static async triggerGeneration(
     userId: string,
-    profileHash: string,
-    reason: RecommendationGenerationReason,
-  ): Promise<void> {
-    if (this.activeLocks.has(userId)) {
+    reason: RecommendationGenerationReason = RecommendationGenerationReason.DAILY_SCHEDULE,
+  ): Promise<{ packId: string; status: string }> {
+    // 0. Onboarding Gating Guard: Exit cleanly if onboarding is incomplete
+    const isCompleted = await OnboardingGuard.isOnboardingCompleted(userId);
+    if (!isCompleted) {
       console.log(
-        `[Recommendation] Generation already in progress for user ${userId}. Skipping duplicate trigger.`,
+        `[Recommendation] Generation Skipped. Reason: Onboarding incomplete for user ${userId}`,
       );
-      return;
+      return { packId: 'skipped', status: 'ONBOARDING_REQUIRED' };
     }
 
-    // Acquire lock synchronously immediately
+    // 1. Prevent duplicate concurrent generations
+    if (this.activeLocks.has(userId)) {
+      const existing = await RecommendationRepository.findLatestByUser(userId);
+      return {
+        packId: existing?._id?.toString() || 'active',
+        status: existing?.status || 'GENERATING',
+      };
+    }
+
+    // 2. Cooldown check: prevent immediate repeated regeneration loops if failed recently (2-minute cooldown)
+    const lastFailedAt = this.failedLocks.get(userId);
+    if (lastFailedAt && Date.now() - lastFailedAt < 120000) {
+      console.warn(
+        `[Recommendation] Cooldown active for user ${userId}. Skipping repeated generation.`,
+      );
+      const existing = await RecommendationRepository.findLatestByUser(userId);
+      return {
+        packId: existing?._id?.toString() || 'cooldown',
+        status: existing?.status || 'FAILED',
+      };
+    }
+
+    // 3. Create placeholder GENERATING pack with required recommendationVersion
+    const profile = await ProfileModel.findOne({
+      userId: new mongoose.Types.ObjectId(userId),
+    }).exec();
+    const profileHash = profile ? profile.updatedAt?.getTime().toString() || 'v1' : 'v1';
+
+    const pack = await RecommendationRepository.createPack({
+      userId: new mongoose.Types.ObjectId(userId),
+      generatedAt: new Date(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+      status: 'GENERATING',
+      progressPhase: 'RETRIEVING',
+      generationReason: reason,
+      profileHash,
+      recommendationVersion: ENGINE_VERSION,
+    });
+
+    const packId = pack._id.toString();
+
+    // 4. Acquire lock and launch worker asynchronously
     this.activeLocks.add(userId);
 
-    // Trigger asynchronously
-    this.startWorkerAsync(userId, profileHash, reason);
-  }
+    setImmediate(() => {
+      this.runWorker(userId, packId, profileHash, reason).finally(() => {
+        this.activeLocks.delete(userId);
+      });
+    });
 
-  private static async startWorkerAsync(
-    userId: string,
-    profileHash: string,
-    reason: RecommendationGenerationReason,
-  ): Promise<void> {
-    let packId = '';
-    try {
-      const generatingPack = await RecommendationService.createGeneratingPack(
-        userId,
-        profileHash,
-        reason,
-      );
-      packId = generatingPack._id.toString();
-      await this.runWorker(packId, userId, profileHash, reason);
-    } catch (err: any) {
-      console.error(`[Recommendation] Failed to initialize background generation:`, err.message);
-      if (packId) {
-        await RecommendationService.markFailed(packId).catch(() => {});
-      }
-    } finally {
-      this.activeLocks.delete(userId);
-    }
+    return { packId, status: 'GENERATING' };
   }
 
   /**
-   * Background worker execution thread.
+   * Worker thread processing the multi-stage recommendation pipeline.
    */
   private static async runWorker(
-    packId: string,
     userId: string,
+    packId: string,
     profileHash: string,
     reason: RecommendationGenerationReason,
   ): Promise<void> {
@@ -83,19 +113,33 @@ export class BackgroundGenerationService {
     let success = false;
     let aiLatency = 0;
     let promptHashVal = '';
+    let currentStage = 'INIT';
 
     try {
+      // 0. Verify onboarding completion before executing worker pipeline
+      const isCompleted = await OnboardingGuard.isOnboardingCompleted(userId);
+      if (!isCompleted) {
+        console.log(
+          `[Recommendation] Generation Skipped. Reason: Onboarding incomplete for user ${userId}`,
+        );
+        await RecommendationRepository.markFailed(packId);
+        return;
+      }
+
       // 1. Assign Experiment Group and load configurations
+      currentStage = 'EXPERIMENT_CONFIG';
       const experimentGroup = ScoringExperimentsService.assignGroup(userId);
       const flags = RecommendationConfig.getFlags();
       const weights = RecommendationConfig.getWeights(experimentGroup);
 
-      // 2. Retrieving
+      // 2. Retrieving Active Candidates
+      currentStage = 'CANDIDATE_RETRIEVAL';
       await RecommendationRepository.updateProgressPhase(packId, 'RETRIEVING');
       const rawCandidates = await CandidateRetrievalService.fetchActiveCandidates();
       initialCount = rawCandidates.length;
 
       // Fetch user profile and resume
+      currentStage = 'FETCH_USER_PROFILE';
       const profile = await ProfileModel.findOne({
         userId: new mongoose.Types.ObjectId(userId),
       }).exec();
@@ -106,13 +150,15 @@ export class BackgroundGenerationService {
         userId: new mongoose.Types.ObjectId(userId),
       }).exec();
 
-      // Stage 1: Candidate Snapshot Builder
+      // Stage 1: Candidate Snapshot Builder (Built exactly ONCE)
+      currentStage = 'CANDIDATE_SNAPSHOT';
       const { CandidateSnapshotBuilder } =
         await import('../../../recommendation/engine/candidate-snapshot');
       const snapshotBuilder = new CandidateSnapshotBuilder();
       const snapshot = snapshotBuilder.build(profile, resume);
 
       // Stage 2A: Hard & Soft Candidate Filtering
+      currentStage = 'HARD_FILTERING';
       await RecommendationRepository.updateProgressPhase(packId, 'FILTERING');
       const { OpportunityFilter } =
         await import('../../../recommendation/engine/opportunity-filter');
@@ -121,20 +167,45 @@ export class BackgroundGenerationService {
       filteredCount = filterResult.eligible.length;
 
       // Stage 2B: Deterministic Opportunity Scoring
+      currentStage = 'DETERMINISTIC_SCORING';
       await RecommendationRepository.updateProgressPhase(packId, 'SCORING');
       const { RecommendationScorer } =
         await import('../../../recommendation/engine/recommendation-score');
       const oppScorer = new RecommendationScorer();
-      const scoredList = filterResult.eligible
+      let scoredList = filterResult.eligible
         .map((opp) => oppScorer.score(snapshot, opp))
         .filter((res): res is NonNullable<typeof res> => res !== null)
         .sort((a, b) => b.totalScore - a.totalScore);
 
-      // Top 40 Deterministic Candidates passed to LLM
+      // Prevent candidates from disappearing if minimum threshold (45) drops all items
+      if (scoredList.length === 0 && filterResult.eligible.length > 0) {
+        console.warn(
+          `[Recommendation] Threshold dropped all candidates. Falling back to unthresholded eligible pool.`,
+        );
+        scoredList = filterResult.eligible.map((opp) => ({
+          opportunity: opp,
+          totalScore: 50,
+          score: 50,
+          scoreBreakdown: {
+            skillMatch: 25,
+            projectMatch: 25,
+            preferenceMatch: 0,
+            titleRelevance: 0,
+            recencyScore: 0,
+            softPenalties: 0,
+          },
+          matchedSkills: [],
+          matchedProjects: [],
+          reasons: ['Eligible candidate posting'],
+          recommendationStrength: 'good' as const,
+        }));
+      }
+
+      // Top 40 Deterministic Candidates passed to Portfolio Builder
       const top40Candidates = scoredList.slice(0, 40);
 
       // Print Recommendation Filtering Report
-      const scores = scoredList.map((s) => s.totalScore);
+      const scores = scoredList.map((s) => s.totalScore || s.score || 50);
       const avgScore =
         scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
       const highestScore = scores.length > 0 ? Math.max(...scores) : 0;
@@ -156,42 +227,36 @@ Expired: ${filterResult.stats.rejectionReasons['REJECT_EXPIRED'] || 0}
 Location: 0
 Non Engineering: ${filterResult.stats.rejectionReasons['REJECT_NON_ENGINEERING'] || 0}
 
-Remaining: ${scoredList.length}
+Remaining Candidates: ${scoredList.length}
 
-Average Score: ${avgScore}
-
-Highest Score: ${highestScore}
-
-Lowest Score: ${lowestScore}
+Average Match Score: ${avgScore}
+Highest Match Score: ${highestScore}
+Lowest Match Score:  ${lowestScore}
 
 Top Candidate:
 ${topCandidate?.opportunity?.title || 'N/A'}
-${topCandidate?.opportunity?.organization || 'N/A'}
-
-Matched Projects:
-${topCandidate?.matchedProjects?.length ? topCandidate.matchedProjects.join('\n') : 'N/A'}
-
-Matched Skills:
-${topCandidate?.matchedSkills?.length ? topCandidate.matchedSkills.join('\n') : 'N/A'}
+${topCandidate?.opportunity?.organization || topCandidate?.opportunity?.company || 'N/A'}
 
 ======================================
 `);
 
       // 5. Portfolio Construction (Stage 4)
+      currentStage = 'PORTFOLIO_CONSTRUCTION';
       await RecommendationRepository.updateProgressPhase(packId, 'DIVERSIFYING');
       const { RecommendationPortfolioBuilder } =
         await import('../../../recommendation/engine/recommendation-portfolio');
       const portfolioBuilder = new RecommendationPortfolioBuilder();
       const portfolio = portfolioBuilder.buildPortfolio(top40Candidates, snapshot);
 
+      // Exactly 5 candidates passed downstream to LLM Personalization
       const top5Candidates = portfolio.selectedCandidates.map((sc) => ({
-        opportunity: sc.opportunity,
-        score: sc.totalScore || sc.score,
-        scoreBreakdown: sc.scoreBreakdown,
-        matchedSkills: sc.matchedSkills,
-        matchedProjects: sc.matchedProjects,
-        reasons: sc.reasons,
-        recommendationStrength: sc.recommendationStrength,
+        opportunity: sc.opportunity || sc,
+        score: sc.totalScore || sc.score || 75,
+        scoreBreakdown: sc.scoreBreakdown || {},
+        matchedSkills: sc.matchedSkills || [],
+        matchedProjects: sc.matchedProjects || [],
+        reasons: sc.reasons || [],
+        recommendationStrength: sc.recommendationStrength || 'strong',
       }));
 
       // Print Recommendation Portfolio Report
@@ -227,7 +292,8 @@ Portfolio Diversity Score: ${portfolio.portfolioDiversityScore}/100
 ======================================
 `);
 
-      // 6. Personalizing (skip if AI Personalization flag is disabled)
+      // 6. LLM Personalization (Stage 3 - 5 Selected Slots)
+      currentStage = 'LLM_PERSONALIZATION';
       await RecommendationRepository.updateProgressPhase(packId, 'PERSONALIZING');
 
       let aiResponse: IAIPersonalizationResponse;
@@ -265,7 +331,29 @@ Portfolio Diversity Score: ${portfolio.portfolioDiversityScore}/100
         promptHashVal = '';
       }
 
+      // Ensure per-slot fallback completeness if AI personalization omitted any slot
+      const requiredSlots = [
+        'perfectMatch',
+        'hiddenGem',
+        'fastApply',
+        'resumeBuilder',
+        'stretchGoal',
+      ];
+      requiredSlots.forEach((slotKey, idx) => {
+        if (!aiResponse.recommendationsBySlot[slotKey]) {
+          console.warn(
+            `[Recommendation] Slot ${slotKey} missing in AI response. Generating slot fallback.`,
+          );
+          const cand = top5Candidates[idx] || top5Candidates[0];
+          const fallbackGen = FallbackPersonalization.generate([cand], profile, resume, snapshot);
+          aiResponse.recommendationsBySlot[slotKey] =
+            fallbackGen.recommendationsBySlot['perfectMatch'] ||
+            Object.values(fallbackGen.recommendationsBySlot)[0];
+        }
+      });
+
       // 7. Quality evaluation
+      currentStage = 'QUALITY_EVALUATION';
       const qualityScore = RecommendationQualityService.evaluatePack(top5Candidates);
 
       // Print Comprehensive Recommendation Quality Report
@@ -295,11 +383,13 @@ AI Provider:                  ${aiMeta?.provider || 'local-fallback'}
 Latency:                      ${aiMeta?.latencyMs || 0}ms
 Fallback Used:                ${fallbackUsed}
 Repair Used:                  ${repairUsed}
+Overall Quality Score:        ${qualityScore}
 
 ======================================
 `);
 
-      // 8. Building Pack
+      // 8. Building & Persisting Pack
+      currentStage = 'SAVE_RECOMMENDATION_PACK';
       await RecommendationRepository.updateProgressPhase(packId, 'BUILDING_PACK');
       const finalPackFields = RecommendationPackBuilder.build(
         userId,
@@ -319,125 +409,38 @@ Repair Used:                  ${repairUsed}
         finalPackFields.metadata.filteredCount = filteredCount;
       }
 
-      console.log(
-        '[BackgroundGenerationService] RecommendationPackBuilder finished building. Object keys:',
-        Object.keys(finalPackFields),
-      );
-      console.log(
-        '[BackgroundGenerationService] perfectMatch content:',
-        JSON.stringify(finalPackFields.perfectMatch),
-      );
-      console.log(
-        '[BackgroundGenerationService] metadata content:',
-        JSON.stringify(finalPackFields.metadata),
-      );
-
-      // Mark pack ready
-      const readyPack = await RecommendationService.markReady(packId, finalPackFields);
-      if (readyPack) {
-        console.log(
-          '[BackgroundGenerationService] Verification Check: saved status =',
-          readyPack.status,
-        );
-        console.log(
-          '[BackgroundGenerationService] Verification Check: saved perfectMatch oppId =',
-          readyPack.perfectMatch?.opportunityId,
-        );
-        console.log(
-          '[BackgroundGenerationService] Verification Check: saved metadata candidateCount =',
-          readyPack.metadata?.candidateCount,
-        );
-      } else {
-        console.error(
-          '[BackgroundGenerationService] Verification Check Error: markReady returned null!',
-        );
-      }
+      await RecommendationRepository.markReady(packId, finalPackFields);
       success = true;
+      // Clear failed lock on success
+      this.failedLocks.delete(userId);
 
-      // Print Quality Report Logs
-      this.logQualityReport(
-        durationMs,
-        initialCount,
-        filteredCount,
-        top5Candidates,
-        aiLatency,
-        fallbackUsed,
-        repairUsed,
-        qualityScore,
-      );
+      console.log(`
+======================================
+Recommendation Pipeline Completed
+======================================
+Candidates Found:   ${initialCount}
+Hard Filtered:      ${filteredCount}
+Scored:             ${scoredList.length}
+Portfolio Selected: ${top5Candidates.length}
+Personalized:       5
+Saved Status:       SUCCESS (Pack ID: ${packId})
+======================================
+`);
     } catch (err: any) {
-      console.error(`[Recommendation] Worker failed for pack ${packId}:`, err.message);
-      await RecommendationService.markFailed(packId).catch(() => {});
-      const durationMs = Date.now() - startTime;
-      this.logQualityReport(
-        durationMs,
-        initialCount,
-        filteredCount,
-        [],
-        0,
-        fallbackUsed,
-        repairUsed,
-        0,
-      );
+      console.error(`
+======================================
+FAILED DURING STAGE: ${currentStage}
+Reason: ${err.message}
+Stack: ${err.stack}
+======================================
+`);
+      // Record failure timestamp for cooldown check
+      this.failedLocks.set(userId, Date.now());
+      await RecommendationRepository.markFailed(packId);
+    } finally {
+      // Clear active lock
+      this.activeLocks.delete(userId);
     }
-  }
-
-  /**
-   * Logs quality report.
-   */
-  private static logQualityReport(
-    generationTime: number,
-    candidatePool: number,
-    filtered: number,
-    top5: any[],
-    aiLatency: number,
-    fallback: boolean,
-    repair: boolean,
-    qualityScore: number,
-  ): void {
-    const scores = top5.map((c) => c.finalScore);
-    const topScore = scores.length > 0 ? Math.max(...scores) : 0;
-    const avgScore =
-      scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-
-    const hiddenGems = top5.map((c) => c.opportunity.hiddenGemScore || 0);
-    const avgHiddenGem =
-      hiddenGems.length > 0
-        ? Math.round(hiddenGems.reduce((a, b) => a + b, 0) / hiddenGems.length)
-        : 0;
-
-    const portfolios = top5.map((c) => {
-      const valSum =
-        (c.opportunity.careerValPortfolio || 0) +
-        (c.opportunity.careerValResume || 0) +
-        (c.opportunity.careerValLearning || 0) +
-        (c.opportunity.careerValNetworking || 0) +
-        (c.opportunity.careerValExposure || 0);
-      return Math.round((valSum / 25) * 10);
-    });
-    const avgPortfolio =
-      portfolios.length > 0
-        ? Math.round(portfolios.reduce((a, b) => a + b, 0) / portfolios.length)
-        : 0;
-
-    // Diversity: unique organizations size
-    const orgs = new Set(top5.map((c) => c.diversificationTags.organization));
-    const avgDiversity = top5.length > 0 ? Math.round((orgs.size / top5.length) * 10) : 0;
-
-    console.log('\n========== Recommendation Quality Report ==========');
-    console.log(`Generation Time: ${generationTime} ms`);
-    console.log(`Candidate Pool: ${candidatePool}`);
-    console.log(`Filtered: ${filtered}`);
-    console.log(`Top Score: ${topScore}`);
-    console.log(`Average Score: ${avgScore}`);
-    console.log(`Average Hidden Gem: ${avgHiddenGem}`);
-    console.log(`Average Portfolio Value: ${avgPortfolio}`);
-    console.log(`Average Diversity: ${avgDiversity} / 10`);
-    console.log(`AI Latency: ${aiLatency} ms`);
-    console.log(`Fallback: ${fallback ? 'Yes' : 'No'}`);
-    console.log(`Repair: ${repair ? 'Yes' : 'No'}`);
-    console.log(`Quality Score: ${qualityScore}`);
-    console.log('===========================================\n');
   }
 
   /**
@@ -445,110 +448,5 @@ Repair Used:                  ${repairUsed}
    */
   static isGenerating(userId: string): boolean {
     return this.activeLocks.has(userId);
-  }
-
-  /**
-   * Performs a sandbox pipeline dry run, returning intermediate outputs per phase.
-   */
-  static async runDryRun(userId: string, targetStage?: string, customWeights?: any): Promise<any> {
-    const startTime = Date.now();
-    const stages: any[] = [];
-    const runStage = async (name: string, fn: () => Promise<any> | any) => {
-      const stageStart = Date.now();
-      try {
-        const res = await fn();
-        stages.push({
-          name,
-          status: 'completed',
-          durationMs: Date.now() - stageStart,
-          output: res,
-        });
-        return res;
-      } catch (err: any) {
-        stages.push({
-          name,
-          status: 'failed',
-          durationMs: Date.now() - stageStart,
-          error: err.message,
-        });
-        throw err;
-      }
-    };
-
-    // 1. Retrieval
-    const rawCandidates = await runStage('Retrieval', async () => {
-      return await CandidateRetrievalService.fetchActiveCandidates();
-    });
-
-    if (targetStage === 'Retrieval') return { durationMs: Date.now() - startTime, stages };
-
-    // Fetch user profile and resume
-    const profile = await ProfileModel.findOne({
-      userId: new mongoose.Types.ObjectId(userId),
-    }).exec();
-    if (!profile) {
-      throw new Error('User profile not found. Complete onboarding first.');
-    }
-    const resume = await ResumeModel.findOne({
-      userId: new mongoose.Types.ObjectId(userId),
-    }).exec();
-
-    // 2. Hard Filters
-    const filterRes = await runStage('Hard Filters', () => {
-      return HardFilterEngine.run(rawCandidates, profile);
-    });
-
-    if (targetStage === 'Hard Filters') return { durationMs: Date.now() - startTime, stages };
-
-    // 3. Scoring
-    const experimentGroup = ScoringExperimentsService.assignGroup(userId);
-    const weights = customWeights || RecommendationConfig.getWeights(experimentGroup);
-    const scoredCandidates = await runStage('Scoring', () => {
-      const pool = filterRes.pool.map((e: any) => e.opportunity);
-      return ScoringEngine.run(pool, profile, weights);
-    });
-
-    if (targetStage === 'Scoring') return { durationMs: Date.now() - startTime, stages };
-
-    // 4. Diversification
-    const diversified = await runStage('Diversification', () => {
-      return DiversificationEngine.diversify(scoredCandidates, 5);
-    });
-
-    if (targetStage === 'Diversification') return { durationMs: Date.now() - startTime, stages };
-
-    // 5. AI Personalization
-    const aiPersonalized = await runStage('AI Personalization', async () => {
-      if (RecommendationConfig.getFlags().enableAIPersonalization) {
-        return await PersonalizationService.personalize(profile, resume, diversified);
-      } else {
-        return {
-          response: FallbackPersonalization.generate(diversified),
-          metadata: { provider: 'local-fallback', fallbackUsed: true },
-        };
-      }
-    });
-
-    if (targetStage === 'AI Personalization') return { durationMs: Date.now() - startTime, stages };
-
-    // 6. Build Pack
-    await runStage('Build Pack', () => {
-      const qualityScore = RecommendationQualityService.evaluatePack(diversified);
-      return RecommendationPackBuilder.build(
-        userId,
-        'dry-run-hash',
-        'ADMIN_FORCE' as any,
-        diversified,
-        aiPersonalized.response,
-        aiPersonalized.metadata,
-        experimentGroup,
-        qualityScore,
-      );
-    });
-
-    return {
-      durationMs: Date.now() - startTime,
-      stages,
-    };
   }
 }

@@ -25,7 +25,7 @@ export class RecommendationRepository {
     const pack = await RecommendationPackModel.findByIdAndUpdate(
       packId,
       { $set: updateData },
-      { new: true },
+      { returnDocument: 'after' },
     )
       .populate('perfectMatch.opportunityId')
       .populate('hiddenGem.opportunityId')

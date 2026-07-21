@@ -29,35 +29,70 @@ export class RecommendationPortfolioBuilder {
   public static inferRoleFamily(opp: any): string {
     if (!opp) return 'General Software';
     const text =
-      `${opp.title || ''} ${opp.summary || ''} ${opp.description || ''} ${(opp.skills || []).join(' ')}`.toLowerCase();
+      `${opp.title || ''} ${opp.summary || ''} ${opp.description || ''} ${(opp.skills || []).join(' ')} ${(opp.tags || []).join(' ')}`.toLowerCase();
 
-    if (text.includes('full stack') || text.includes('fullstack') || text.includes('mern'))
+    if (
+      text.includes('full stack') ||
+      text.includes('fullstack') ||
+      text.includes('mern') ||
+      text.includes('web developer')
+    )
       return 'Full Stack';
     if (
-      text.includes('ai') ||
-      text.includes('machine learning') ||
-      text.includes('llm') ||
-      text.includes('deep learning') ||
-      text.includes('langgraph') ||
-      text.includes('gemini')
+      text.includes('data') ||
+      text.includes('analytics') ||
+      text.includes('sql') ||
+      text.includes('etl') ||
+      text.includes('spark') ||
+      text.includes('pandas') ||
+      text.includes('data pipeline')
     )
-      return 'AI / ML';
+      return 'Data';
     if (
-      text.includes('cloud') ||
+      text.includes('machine learning') ||
+      text.includes(' ml') ||
+      text.includes('ml ') ||
+      text.includes('pytorch') ||
+      text.includes('tensorflow') ||
+      text.includes('computer vision')
+    )
+      return 'ML';
+    if (
+      text.includes('ai') ||
+      text.includes('llm') ||
+      text.includes('agent') ||
+      text.includes('langgraph') ||
+      text.includes('gemini') ||
+      text.includes('openai') ||
+      text.includes('nlp')
+    )
+      return 'AI';
+    if (
       text.includes('devops') ||
-      text.includes('aws') ||
       text.includes('docker') ||
       text.includes('kubernetes') ||
-      text.includes('infrastructure')
+      text.includes('ci/cd')
     )
-      return 'Cloud / DevOps';
+      return 'DevOps';
+    if (
+      text.includes('cloud') ||
+      text.includes('aws') ||
+      text.includes('gcp') ||
+      text.includes('azure') ||
+      text.includes('infrastructure') ||
+      text.includes('terraform')
+    )
+      return 'Cloud';
     if (
       text.includes('backend') ||
       text.includes('server') ||
       text.includes('express') ||
       text.includes('node') ||
       text.includes('api') ||
-      text.includes('microservice')
+      text.includes('microservice') ||
+      text.includes('django') ||
+      text.includes('spring') ||
+      text.includes('flask')
     )
       return 'Backend';
     if (
@@ -66,25 +101,46 @@ export class RecommendationPortfolioBuilder {
       text.includes('ui') ||
       text.includes('ux') ||
       text.includes('web') ||
-      text.includes('vue')
+      text.includes('vue') ||
+      text.includes('angular') ||
+      text.includes('next')
     )
       return 'Frontend';
     if (
       text.includes('data') ||
       text.includes('analytics') ||
       text.includes('sql') ||
-      text.includes('pipeline')
+      text.includes('etl') ||
+      text.includes('spark') ||
+      text.includes('pandas')
     )
       return 'Data';
     if (
       text.includes('mobile') ||
       text.includes('android') ||
       text.includes('ios') ||
-      text.includes('flutter')
+      text.includes('flutter') ||
+      text.includes('react native')
     )
       return 'Mobile';
-    if (text.includes('security') || text.includes('cyber')) return 'Security';
+    if (
+      text.includes('security') ||
+      text.includes('cyber') ||
+      text.includes('infosec') ||
+      text.includes('pen test')
+    )
+      return 'Security';
+    if (
+      text.includes('open source') ||
+      text.includes('gsoc') ||
+      text.includes('lfx') ||
+      text.includes('oss')
+    )
+      return 'Open Source';
+    if (text.includes('research') || text.includes('lab') || text.includes('postdoc'))
+      return 'Research';
     if (text.includes('hackathon') || opp.opportunityType === 'HACKATHON') return 'Hackathon';
+    if (text.includes('competition') || opp.opportunityType === 'COMPETITION') return 'Competition';
     if (
       text.includes('fellowship') ||
       text.includes('scholarship') ||
@@ -105,6 +161,7 @@ export class RecommendationPortfolioBuilder {
 
     const available = [...rankedList];
     const selectedIds = new Set<string>();
+    const selectedUrls = new Set<string>();
     const selectedCompanies = new Set<string>();
     const selectedRoleFamilies = new Set<string>();
     const selectedTypes = new Set<string>();
@@ -112,7 +169,7 @@ export class RecommendationPortfolioBuilder {
 
     const slots: Record<string, PortfolioSlot> = {};
 
-    // Safe helper to extract clean opportunity details defensively
+    // Defensive helper to extract clean opportunity details
     const getOpp = (c: any) => (c && (c.opportunity || c)) || {};
     const getId = (c: any) => {
       const opp = getOpp(c);
@@ -122,42 +179,55 @@ export class RecommendationPortfolioBuilder {
         `${opp.title || 'opp'}_${opp.organization || opp.company || 'org'}`
       );
     };
+    const getUrl = (c: any) => {
+      const opp = getOpp(c);
+      const url = opp.applyUrl || opp.link || opp.url || '';
+      return url.trim().toLowerCase();
+    };
     const getCompany = (c: any) => {
       const opp = getOpp(c);
       return (opp.organization || opp.company || 'Unknown Organization').toLowerCase();
     };
 
-    // Helper selection strategy with graceful fallback
+    // Helper selection strategy with strict uniqueness and graceful fallback
     const pickBestMatch = (predicate: (cand: any) => boolean, defaultReason: string): any => {
-      // 1. Try candidates matching predicate and unique company
+      const isUnselected = (c: any) => {
+        const id = getId(c);
+        const url = getUrl(c);
+        if (selectedIds.has(id)) return false;
+        if (url && selectedUrls.has(url)) return false;
+        return true;
+      };
+
+      // 1. Try candidates matching predicate, unselected, and with unique company
       let match = available.find(
-        (c) => !selectedIds.has(getId(c)) && predicate(c) && !selectedCompanies.has(getCompany(c)),
+        (c) => isUnselected(c) && predicate(c) && !selectedCompanies.has(getCompany(c)),
       );
 
-      // 2. Try candidates matching predicate even if company repeated
+      // 2. Try candidates matching predicate, unselected, even if company repeated
       if (!match) {
-        match = available.find((c) => !selectedIds.has(getId(c)) && predicate(c));
+        match = available.find((c) => isUnselected(c) && predicate(c));
       }
 
-      // 3. Fallback: try candidate with unique company
+      // 3. Fallback: try candidate with unique company from unselected pool
       if (!match) {
-        match = available.find(
-          (c) => !selectedIds.has(getId(c)) && !selectedCompanies.has(getCompany(c)),
-        );
+        match = available.find((c) => isUnselected(c) && !selectedCompanies.has(getCompany(c)));
       }
 
-      // 4. Ultimate fallback: pick next highest scoring candidate
+      // 4. Ultimate fallback: pick next unselected candidate
       if (!match) {
-        match = available.find((c) => !selectedIds.has(getId(c)));
+        match = available.find((c) => isUnselected(c));
       }
 
       if (match) {
         const id = getId(match);
+        const url = getUrl(match);
         const comp = getCompany(match);
         const opp = getOpp(match);
         const family = RecommendationPortfolioBuilder.inferRoleFamily(opp);
 
         selectedIds.add(id);
+        if (url) selectedUrls.add(url);
         selectedCompanies.add(comp);
         selectedRoleFamilies.add(family);
         selectedTypes.add(opp.opportunityType || 'INTERNSHIP');
