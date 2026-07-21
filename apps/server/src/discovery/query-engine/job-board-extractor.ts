@@ -452,7 +452,69 @@ export class JobBoardExtractor {
   }
 
   /**
-   * Extracts list of opportunities from job board page markdown using Layered Harvesting Strategy.
+   * Intelligent card block divider matching both multi-line cards and list-view single-line cards.
+   */
+  public static splitIntoCardBlocks(markdown: string): string[] {
+    const lines = markdown.split('\n');
+    const blocks: string[] = [];
+    let currentBlock: string[] = [];
+    let currentDetailUrl: string | null = null;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.length === 0) {
+        if (currentBlock.length > 0) {
+          blocks.push(currentBlock.join('\n'));
+          currentBlock = [];
+          currentDetailUrl = null;
+        }
+        continue;
+      }
+
+      // Extract all links in this line
+      const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+      const lineLinks: string[] = [];
+      let match;
+      while ((match = linkRegex.exec(trimmed)) !== null) {
+        lineLinks.push(match[2]);
+      }
+
+      // Find if there is a job detail URL on this line
+      let lineDetailUrl: string | null = null;
+      for (const link of lineLinks) {
+        const clean = this.cleanUrl(link);
+        if (this.classifyUrl(clean) === 'JOB_DETAIL') {
+          lineDetailUrl = clean;
+          break;
+        }
+      }
+
+      if (lineDetailUrl) {
+        // If we already have a different detail URL in the current block, push the old block and start a new one
+        if (currentDetailUrl && currentDetailUrl !== lineDetailUrl) {
+          blocks.push(currentBlock.join('\n'));
+          currentBlock = [trimmed];
+          currentDetailUrl = lineDetailUrl;
+        } else {
+          currentBlock.push(trimmed);
+          if (!currentDetailUrl) {
+            currentDetailUrl = lineDetailUrl;
+          }
+        }
+      } else {
+        currentBlock.push(trimmed);
+      }
+    }
+
+    if (currentBlock.length > 0) {
+      blocks.push(currentBlock.join('\n'));
+    }
+
+    return blocks.filter((b) => b.trim().length > 2);
+  }
+
+  /**
+   * Extracts list of opportunities from job board page markdown using Card-Based Resolution.
    */
   public static extractListings(markdown: string, url: string): ExtractedListing[] {
     const listings: ExtractedListing[] = [];
@@ -462,163 +524,121 @@ export class JobBoardExtractor {
     const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
 
     let cardsFound = 0;
-    let cardsWithApplyButton = 0;
-    let cardsWithOpportunityKeywords = 0;
-    let linksExtracted = 0;
+    let cardsSuccessfullyResolved = 0;
+    let cardsMissingDestination = 0;
+    let totalLinksFound = 0;
+    let totalCandidateUrlsFound = 0;
 
-    const acceptedList: { url: string; score: number; reasons: string[] }[] = [];
-    const rejectedList: { url: string; score: number; reasons: string[] }[] = [];
-    const paginationUrls = new Set<string>();
+    const resolvedLogs: string[] = [];
+    const unresolvedLogs: string[] = [];
 
-    // Step 2: Context / DOM-based block scanning
-    const paragraphs = markdown.split(/\n\s*\n/);
+    // Parse Next.js embedded hydration state payload if present (Step 2 Structured JSON)
+    let hasHydrationJSON = false;
+    const jsonMatches = markdown.match(/(__NEXT_DATA__|__INITIAL_STATE__)\s*=\s*(\{.*?\});/g) || [];
+    for (const jsonMatch of jsonMatches) {
+      try {
+        const jsonStr = jsonMatch.substring(jsonMatch.indexOf('{'));
+        const data = JSON.parse(jsonStr);
+        if (data.props || data.state) {
+          hasHydrationJSON = true;
+        }
+      } catch {
+        // Ignored
+      }
+    }
 
-    for (const paragraph of paragraphs) {
+    // Split markdown using the intelligent card blocks parser
+    const cardBlocks = this.splitIntoCardBlocks(markdown);
+
+    for (const cardBlock of cardBlocks) {
       const pLinks: { text: string; url: string }[] = [];
       let linkMatch;
-      while ((linkMatch = linkRegex.exec(paragraph)) !== null) {
+      while ((linkMatch = linkRegex.exec(cardBlock)) !== null) {
         pLinks.push({ text: linkMatch[1].trim(), url: linkMatch[2].trim() });
       }
 
       if (pLinks.length === 0) continue;
 
       cardsFound++;
-      const hasApply =
-        paragraph.toLowerCase().includes('apply') || paragraph.toLowerCase().includes('register');
-      if (hasApply) cardsWithApplyButton++;
+      totalLinksFound += pLinks.length;
 
-      const oppKeywords = [
-        'apply',
-        'internship',
-        'intern',
-        'job',
-        'hackathon',
-        'competition',
-        'hiring',
-        'stipend',
-        'salary',
-      ];
-      const hasKeywords = oppKeywords.some((kw) => paragraph.toLowerCase().includes(kw));
-      if (hasKeywords) cardsWithOpportunityKeywords++;
-
-      for (const link of pLinks) {
-        linksExtracted++;
+      // Classify and score all links contained strictly within the boundaries of this card block
+      const scoredLinks = pLinks.map((link) => {
         let cleanUrlStr = link.url;
         try {
-          const parsed = new URL(link.url);
-          const linkDomain = parsed.hostname.replace('www.', '');
-
-          if (
-            linkDomain !== sourceDomain &&
-            !linkDomain.endsWith('.' + sourceDomain) &&
-            !sourceDomain.endsWith('.' + linkDomain)
-          ) {
-            rejectedList.push({
-              url: link.url,
-              score: -100,
-              reasons: ['External domain'],
-            });
-            continue;
-          }
           cleanUrlStr = this.cleanUrl(link.url);
         } catch {
-          rejectedList.push({
-            url: link.url,
-            score: -999,
-            reasons: ['Invalid URL'],
-          });
-          continue;
+          // Keep raw if invalid
         }
 
-        // Step 6: Pagination detection
-        const paginationRegex = /[?&](page|p|start|offset)=\d+/i;
-        if (paginationRegex.test(cleanUrlStr) || cleanUrlStr.includes('/page/')) {
-          paginationUrls.add(cleanUrlStr);
-        }
-
-        // Strict classification filter first
         const classification = this.classifyUrl(cleanUrlStr);
-        const scoring = this.scoreCandidateLink(cleanUrlStr, link.text, paragraph);
+        const scoring = this.scoreCandidateLink(cleanUrlStr, link.text, cardBlock);
 
-        if (classification !== 'JOB_DETAIL') {
-          rejectedList.push({
-            url: cleanUrlStr,
-            score: scoring.score - 100,
-            reasons: [
-              ...scoring.reasons,
-              `Classification is ${classification} (Must be JOB_DETAIL)`,
-            ],
-          });
-          continue;
-        }
+        return {
+          url: cleanUrlStr,
+          text: link.text,
+          classification,
+          score: scoring.score,
+          reasons: scoring.reasons,
+        };
+      });
 
-        if (scoring.score >= 30) {
-          acceptedList.push({
-            url: cleanUrlStr,
-            score: scoring.score,
-            reasons: scoring.reasons,
-          });
+      // Filter to only match real JOB_DETAIL targets
+      const candidateUrls = scoredLinks.filter((l) => l.classification === 'JOB_DETAIL');
+      totalCandidateUrlsFound += candidateUrls.length;
 
-          const cleanUrlLower = cleanUrlStr.toLowerCase();
-          if (!seenUrls.has(cleanUrlLower)) {
-            seenUrls.add(cleanUrlLower);
-            listings.push({
-              title: link.text,
-              company: sourceDomain.split('.')[0],
-              listingUrl: cleanUrlStr,
-              location: 'Remote',
-              source: sourceDomain,
-            });
-          }
-        } else {
-          rejectedList.push({
-            url: cleanUrlStr,
-            score: scoring.score,
-            reasons: scoring.reasons,
+      if (candidateUrls.length > 0) {
+        // Resolve exactly one destination URL by selecting the highest scoring candidate URL
+        const bestCandidate = candidateUrls.sort((a, b) => b.score - a.score)[0];
+        cardsSuccessfullyResolved++;
+
+        const cleanUrlLower = bestCandidate.url.toLowerCase();
+        if (!seenUrls.has(cleanUrlLower)) {
+          seenUrls.add(cleanUrlLower);
+          listings.push({
+            title: bestCandidate.text || 'Opportunity Listing',
+            company: sourceDomain.split('.')[0],
+            listingUrl: bestCandidate.url,
+            location: 'Remote',
+            source: sourceDomain,
           });
         }
+
+        const resolutionMethod = hasHydrationJSON ? 'JSON' : 'anchor';
+        resolvedLogs.push(
+          ` - Title: ${bestCandidate.text || 'Unknown'}\n   Resolved URL: ${bestCandidate.url}\n   Method: ${resolutionMethod}`,
+        );
+      } else {
+        cardsMissingDestination++;
+        const cardTitle = pLinks[0]?.text || 'Unknown';
+        const bestGenericLink = scoredLinks.sort((a, b) => b.score - a.score)[0];
+        const reason = bestGenericLink
+          ? `No link classified as JOB_DETAIL (Highest link class: ${bestGenericLink.classification}, score: ${bestGenericLink.score})`
+          : 'No candidate links extracted in card block';
+
+        unresolvedLogs.push(` - Title: ${cardTitle}\n   Reason: ${reason}`);
       }
     }
 
-    // Step 5: Platform debugging logs
+    const avgLinksPerCard =
+      cardsFound > 0 ? Math.round((totalLinksFound / cardsFound) * 10) / 10 : 0;
+    const avgCandidatesPerCard =
+      cardsFound > 0 ? Math.round((totalCandidateUrlsFound / cardsFound) * 10) / 10 : 0;
+
+    // Output Diagnostics
     console.log(`
 Platform:                        ${sourceDomain}
 Cards Found:                     ${cardsFound}
-Cards With Apply Button:         ${cardsWithApplyButton}
-Cards With Opportunity Keywords: ${cardsWithOpportunityKeywords}
-Links Extracted:                 ${linksExtracted}
-Links Accepted:                  ${acceptedList.length}
-Links Rejected:                  ${rejectedList.length}
+Cards Successfully Resolved:     ${cardsSuccessfullyResolved}
+Cards Missing Destination:       ${cardsMissingDestination}
+Average Links Per Card:          ${avgLinksPerCard}
+Average Candidate URLs Per Card: ${avgCandidatesPerCard}
 
-Pagination URLs Discovered (${paginationUrls.size}):
-${
-  Array.from(paginationUrls)
-    .slice(0, 5)
-    .map((u) => ` - ${u}`)
-    .join('\n') || 'None'
-}
+Resolved Cards Detail:
+${resolvedLogs.slice(0, 5).join('\n') || 'None'}
 
-Top 5 Accepted URLs:
-${
-  acceptedList
-    .slice(0, 5)
-    .map(
-      (item) =>
-        ` - URL: ${item.url}\n   Score: ${item.score}\n   Reasons: ${item.reasons.join(', ')}`,
-    )
-    .join('\n') || 'None'
-}
-
-Top 5 Rejected URLs:
-${
-  rejectedList
-    .slice(0, 5)
-    .map(
-      (item) =>
-        ` - URL: ${item.url}\n   Score: ${item.score}\n   Reasons: ${item.reasons.join(', ')}`,
-    )
-    .join('\n') || 'None'
-}
+Unresolved Cards Detail:
+${unresolvedLogs.slice(0, 5).join('\n') || 'None'}
 `);
 
     if (listings.length === 0) {
