@@ -58,6 +58,21 @@ describe('JobBoardExtractor', () => {
       expect(JobBoardExtractor.classifyUrl('https://jobs.lever.co/google/1234-abcd')).toBe(
         'JOB_DETAIL',
       );
+      expect(
+        JobBoardExtractor.classifyUrl('https://devfolio.co/hackathons/my-awesome-hackathon'),
+      ).toBe('JOB_DETAIL');
+      expect(
+        JobBoardExtractor.classifyUrl(
+          'https://unstop.com/competition/unstop-coding-challenge-12345',
+        ),
+      ).toBe('JOB_DETAIL');
+    });
+
+    it('should classify asset URLs as UNKNOWN', () => {
+      expect(JobBoardExtractor.classifyUrl('https://cdn.devfolio.co/images/logo.png')).toBe(
+        'UNKNOWN',
+      );
+      expect(JobBoardExtractor.classifyUrl('https://unstop.com/assets/banner.svg')).toBe('UNKNOWN');
     });
 
     it('should classify non-job detail pages correctly', () => {

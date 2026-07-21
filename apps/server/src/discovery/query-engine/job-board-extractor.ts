@@ -15,6 +15,66 @@ export class JobBoardExtractor {
     10,
   );
 
+  // Reusable Domain-Specific opportunity and listing patterns
+  private static readonly DOMAIN_PATTERNS: Record<
+    string,
+    { details: RegExp[]; listings: RegExp[] }
+  > = {
+    'devfolio.co': {
+      details: [
+        /\/hackathons\/[\w-]+/i,
+        /\/hiring\/[\w-]+/i,
+        /\/jobs\/[\w-]+/i,
+        /\/opportunity\/[\w-]+/i,
+        /\/projects\/[\w-]+/i,
+      ],
+      listings: [/^\/$/i, /^\/hackathons$/i, /^\/jobs$/i],
+    },
+    'unstop.com': {
+      details: [
+        /\/competition\/[\w-]+/i,
+        /\/internship\/[\w-]+/i,
+        /\/job\/[\w-]+/i,
+        /\/hackathon\/[\w-]+/i,
+        /\/fellowship\/[\w-]+/i,
+        /\/opportunities\/[\w-]+/i,
+      ],
+      listings: [/^\/$/i, /^\/jobs$/i, /^\/internships$/i, /^\/opportunities$/i],
+    },
+    'indeed.com': {
+      details: [/\/viewjob/i, /\/rc\/clk/i, /\/job\/[\w-]+/i],
+      listings: [/^\/$/i, /\/jobs/i, /\/q-/i, /\/l-/i],
+    },
+    'glassdoor.co': {
+      details: [/\/job-listing\/[\w-]+/i, /\/job-details\/[\w-]+/i],
+      listings: [/^\/$/i, /\/jobs/i, /\/job/i],
+    },
+    'internshala.com': {
+      details: [/\/internship\/detail\/[\w-]+/i, /\/job\/detail\/[\w-]+/i],
+      listings: [/^\/$/i, /\/internships/i, /\/jobs/i],
+    },
+    'hackerrank.com': {
+      details: [/\/jobs\/[\w-]+/i, /\/careers\/[\w-]+/i],
+      listings: [/^\/$/i, /\/jobs$/i, /\/careers$/i],
+    },
+    'greenhouse.io': {
+      details: [/\/jobs\/\d+/i, /\/requisitions\/\d+/i],
+      listings: [/^\/$/i],
+    },
+    'lever.co': {
+      details: [/\/[^/]+\/[0-9a-f-]{36}/i, /\/[^/]+\/[a-f0-9-]{12,}/i],
+      listings: [/^\/$/i],
+    },
+    'ashbyhq.com': {
+      details: [/\/jobs\/[\w-]+/i],
+      listings: [/^\/$/i],
+    },
+    'wellfound.com': {
+      details: [/\/jobs\/[\w-]+/i],
+      listings: [/^\/$/i, /\/jobs$/i, /\/role/i, /\/company/i],
+    },
+  };
+
   /**
    * Safe URL normalization that retains only vital keys
    * and strips all tracking, source, and attribution params.
@@ -58,6 +118,58 @@ export class JobBoardExtractor {
   }
 
   /**
+   * Rejects asset URLs (images, cdn subdomains, media extensions).
+   */
+  public static isAssetUrl(urlStr: string): boolean {
+    try {
+      const url = new URL(urlStr);
+      const host = url.hostname.toLowerCase();
+      const path = url.pathname.toLowerCase();
+
+      const isAssetHost =
+        host.startsWith('cdn.') ||
+        host.startsWith('images.') ||
+        host.startsWith('assets.') ||
+        host.startsWith('static.') ||
+        host.startsWith('media.') ||
+        host.includes('cloudfront.net') ||
+        host.includes('s3.amazonaws.com') ||
+        host.includes('wp-content');
+      if (isAssetHost) {
+        return true;
+      }
+
+      const ext = path.split('.').pop() || '';
+      const assetExtensions = [
+        'jpg',
+        'jpeg',
+        'png',
+        'webp',
+        'svg',
+        'gif',
+        'ico',
+        'css',
+        'js',
+        'pdf',
+        'woff',
+        'woff2',
+        'ttf',
+        'otf',
+        'mp4',
+        'mp3',
+        'zip',
+      ];
+      if (assetExtensions.includes(ext)) {
+        return true;
+      }
+
+      return false;
+    } catch {
+      return true;
+    }
+  }
+
+  /**
    * Classifies url to enforce only queueing real opportunity pages.
    */
   public static classifyUrl(
@@ -70,13 +182,17 @@ export class JobBoardExtractor {
     | 'CATEGORY'
     | 'FILTER'
     | 'UNKNOWN' {
+    if (this.isAssetUrl(urlStr)) {
+      return 'UNKNOWN';
+    }
+
     try {
       const url = new URL(urlStr);
       const host = url.hostname.toLowerCase();
       const path = url.pathname.toLowerCase();
       const search = url.search.toLowerCase();
 
-      // Pagination indicators
+      // Check pagination patterns
       const hasPageParam =
         url.searchParams.has('page') ||
         url.searchParams.has('p') ||
@@ -88,7 +204,7 @@ export class JobBoardExtractor {
         return 'PAGINATION';
       }
 
-      // Search engine / query filters
+      // Check search parameters
       if (
         url.searchParams.has('q') ||
         url.searchParams.has('query') ||
@@ -98,7 +214,7 @@ export class JobBoardExtractor {
         return 'SEARCH_PAGE';
       }
 
-      // Geo / age / radius filters
+      // Check filters
       if (
         url.searchParams.has('loc') ||
         url.searchParams.has('radius') ||
@@ -110,7 +226,7 @@ export class JobBoardExtractor {
         return 'FILTER';
       }
 
-      // Category paths
+      // Check categories
       if (
         path.includes('/category/') ||
         path.includes('/categories/') ||
@@ -120,88 +236,43 @@ export class JobBoardExtractor {
         return 'CATEGORY';
       }
 
-      // Glassdoor
-      if (host.includes('glassdoor.co')) {
-        if (path.includes('/job-listing/') || path.includes('/job-details/')) {
-          return 'JOB_DETAIL';
-        }
-        return 'LISTING_BOARD';
-      }
+      // 1. Domain-specific pattern checks
+      for (const [domainKey, patterns] of Object.entries(this.DOMAIN_PATTERNS)) {
+        if (host.includes(domainKey)) {
+          // Check detail patterns
+          for (const rx of patterns.details) {
+            if (rx.test(path) || rx.test(url.pathname + url.search)) {
+              return 'JOB_DETAIL';
+            }
+          }
+          // Check listing patterns
+          for (const rx of patterns.listings) {
+            if (rx.test(path)) {
+              return 'LISTING_BOARD';
+            }
+          }
 
-      // Indeed
-      if (host.includes('indeed.com')) {
-        if (path.includes('/viewjob') || search.includes('jk=')) {
-          return 'JOB_DETAIL';
-        }
-        return 'LISTING_BOARD';
-      }
+          // Lever specific fallback: lever detail pages have at least 2 segments
+          if (domainKey === 'lever.co') {
+            const segments = path.split('/').filter(Boolean);
+            if (segments.length >= 2) {
+              return 'JOB_DETAIL';
+            }
+          }
 
-      // Internshala
-      if (host.includes('internshala.com')) {
-        if (path.includes('/internship/detail/') || path.includes('/job/detail/')) {
-          return 'JOB_DETAIL';
-        }
-        return 'LISTING_BOARD';
-      }
+          // Ashby specific fallback: ashby detail pages have jobs/id
+          if (domainKey === 'ashbyhq.com') {
+            const segments = path.split('/').filter(Boolean);
+            if (segments.includes('jobs') && segments.length > segments.indexOf('jobs') + 1) {
+              return 'JOB_DETAIL';
+            }
+          }
 
-      // Unstop
-      if (host.includes('unstop.com')) {
-        if (path.match(/\/jobs\/[\w-]+-\d+/) || path.match(/\/internships\/[\w-]+-\d+/)) {
-          return 'JOB_DETAIL';
-        }
-        return 'LISTING_BOARD';
-      }
-
-      // Greenhouse
-      if (host.includes('greenhouse.io')) {
-        if (path.match(/\/jobs\/\d+/)) {
-          return 'JOB_DETAIL';
-        }
-        return 'LISTING_BOARD';
-      }
-
-      // Lever
-      if (host.includes('lever.co')) {
-        const segments = path.split('/').filter(Boolean);
-        if (segments.length >= 2) {
-          return 'JOB_DETAIL';
-        }
-        return 'LISTING_BOARD';
-      }
-
-      // Ashby
-      if (host.includes('ashbyhq.com')) {
-        const segments = path.split('/').filter(Boolean);
-        if (segments.includes('jobs') && segments.length > segments.indexOf('jobs') + 1) {
-          return 'JOB_DETAIL';
-        }
-        return 'LISTING_BOARD';
-      }
-
-      // Wellfound
-      if (host.includes('wellfound.com')) {
-        if (path.includes('/jobs') || path.includes('/role') || path.includes('/company')) {
           return 'LISTING_BOARD';
         }
       }
 
-      // Devfolio
-      if (host.includes('devfolio.co')) {
-        if (path.includes('/jobs/') || path.includes('/internships/')) {
-          return 'JOB_DETAIL';
-        }
-        return 'LISTING_BOARD';
-      }
-
-      // Hackerrank
-      if (host.includes('hackerrank.com')) {
-        if (path.includes('/jobs/') || path.includes('/careers/')) {
-          return 'JOB_DETAIL';
-        }
-        return 'LISTING_BOARD';
-      }
-
-      // General fallback
+      // 2. Generic opportunity keywords fallback
       const isJobPath =
         path.match(/\/(job|opening|vacancy|opportunity|detail)\//) || path.match(/\/\d{5,}/);
       if (isJobPath) {
