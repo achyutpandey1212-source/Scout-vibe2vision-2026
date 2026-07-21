@@ -58,25 +58,42 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
     }
 
     const maxTargets = (_options as any)?.maxTargets || 50;
-    const sources = await sourceRegistryService.getDueSourcesWithCursor(maxTargets, filterQuery);
 
-    targets = sources.map((s: any) => ({
-      domain: s.domain,
-      organization: s.organization,
-      homepage: s.homepage,
-      strategy: s.strategy,
-      defaultTags: s.defaultTags,
-      trustScore: s.trustScore,
-      priority: s.priority,
-      nextCrawlAt: s.nextCrawlAt,
-    }));
+    if (runMode === 'custom' && runCustomDomains.length > 0) {
+      targets = runCustomDomains.map((d: string) => {
+        const cleanDomain = d.toLowerCase().trim();
+        return {
+          domain: cleanDomain,
+          organization: cleanDomain.split('.')[0],
+          homepage: cleanDomain.startsWith('http') ? cleanDomain : `https://${cleanDomain}`,
+          strategy: 'direct',
+          defaultTags: ['custom-crawl'],
+          trustScore: 80,
+          priority: 'high',
+        };
+      });
+    } else {
+      const sources = await sourceRegistryService.getDueSourcesWithCursor(maxTargets, filterQuery);
+      targets = sources.map((s: any) => ({
+        domain: s.domain,
+        organization: s.organization,
+        homepage: s.homepage,
+        strategy: s.strategy,
+        defaultTags: s.defaultTags,
+        trustScore: s.trustScore,
+        priority: s.priority,
+        nextCrawlAt: s.nextCrawlAt,
+      }));
+    }
 
     if (targets.length === 0) {
       console.warn(`[Stage 1] No sources found matching filter criteria (Mode: ${runMode}).`);
       return [];
     }
 
-    console.log(`[Stage 1] ${targets.length} sources resolved for crawl (Mode: ${runMode}).`);
+    console.log(
+      `[Stage 1] Completed. Sources scheduled: ${targets.length}. Candidate URLs generated: ${targets.length}.`,
+    );
     return this.resolveCandidatesForTargets(targets, context);
   }
 
@@ -112,9 +129,29 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
     const tavilyClient = new TavilyClient();
     const processedUrls = new Set<string>();
 
+    const isCustomMode = (context as any).runMode === 'custom';
+
     // 2. Per-source strategy resolution
     for (const target of targets) {
       const now = new Date().toISOString();
+
+      if (isCustomMode) {
+        const fullUrl = target.homepage;
+        const normalized = normalizeUrl(fullUrl);
+        if (!processedUrls.has(normalized)) {
+          processedUrls.add(normalized);
+          allCandidates.push({
+            url: fullUrl,
+            source: target.organization,
+            domain: target.domain,
+            query: `custom:${target.domain}`,
+            snippet: '',
+            score: target.trustScore / 10,
+            discoveredAt: now,
+          });
+        }
+        continue;
+      }
 
       switch (target.strategy) {
         case 'direct': {

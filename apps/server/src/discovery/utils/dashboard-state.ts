@@ -57,6 +57,14 @@ export interface DashboardState {
   careerPages?: number;
   multiJobPages?: number;
   jobsExtractedWithoutAI?: number;
+  averageOpportunitiesPerDirectory?: number;
+
+  // Discovery Engine V2 Listing Board Metrics
+  boardPagesDetected?: number;
+  listingsHarvested?: number;
+  listingsCrawled?: number;
+  listingsDeduplicated?: number;
+  avgListingsPerBoard?: number;
 }
 
 class DashboardStateManager {
@@ -95,6 +103,11 @@ class DashboardStateManager {
     multiJobPages: 0,
     jobsExtractedWithoutAI: 0,
     averageOpportunitiesPerDirectory: 0,
+    boardPagesDetected: 0,
+    listingsHarvested: 0,
+    listingsCrawled: 0,
+    listingsDeduplicated: 0,
+    avgListingsPerBoard: 0,
   };
 
   private constructor() {}
@@ -152,6 +165,11 @@ class DashboardStateManager {
       multiJobPages: 0,
       jobsExtractedWithoutAI: 0,
       averageOpportunitiesPerDirectory: 0,
+      boardPagesDetected: 0,
+      listingsHarvested: 0,
+      listingsCrawled: 0,
+      listingsDeduplicated: 0,
+      avgListingsPerBoard: 0,
     };
   }
 }

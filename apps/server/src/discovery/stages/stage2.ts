@@ -13,6 +13,7 @@ import { CrawlBudgetManager } from '../query-engine/crawl-budget-manager';
 import { CandidateScorer } from '../query-engine/candidate-scorer';
 import { EligibilityFilter } from '../query-engine/eligibility-filter';
 import { FreshnessFilter } from '../query-engine/freshness-filter';
+import { JobBoardExtractor } from '../query-engine/job-board-extractor';
 
 export interface CrawledPage {
   url: string;
@@ -49,8 +50,8 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
     const redisClient = redis.getClient();
     const results: CrawledPage[] = [];
 
-    // Prioritize candidates based on CandidateScorer
-    const queue = candidates
+    // Filter and score seed candidates
+    const seedQueue = candidates
       .filter((c) => {
         const scoreObj = CandidateScorer.scoreCandidate(c.url);
         return scoreObj.pageType !== 'BLOG' && scoreObj.pageType !== 'DOCUMENTATION';
@@ -61,9 +62,22 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
         return scoreB - scoreA;
       });
 
-    const totalCount = queue.length;
-    const processedUrls = new Set<string>(queue.map((c) => normalizeUrl(c.url)));
+    // Dedicated Opportunity Queue for direct listings discovered on board listing pages
+    const opportunityQueue: CandidateURL[] = [];
+    const expandedBoardPages = new Set<string>();
+    const processedUrls = new Set<string>(candidates.map((c) => normalizeUrl(c.url)));
     const budgetManager = new CrawlBudgetManager();
+
+    // Listings-specific counters
+    let boardPagesCount = 0;
+    let listingsHarvestedCount = 0;
+    let listingsCrawledCount = 0;
+    let listingsDeduplicatedCount = 0;
+
+    const MAX_TOTAL_DISCOVERED_LISTINGS_PER_RUN = parseInt(
+      process.env.MAX_TOTAL_DISCOVERED_LISTINGS_PER_RUN || '250',
+      10,
+    );
 
     let failedCount = 0;
     let atsPagesCount = 0;
@@ -85,15 +99,31 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
     let completedCount = 0;
     let batchNumber = 0;
 
-    // Outer Loop: Batch processing until queue is empty
-    while (queue.length > 0) {
+    // Outer Loop: Process until both queues are empty
+    while (opportunityQueue.length > 0 || seedQueue.length > 0) {
       batchNumber++;
-      const currentBatch = queue.splice(0, concurrency);
+
+      // Concurrently process batch prioritizing Opportunity Queue
+      const currentBatch: CandidateURL[] = [];
+      while (
+        currentBatch.length < concurrency &&
+        (opportunityQueue.length > 0 || seedQueue.length > 0)
+      ) {
+        if (opportunityQueue.length > 0) {
+          const item = opportunityQueue.shift()!;
+          currentBatch.push(item);
+          listingsCrawledCount++;
+        } else {
+          currentBatch.push(seedQueue.shift()!);
+        }
+      }
+
+      const totalRemaining = opportunityQueue.length + seedQueue.length;
 
       // Update telemetry state
       DashboardStateInstance.updateState({
         currentStage: 'STAGE_2_CRAWLING',
-        crawlQueueRemaining: queue.length,
+        crawlQueueRemaining: totalRemaining,
         crawlBatchNumber: batchNumber,
         crawlCurrentlyCrawling: currentBatch.map((c) => c.url),
         crawlCompleted: completedCount,
@@ -101,7 +131,7 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
       });
 
       console.log(
-        `\n[Stage 2] [Queue Processing] Starting Batch #${batchNumber} (Processing ${currentBatch.length} URLs, Remaining in Queue: ${queue.length})`,
+        `\n[Stage 2] [Queue Processing] Starting Batch #${batchNumber} (Processing ${currentBatch.length} URLs, Remaining in Queue: ${totalRemaining})`,
       );
 
       const batchPromises = currentBatch.map(async (candidate) => {
@@ -150,7 +180,7 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
         let rawMarkdown = '';
         let cleanMetadata: Record<string, unknown> = {};
         let fetchMethod: 'firecrawl' | 'cache' | 'snippet' = 'cache';
-        let crawlStatus: 'SUCCESS' | 'FAILED' | 'BLOCKED' = 'SUCCESS';
+        let crawlStatus: 'SUCCESS' | 'FAILED' | 'BLOCKED' | 'SKIPPED' = 'SUCCESS';
         let duration = 0;
 
         if (cachedContent) {
@@ -301,59 +331,108 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
           }
         }
 
-        // F. Dynamic ATS & Multi-Opportunity Link Extraction Hook
+        // F. Multi-Listing Job Board Detection & Extraction Guard
         if (crawlStatus === 'SUCCESS' && rawMarkdown.length > 10) {
-          const isAtsPage = route === 'ATS_DIRECTORY' || route === 'SINGLE_OPPORTUNITY';
-          const isCareerPage =
-            route === 'MULTI_OPPORTUNITY_DIRECTORY' || route === 'PORTFOLIO_DIRECTORY';
+          const isListingBoard = JobBoardExtractor.isBoardPage(candidate.url, rawMarkdown);
 
-          if (isAtsPage || isCareerPage) {
-            const extracted = ATSParser.parse(rawMarkdown, candidate.url, candidate.source).concat(
-              MultiOpportunityExtractor.extract(rawMarkdown, candidate.url, candidate.source),
-            );
+          if (isListingBoard) {
+            const boardUrlNormalized = normalizeUrl(candidate.url);
 
-            if (extracted.length > 0) {
-              multiJobPagesCount++;
-              jobsExtractedCount += extracted.length;
-              console.log(
-                `[Crawl Diagnostics] Page: ${candidate.url} | Type: ${route} | Candidates Extracted: ${extracted.length}`,
-              );
+            if (!expandedBoardPages.has(boardUrlNormalized)) {
+              expandedBoardPages.add(boardUrlNormalized);
+              boardPagesCount++;
 
-              for (const job of extracted) {
-                const normJobUrl = normalizeUrl(job.url);
-                if (!processedUrls.has(normJobUrl)) {
-                  processedUrls.add(normJobUrl);
+              const rawListings = JobBoardExtractor.extractListings(rawMarkdown, candidate.url);
+              listingsHarvestedCount += rawListings.length;
 
-                  if (budgetManager.canVisitCareerPage()) {
-                    budgetManager.recordCareerPageVisit();
-                    queue.push({
-                      url: job.url,
-                      source: job.source,
-                      domain: candidate.domain,
-                      query: `discovered:${candidate.url}`,
-                      snippet: '',
-                      score: candidate.score,
-                      discoveredAt: new Date().toISOString(),
-                    });
-                  }
+              let uniqueAddedCount = 0;
+              for (const listing of rawListings) {
+                const cleanListingUrl = JobBoardExtractor.cleanUrl(listing.listingUrl);
+                const normListingUrl = normalizeUrl(cleanListingUrl);
+
+                if (processedUrls.has(normListingUrl)) {
+                  listingsDeduplicatedCount++;
+                  continue;
+                }
+
+                processedUrls.add(normListingUrl);
+
+                // Enforce global discovered listings limit per run
+                if (
+                  listingsHarvestedCount - listingsDeduplicatedCount <=
+                  MAX_TOTAL_DISCOVERED_LISTINGS_PER_RUN
+                ) {
+                  uniqueAddedCount++;
+                  opportunityQueue.push({
+                    url: cleanListingUrl,
+                    source: listing.company || candidate.source,
+                    domain: candidate.domain,
+                    query: `discovered-listing:${candidate.url}`,
+                    snippet: '',
+                    score: candidate.score,
+                    discoveredAt: new Date().toISOString(),
+                  });
                 }
               }
 
-              // Resort queue to bubble up the new direct job URLs immediately
-              queue.sort((a, b) => {
-                const scoreA = CandidateScorer.scoreCandidate(a.url).score;
-                const scoreB = CandidateScorer.scoreCandidate(b.url).score;
-                return scoreB - scoreA;
-              });
-            } else {
               console.log(
-                `[Crawl Diagnostics] Page: ${candidate.url} | Type: ${route} | Candidates Extracted: 0`,
+                `[Stage2] Detected Listing Board\nDomain: ${new URL(candidate.url).hostname}\nCards Found: ${rawListings.length}\nUnique URLs: ${uniqueAddedCount}\nQueued: ${uniqueAddedCount}\nSkipped Duplicates: ${rawListings.length - uniqueAddedCount}`,
+              );
+              console.log(
+                `[Stage2] Expanded Board: ${new URL(candidate.url).hostname}\nGenerated ${uniqueAddedCount} crawl targets`,
               );
             }
+
+            // Skip AI extraction for board listing pages themselves
+            crawlStatus = 'SKIPPED';
           } else {
-            console.log(
-              `[Crawl Diagnostics] Page: ${candidate.url} | Type: ${route} | Candidates Extracted: 0`,
-            );
+            // Normal ATS or Multi-Opportunity directories
+            const isAtsPage = route === 'ATS_DIRECTORY' || route === 'SINGLE_OPPORTUNITY';
+            const isCareerPage =
+              route === 'MULTI_OPPORTUNITY_DIRECTORY' || route === 'PORTFOLIO_DIRECTORY';
+
+            if (isAtsPage || isCareerPage) {
+              const extracted = ATSParser.parse(
+                rawMarkdown,
+                candidate.url,
+                candidate.source,
+              ).concat(
+                MultiOpportunityExtractor.extract(rawMarkdown, candidate.url, candidate.source),
+              );
+
+              if (extracted.length > 0) {
+                multiJobPagesCount++;
+                jobsExtractedCount += extracted.length;
+                console.log(
+                  `[Crawl Diagnostics] Page: ${candidate.url} | Type: ${route} | Candidates Extracted: ${extracted.length}`,
+                );
+
+                for (const job of extracted) {
+                  const normJobUrl = normalizeUrl(job.url);
+                  if (!processedUrls.has(normJobUrl)) {
+                    processedUrls.add(normJobUrl);
+
+                    if (budgetManager.canVisitCareerPage()) {
+                      budgetManager.recordCareerPageVisit();
+                      // Normal discovered links can go directly to opportunityQueue
+                      opportunityQueue.push({
+                        url: job.url,
+                        source: job.source,
+                        domain: candidate.domain,
+                        query: `discovered:${candidate.url}`,
+                        snippet: '',
+                        score: candidate.score,
+                        discoveredAt: new Date().toISOString(),
+                      });
+                    }
+                  }
+                }
+              } else {
+                console.log(
+                  `[Crawl Diagnostics] Page: ${candidate.url} | Type: ${route} | Candidates Extracted: 0`,
+                );
+              }
+            }
           }
         }
 
@@ -380,13 +459,14 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
       results.push(...mappedResults);
 
       completedCount += batchResults.length;
-      console.log(
-        `[Stage 2] [Batch Complete] Processed ${completedCount}/${totalCount} total candidates.`,
-      );
+      console.log(`[Stage 2] [Batch Complete] Processed ${completedCount} total candidates.`);
     }
 
     const avgOppsPerDir =
       multiJobPagesCount > 0 ? Math.round((jobsExtractedCount / multiJobPagesCount) * 10) / 10 : 0;
+
+    const avgListingsPerBoard =
+      boardPagesCount > 0 ? Math.round((listingsHarvestedCount / boardPagesCount) * 10) / 10 : 0;
 
     // Update global dashboard state metrics with Phase 2 yields
     DashboardStateInstance.updateState({
@@ -394,6 +474,11 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
       pagesCrawled: DashboardStateInstance.getState().pagesCrawled + results.length,
       skippedNonHtmlResources: DashboardStateInstance.getState().skippedNonHtmlResources || 0,
       averageOpportunitiesPerDirectory: avgOppsPerDir,
+      boardPagesDetected: boardPagesCount,
+      listingsHarvested: listingsHarvestedCount,
+      listingsCrawled: listingsCrawledCount,
+      listingsDeduplicated: listingsDeduplicatedCount,
+      avgListingsPerBoard,
       ...{
         atsPagesDetected: atsPagesCount,
         careerPages: careerPagesCount,
@@ -405,3 +490,4 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
     return results;
   }
 }
+export default Stage2Crawling;

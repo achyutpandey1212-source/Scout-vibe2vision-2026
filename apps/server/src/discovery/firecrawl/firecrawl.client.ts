@@ -26,7 +26,8 @@ export class FirecrawlClient {
       onlyMainContent: true,
     };
 
-    const maxAttempts = DISCOVERY_CONFIG.FIRECRAWL_RETRIES + 1;
+    const keysCount = pool.getKeys ? pool.getKeys().length : 1;
+    const maxAttempts = Math.max(keysCount, DISCOVERY_CONFIG.FIRECRAWL_RETRIES + 1);
     const timeoutMs = DISCOVERY_CONFIG.FIRECRAWL_TIMEOUT;
     let attempt = 0;
 
@@ -35,6 +36,11 @@ export class FirecrawlClient {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       const activeKey = pool.getCurrentKey();
+      const telemetry = pool.getTelemetry();
+
+      console.log(
+        `[Firecrawl Client] Executing request with key (${telemetry.activeIndex + 1}/${telemetry.totalKeys})`,
+      );
 
       try {
         const response = await fetch(this.baseUrl, {
@@ -68,24 +74,18 @@ export class FirecrawlClient {
             );
           }
 
-          if (status === 401 || status === 429) {
-            pool.markFailure();
-            pool.rotate();
-          }
-
           if (status === 401) {
             throw new Error(`Firecrawl API responded with HTTP error 401: Unauthorized API Key`);
           }
 
-          if (status >= 500 || status === 429) {
-            console.warn(
-              `[Firecrawl Client] Transient error (HTTP ${status}) on attempt ${attempt}. Retrying... Details: ${text}`,
-            );
-            if (attempt < maxAttempts) {
-              await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
-              continue;
-            }
+          if (status === 402) {
+            throw new Error(`Firecrawl API responded with HTTP error 402: Insufficient credits`);
           }
+
+          if (status === 429) {
+            throw new Error(`Firecrawl API responded with HTTP error 429: Rate limit exceeded`);
+          }
+
           throw new Error(`Firecrawl API responded with HTTP error ${status}: ${text}`);
         }
 
@@ -111,7 +111,7 @@ export class FirecrawlClient {
           pool.markFailure();
           pool.rotate();
           console.warn(
-            `[Firecrawl Client] Failed attempt ${attempt}/${maxAttempts}: ${errorMsg}. Retrying...`,
+            `[Firecrawl Client] Failed attempt ${attempt}/${maxAttempts}: ${errorMsg}. Retrying with rotated key...`,
           );
           await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
           continue;
@@ -126,3 +126,4 @@ export class FirecrawlClient {
     throw new Error('Failed to scrape page via Firecrawl after maximum attempts');
   }
 }
+export default FirecrawlClient;

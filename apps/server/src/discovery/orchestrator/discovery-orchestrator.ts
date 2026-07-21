@@ -161,32 +161,62 @@ Total Targets Limit: ${totalTargetLimit}
   // Build filter query based on run mode
   const runMode = (context as any).runMode || 'due';
   const runCategory = (context as any).runCategory;
-  const runCustomDomains = (context as any).runCustomDomains || [];
-  const filterQuery: Record<string, any> = {};
+  const runCustomDomains: string[] = (context as any).runCustomDomains || [];
 
-  if (runMode === 'high-priority') {
-    filterQuery.priority = { $in: ['critical', 'high'] };
-  } else if (runMode === 'category' && runCategory) {
-    if (runCategory === 'STARTUP_INTERNSHIPS') {
-      filterQuery.$or = [
-        { category: 'STARTUP_INTERNSHIPS' },
-        { category: 'INTERNSHIPS', ecosystemType: { $in: ['STARTUP', 'INCUBATOR'] } },
-      ];
-    } else {
-      filterQuery.category = runCategory;
+  let targets: any[] = [];
+
+  if (runMode === 'custom' && runCustomDomains.length > 0) {
+    console.log(`
+================================
+Discovery Mode: CUSTOM
+================================
+
+Domains Submitted: ${runCustomDomains.length}
+
+${runCustomDomains.join('\n')}
+
+Sources Scheduled: ${runCustomDomains.length}
+`);
+
+    targets = runCustomDomains.map((domain) => {
+      const cleanDomain = domain.trim().toLowerCase();
+      return {
+        domain: cleanDomain,
+        organization: cleanDomain.split('.')[0],
+        homepage: cleanDomain.startsWith('http') ? cleanDomain : `https://${cleanDomain}`,
+        strategy: 'direct',
+        defaultTags: ['custom-crawl'],
+        trustScore: 80,
+        priority: 'high',
+      };
+    });
+  } else {
+    console.log(`
+================================
+Discovery Mode: SCHEDULED
+================================
+`);
+
+    const filterQuery: Record<string, any> = {};
+    if (runMode === 'high-priority') {
+      filterQuery.priority = { $in: ['critical', 'high'] };
+    } else if (runMode === 'category' && runCategory) {
+      if (runCategory === 'STARTUP_INTERNSHIPS') {
+        filterQuery.$or = [
+          { category: 'STARTUP_INTERNSHIPS' },
+          { category: 'INTERNSHIPS', ecosystemType: { $in: ['STARTUP', 'INCUBATOR'] } },
+        ];
+      } else {
+        filterQuery.category = runCategory;
+      }
+    } else if (runMode === 'active') {
+      filterQuery.bypassDueCheck = true;
     }
-  } else if (runMode === 'active') {
-    filterQuery.bypassDueCheck = true;
-  } else if (runMode === 'custom' && runCustomDomains.length > 0) {
-    const cleanDomains = runCustomDomains.map((d: string) => d.toLowerCase().trim());
-    filterQuery.domain = { $in: cleanDomains };
+
+    // Fetch all due targets for this run using persistent round-robin cursor
+    targets = await sourceRegistryService.getDueSourcesWithCursor(totalTargetLimit, filterQuery);
   }
 
-  // Fetch all due targets for this run using persistent round-robin cursor
-  const targets = await sourceRegistryService.getDueSourcesWithCursor(
-    totalTargetLimit,
-    filterQuery,
-  );
   if (targets.length === 0) {
     console.warn(`[Discovery Controller] No sources due or found for mode: ${runMode}`);
     return {
