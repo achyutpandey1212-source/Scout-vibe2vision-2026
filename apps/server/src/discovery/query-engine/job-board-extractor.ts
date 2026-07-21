@@ -287,88 +287,117 @@ export class JobBoardExtractor {
     const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
     let match;
 
+    let cardsFound = 0;
+    const candidateLinks: string[] = [];
+    const jobDetailUrls: string[] = [];
+    const listingUrls: string[] = [];
+    const externalUrls: string[] = [];
+    const rejectedUrls: string[] = [];
+
     while ((match = linkRegex.exec(markdown)) !== null) {
+      cardsFound++;
       const titleText = match[1].trim();
       const rawUrl = match[2].trim();
-      const cleanUrlStr = this.cleanUrl(rawUrl);
-      const cleanUrlLower = cleanUrlStr.toLowerCase();
 
-      if (seenUrls.has(cleanUrlLower)) continue;
-
-      let isJobLink = false;
-      const company = '';
-      const location = 'Remote';
-
-      // Domain-specific job link filters
-      if (sourceDomain.includes('indeed.com')) {
-        isJobLink =
-          cleanUrlLower.includes('/rc/clk') ||
-          cleanUrlLower.includes('/viewjob') ||
-          cleanUrlLower.includes('/jobs/');
-      } else if (sourceDomain.includes('internshala.com')) {
-        isJobLink =
-          cleanUrlLower.includes('/internship/detail/') || cleanUrlLower.includes('/job/detail/');
-      } else if (sourceDomain.includes('unstop.com')) {
-        isJobLink = cleanUrlLower.includes('/jobs/') || cleanUrlLower.includes('/internships/');
-      } else if (sourceDomain.includes('wellfound.com')) {
-        isJobLink = cleanUrlLower.includes('/jobs') || cleanUrlLower.includes('/company/');
-      } else if (sourceDomain.includes('devfolio.co')) {
-        isJobLink = cleanUrlLower.includes('/jobs/') || cleanUrlLower.includes('/internships/');
-      } else if (sourceDomain.includes('hackerrank.com')) {
-        isJobLink = cleanUrlLower.includes('/jobs/') || cleanUrlLower.includes('/careers/');
-      } else if (
-        sourceDomain.includes('greenhouse.io') ||
-        sourceDomain.includes('lever.co') ||
-        sourceDomain.includes('ashbyhq.com')
-      ) {
-        isJobLink = !!(
-          cleanUrlLower.match(/\/(jobs|requisitions|job|careers)\/\d+/) ||
-          cleanUrlLower.match(/\/[a-f0-9-]{12,}/) ||
-          (cleanUrlLower.includes('lever.co') && cleanUrlLower.split('/').length > 4)
-        );
-      } else {
-        isJobLink =
-          cleanUrlLower.includes('/job/') ||
-          cleanUrlLower.includes('/jobs/') ||
-          cleanUrlLower.includes('/careers/') ||
-          cleanUrlLower.includes('/career/') ||
-          cleanUrlLower.includes('/opening/') ||
-          cleanUrlLower.includes('/openings/');
-      }
-
-      if (isJobLink && titleText.length > 2) {
-        const lowerTitle = titleText.toLowerCase();
+      let cleanUrlStr = rawUrl;
+      try {
+        const parsed = new URL(rawUrl);
+        const linkDomain = parsed.hostname.replace('www.', '');
         if (
-          lowerTitle === 'apply' ||
-          lowerTitle === 'apply now' ||
-          lowerTitle === 'view' ||
-          lowerTitle === 'view details' ||
-          lowerTitle === 'learn more' ||
-          lowerTitle.includes('sign in') ||
-          lowerTitle.includes('login') ||
-          lowerTitle.includes('cookie') ||
-          lowerTitle.includes('privacy') ||
-          lowerTitle.includes('terms')
+          linkDomain !== sourceDomain &&
+          !linkDomain.endsWith('.' + sourceDomain) &&
+          !sourceDomain.endsWith('.' + linkDomain)
         ) {
+          externalUrls.push(rawUrl);
           continue;
         }
+        cleanUrlStr = this.cleanUrl(rawUrl);
+      } catch {
+        rejectedUrls.push(rawUrl);
+        continue;
+      }
 
-        seenUrls.add(cleanUrlLower);
-        listings.push({
-          title: titleText,
-          company: company || sourceDomain.split('.')[0],
-          listingUrl: cleanUrlStr,
-          location,
-          source: sourceDomain,
-        });
+      const cleanUrlLower = cleanUrlStr.toLowerCase();
+      candidateLinks.push(cleanUrlStr);
 
-        if (listings.length >= this.MAX_LISTINGS_PER_BOARD_PAGE) {
-          break;
+      const classification = this.classifyUrl(cleanUrlStr);
+
+      if (classification === 'JOB_DETAIL') {
+        if (titleText.length > 2) {
+          const lowerTitle = titleText.toLowerCase();
+          const isGeneric =
+            lowerTitle === 'apply' ||
+            lowerTitle === 'apply now' ||
+            lowerTitle === 'view' ||
+            lowerTitle === 'view details' ||
+            lowerTitle === 'learn more' ||
+            lowerTitle.includes('sign in') ||
+            lowerTitle.includes('login') ||
+            lowerTitle.includes('cookie') ||
+            lowerTitle.includes('privacy') ||
+            lowerTitle.includes('terms');
+
+          if (!isGeneric) {
+            jobDetailUrls.push(cleanUrlStr);
+            if (!seenUrls.has(cleanUrlLower)) {
+              seenUrls.add(cleanUrlLower);
+              listings.push({
+                title: titleText,
+                company: sourceDomain.split('.')[0],
+                listingUrl: cleanUrlStr,
+                location: 'Remote',
+                source: sourceDomain,
+              });
+            }
+          } else {
+            rejectedUrls.push(`${cleanUrlStr} (Reason: generic title)`);
+          }
+        } else {
+          rejectedUrls.push(`${cleanUrlStr} (Reason: title too short)`);
         }
+      } else if (
+        classification === 'LISTING_BOARD' ||
+        classification === 'SEARCH_PAGE' ||
+        classification === 'PAGINATION'
+      ) {
+        listingUrls.push(cleanUrlStr);
+      } else {
+        rejectedUrls.push(`${cleanUrlStr} (Reason: ${classification})`);
       }
     }
 
-    return listings;
+    // Print diagnostics
+    console.log(`
+[Harvesting Diagnostics] Domain: ${sourceDomain}
+Cards Found:                   ${cardsFound}
+Candidate Links:               ${candidateLinks.length}
+Job Detail URLs:               ${jobDetailUrls.length}
+Listing URLs:                  ${listingUrls.length}
+External URLs:                 ${externalUrls.length}
+Rejected Non-opportunity URLs: ${rejectedUrls.length}
+
+Example Accepted URLs (first 5):
+${
+  jobDetailUrls
+    .slice(0, 5)
+    .map((l) => ` - ${l}`)
+    .join('\n') || 'None'
+}
+
+Example Rejected URLs (first 5):
+${
+  rejectedUrls
+    .slice(0, 5)
+    .map((l) => ` - ${l}`)
+    .join('\n') || 'None'
+}
+`);
+
+    if (jobDetailUrls.length === 0) {
+      console.log(`No opportunity detail pages discovered.`);
+    }
+
+    return listings.slice(0, this.MAX_LISTINGS_PER_BOARD_PAGE);
   }
 }
 export default JobBoardExtractor;
