@@ -7,13 +7,18 @@ export class FallbackPersonalization {
    * Generates a smart, deterministic fallback personalization response
    * derived from CandidateSnapshot and ResumeContext without calling an LLM.
    */
-  static generate(topCandidates: any[], profile?: any, resume?: any): IAIPersonalizationResponse {
-    const snapshotBuilder = new CandidateSnapshotBuilder();
-    const snapshot = snapshotBuilder.build(profile || {}, resume || null);
+  static generate(
+    topCandidates: any[],
+    profile?: any,
+    resume?: any,
+    existingSnapshot?: any,
+  ): IAIPersonalizationResponse {
+    const snapshot =
+      existingSnapshot || new CandidateSnapshotBuilder().build(profile || {}, resume || null);
     const resumeContextBuilder = new ResumeContextBuilder();
     const resumeContext = resumeContextBuilder.build(snapshot);
 
-    const slotNames = ['perfectMatch', 'hiddenGem', 'stretchGoal', 'quickWin', 'confidenceBuilder'];
+    const slotNames = ['perfectMatch', 'hiddenGem', 'fastApply', 'resumeBuilder', 'stretchGoal'];
     const recommendationsBySlot: Record<string, IAIPersonalizationItem> = {};
 
     const primaryProj = resumeContext.topProjects[0] || {
@@ -26,7 +31,7 @@ export class FallbackPersonalization {
       const slot = slotNames[idx] || `match_${idx}`;
       const opp = cand.opportunity || cand;
       const oppTitle = opp.title || 'Software Engineering Opportunity';
-      const org = opp.organization || 'the hiring company';
+      const org = opp.organization || opp.company || 'the hiring company';
 
       // Identify best matched project for this candidate item
       const matchedProjName =
@@ -44,7 +49,9 @@ export class FallbackPersonalization {
       const whyYou = `You have already built ${projObj.title} using ${techList}, showing practical engineering capability beyond coursework.`;
       const whyCompany = `This role at ${org} offers hands-on exposure to production engineering workflows.`;
 
-      const oppSkills = (opp.skills || []).map((s: string) => s.toLowerCase());
+      const oppSkills = (opp.skills || opp.requiredSkills || []).map((s: string) =>
+        s.toLowerCase(),
+      );
       const candSkills = snapshot.technologies;
       const missingSkills = oppSkills.filter((s: string) => !candSkills.includes(s)).slice(0, 3);
       if (missingSkills.length === 0) {

@@ -18,14 +18,14 @@ export class PersonalizationService {
     profile: IProfile,
     resume: any,
     top5: any[],
+    existingSnapshot?: any,
   ): Promise<{ response: IAIPersonalizationResponse; metadata: IAIPersonalizationMetadata }> {
     const startTime = Date.now();
-    const snapshotBuilder = new CandidateSnapshotBuilder();
-    const snapshot = snapshotBuilder.build(profile, resume);
+    const snapshot = existingSnapshot || new CandidateSnapshotBuilder().build(profile, resume);
     const resumeContextBuilder = new ResumeContextBuilder();
     const resumeContext = resumeContextBuilder.build(snapshot);
 
-    const prompt = PromptManager.buildPrompt(profile, resume, top5);
+    const prompt = PromptManager.buildPrompt(profile, resume, top5, snapshot);
     const promptHash = PromptManager.hashPrompt(prompt);
     const systemInstruction = PromptManager.getSystemInstructions();
 
@@ -71,7 +71,7 @@ export class PersonalizationService {
     // 3. Fallback mode
     if (!parsedResponse) {
       fallbackUsed = true;
-      parsedResponse = FallbackPersonalization.generate(top5, profile, resume);
+      parsedResponse = FallbackPersonalization.generate(top5, profile, resume, snapshot);
       responseText = JSON.stringify(parsedResponse);
     }
 

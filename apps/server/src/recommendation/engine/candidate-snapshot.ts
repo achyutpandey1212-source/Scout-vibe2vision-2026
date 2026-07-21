@@ -234,9 +234,6 @@ export class CandidateSnapshotBuilder {
       preferences,
     };
 
-    // Log formatted summary
-    this.logSummary(snapshot);
-
     return snapshot;
   }
 

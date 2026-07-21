@@ -234,7 +234,12 @@ Portfolio Diversity Score: ${portfolio.portfolioDiversityScore}/100
       let aiMeta: IAIPersonalizationMetadata;
 
       if (flags.enableAIPersonalization) {
-        const aiResult = await PersonalizationService.personalize(profile, resume, top5Candidates);
+        const aiResult = await PersonalizationService.personalize(
+          profile,
+          resume,
+          top5Candidates,
+          snapshot,
+        );
         aiResponse = aiResult.response;
         aiMeta = aiResult.metadata;
         fallbackUsed = aiMeta.fallbackUsed;
@@ -243,7 +248,7 @@ Portfolio Diversity Score: ${portfolio.portfolioDiversityScore}/100
         promptHashVal = aiMeta.promptHash;
       } else {
         fallbackUsed = true;
-        aiResponse = FallbackPersonalization.generate(top5Candidates);
+        aiResponse = FallbackPersonalization.generate(top5Candidates, profile, resume, snapshot);
         aiMeta = {
           provider: 'local-fallback',
           model: 'fallback',
@@ -262,6 +267,37 @@ Portfolio Diversity Score: ${portfolio.portfolioDiversityScore}/100
 
       // 7. Quality evaluation
       const qualityScore = RecommendationQualityService.evaluatePack(top5Candidates);
+
+      // Print Comprehensive Recommendation Quality Report
+      console.log(`
+======================================
+Recommendation Quality Report
+======================================
+
+Candidates Evaluated:         ${initialCount}
+Candidates Filtered:          ${filteredCount}
+Candidates Scored:            ${scoredList.length}
+Candidates Ranked:            ${top40Candidates.length}
+
+Average Recommendation Score: ${avgScore}
+Highest Recommendation Score: ${highestScore}
+Lowest Recommendation Score:  ${lowestScore}
+
+Portfolio Diversity Score:    ${portfolio.portfolioDiversityScore}/100
+Unique Role Families:         ${portfolio.uniqueRoleFamiliesCount}
+Unique Companies:             ${portfolio.uniqueCompaniesCount}
+Unique Technologies:          ${portfolio.uniqueTechnologiesCount}
+
+Top Slot (Perfect Match):     ${portfolio.slots['perfectMatch']?.candidate?.opportunity?.title || 'N/A'}
+Recommendation Strength:      ${portfolio.slots['perfectMatch']?.candidate?.recommendationStrength || 'strong'}
+
+AI Provider:                  ${aiMeta?.provider || 'local-fallback'}
+Latency:                      ${aiMeta?.latencyMs || 0}ms
+Fallback Used:                ${fallbackUsed}
+Repair Used:                  ${repairUsed}
+
+======================================
+`);
 
       // 8. Building Pack
       await RecommendationRepository.updateProgressPhase(packId, 'BUILDING_PACK');

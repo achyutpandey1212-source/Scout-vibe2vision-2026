@@ -27,6 +27,7 @@ export class RecommendationPortfolioBuilder {
    * Infer role family deterministically from opportunity title and description.
    */
   public static inferRoleFamily(opp: any): string {
+    if (!opp) return 'General Software';
     const text =
       `${opp.title || ''} ${opp.summary || ''} ${opp.description || ''} ${(opp.skills || []).join(' ')}`.toLowerCase();
 
@@ -111,13 +112,22 @@ export class RecommendationPortfolioBuilder {
 
     const slots: Record<string, PortfolioSlot> = {};
 
-    // Helper to extract clean ID/URL/Company
-    const getOpp = (c: any) => c.opportunity || c;
-    const getId = (c: any) => getOpp(c).id || getOpp(c)._id?.toString() || getOpp(c).title;
-    const getCompany = (c: any) =>
-      (getOpp(c).organization || getOpp(c).company || 'Unknown').toLowerCase();
+    // Safe helper to extract clean opportunity details defensively
+    const getOpp = (c: any) => (c && (c.opportunity || c)) || {};
+    const getId = (c: any) => {
+      const opp = getOpp(c);
+      return (
+        opp.id ||
+        (opp._id ? opp._id.toString() : null) ||
+        `${opp.title || 'opp'}_${opp.organization || opp.company || 'org'}`
+      );
+    };
+    const getCompany = (c: any) => {
+      const opp = getOpp(c);
+      return (opp.organization || opp.company || 'Unknown Organization').toLowerCase();
+    };
 
-    // Helper selection fallback
+    // Helper selection strategy with graceful fallback
     const pickBestMatch = (predicate: (cand: any) => boolean, defaultReason: string): any => {
       // 1. Try candidates matching predicate and unique company
       let match = available.find(
@@ -152,7 +162,19 @@ export class RecommendationPortfolioBuilder {
         selectedRoleFamilies.add(family);
         selectedTypes.add(opp.opportunityType || 'INTERNSHIP');
 
-        (opp.skills || []).forEach((s: string) => selectedTechs.add(s.toLowerCase()));
+        // Robust Technology extraction across all candidate/opportunity fields
+        const oppTechs = [
+          ...(opp.skills || []),
+          ...(opp.requiredSkills || []),
+          ...(opp.technologies || []),
+          ...(opp.tags || []),
+          ...(match.matchedSkills || []),
+        ];
+        oppTechs.forEach((s: string) => {
+          if (typeof s === 'string' && s.trim()) {
+            selectedTechs.add(s.toLowerCase().trim());
+          }
+        });
       }
 
       return match;
@@ -206,7 +228,11 @@ export class RecommendationPortfolioBuilder {
     const candTechSet = new Set(snapshot.technologies);
     const resumeBuilderCand = pickBestMatch((c) => {
       const opp = getOpp(c);
-      const oppSkills = (opp.skills || []).map((s: string) => s.toLowerCase());
+      const oppSkills = [
+        ...(opp.skills || []),
+        ...(opp.requiredSkills || []),
+        ...(opp.technologies || []),
+      ].map((s: string) => s.toLowerCase());
       const hasSkillGap = oppSkills.some((s: string) => !candTechSet.has(s));
       return hasSkillGap;
     }, 'Expands candidate skill profile with new technologies');
