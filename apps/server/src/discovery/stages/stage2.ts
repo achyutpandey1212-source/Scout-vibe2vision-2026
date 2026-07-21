@@ -32,7 +32,7 @@ export interface CrawledPage {
 
 export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPage[]> {
   private readonly firecrawlClient: FirecrawlClient;
-  private static hasLoggedRawResponseDebug = false;
+  private static glassdoorLinkLogCount = 0;
 
   constructor() {
     this.firecrawlClient = new FirecrawlClient();
@@ -48,36 +48,6 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
     console.log(
       `[Stage 2] Initializing classification and prioritized crawling for ${candidates.length} candidates...`,
     );
-
-    for (const c of candidates) {
-      try {
-        const originalInput = c.url;
-        const normalized = normalizeUrl(originalInput);
-        const originOnly = new URL(originalInput).origin;
-        const domainOnly = JobBoardExtractor.getBoardIdentifier(originalInput);
-
-        console.log(`
-----------------------------------------
-Input URL:
-${originalInput}
-
-Normalized URL:
-${normalized}
-
-Candidate URL:
-${originalInput}
-
-Domain:
-${domainOnly}
-
-Origin:
-${originOnly}
-----------------------------------------
-`);
-      } catch (err: any) {
-        console.error('[Stage 2] [Diagnostic Error]', err.message);
-      }
-    }
 
     const redisClient = redis.getClient();
     const results: CrawledPage[] = [];
@@ -261,100 +231,6 @@ ${originOnly}
 
             rawMarkdown = scrapeResponse.data?.markdown || '';
 
-            if (!Stage2Crawling.hasLoggedRawResponseDebug) {
-              Stage2Crawling.hasLoggedRawResponseDebug = true;
-
-              const rawHtml = (scrapeResponse.data as any)?.html || '';
-              const hasJobDescription =
-                rawMarkdown.toLowerCase().includes('job description') ||
-                rawMarkdown.toLowerCase().includes('description') ||
-                rawMarkdown.toLowerCase().includes('about the role');
-              const hasCompanyName =
-                rawMarkdown.toLowerCase().includes('company') ||
-                rawMarkdown.toLowerCase().includes('about us') ||
-                !!(scrapeResponse.data?.metadata as any)?.title;
-              const hasLocation =
-                rawMarkdown.toLowerCase().includes('location') ||
-                rawMarkdown.toLowerCase().includes('remote') ||
-                rawMarkdown.toLowerCase().includes('bengaluru') ||
-                rawMarkdown.toLowerCase().includes('india');
-              const hasApplyButton =
-                rawMarkdown.toLowerCase().includes('apply') ||
-                rawMarkdown.toLowerCase().includes('apply now') ||
-                rawMarkdown.toLowerCase().includes('apply on company site');
-
-              const hasBlockedSignals =
-                rawMarkdown.includes('Sign In') ||
-                rawMarkdown.includes("Verify you're human") ||
-                rawMarkdown.includes('Enable JavaScript') ||
-                rawMarkdown.includes('Cloudflare') ||
-                rawMarkdown.includes('Access Denied') ||
-                rawHtml.includes('Sign In') ||
-                rawHtml.includes("Verify you're human") ||
-                rawHtml.includes('Enable JavaScript') ||
-                rawHtml.includes('Cloudflare') ||
-                rawHtml.includes('Access Denied');
-
-              const isReactShell =
-                (rawHtml.includes('<div id="root"></div>') ||
-                  rawHtml.includes('<div id="__next"></div>')) &&
-                rawHtml.length < 5000 &&
-                rawMarkdown.length < 1000;
-
-              console.log(`
-======================================
-FIRECRAWL RAW RESPONSE DEBUG
-======================================
-
-URL:
-${candidate.url}
-
-HTTP Status:
-200 (Success)
-
-Final URL after redirects:
-${(scrapeResponse.data?.metadata as any)?.domain || 'Unknown'}
-
-Page Title:
-${(scrapeResponse.data?.metadata as any)?.title || 'Unknown'}
-
-HTML length:
-${rawHtml.length}
-
-Markdown length:
-${rawMarkdown.length}
-
-First 1500 characters of markdown:
-${rawMarkdown.substring(0, 1500)}
-
-First 1500 characters of HTML:
-${rawHtml.substring(0, 1500)}
-
-Has Job Description:
-${hasJobDescription}
-
-Has Company Name:
-${hasCompanyName}
-
-Has Location:
-${hasLocation}
-
-Has Apply Button:
-${hasApplyButton}
-
-Returned Format:
-${rawMarkdown && rawHtml ? 'markdown and html' : rawMarkdown ? 'markdown only' : 'html only'}
-
-Blocked/Bot Signals Detected:
-${hasBlockedSignals}
-
-Is React Shell:
-${isReactShell}
-
-======================================
-`);
-            }
-
             const validation = CrawlPlanner.validateContent(rawMarkdown);
             if (!validation.valid) {
               failedCount++;
@@ -524,7 +400,22 @@ ${isReactShell}
               let discardedListingsCount = 0;
 
               for (const listing of rawListings) {
+                // Logs 2 & 3: Trace jl parameter through cleanUrl — first 3 Glassdoor URLs only
+                const isGlassdoorTrace =
+                  listing.listingUrl.includes('glassdoor') &&
+                  Stage2Crawling.glassdoorLinkLogCount < 3;
+
+                if (isGlassdoorTrace) {
+                  Stage2Crawling.glassdoorLinkLogCount++;
+                  console.log(`BEFORE CLEAN:\n${listing.listingUrl}`);
+                }
+
                 const cleanListingUrl = JobBoardExtractor.cleanUrl(listing.listingUrl);
+
+                if (isGlassdoorTrace) {
+                  console.log(`AFTER CLEAN:\n${cleanListingUrl}`);
+                }
+
                 const normListingUrl = normalizeUrl(cleanListingUrl);
                 const childClassification = JobBoardExtractor.classifyUrl(cleanListingUrl);
 
@@ -647,7 +538,7 @@ Queued:                  ${uniqueAddedCount}
           crawlStatus = 'SKIPPED';
         }
 
-        const pageObj = {
+        return {
           url: candidate.url,
           title: (cleanMetadata as any)?.title || candidate.source || 'Unknown',
           markdown: rawMarkdown,
@@ -659,38 +550,6 @@ Queued:                  ${uniqueAddedCount}
           source: candidate.source,
           crawlReason: plan.reason,
         };
-
-        let rawHtml = '';
-        if (fetchMethod === 'firecrawl' && typeof scrapeResponse !== 'undefined') {
-          rawHtml = (scrapeResponse?.data as any)?.html || '';
-        }
-
-        let emptyWhy = '';
-        if (!pageObj.markdown) {
-          if (fetchMethod === 'skipped') {
-            emptyWhy = 'Fetch method skipped (non-HTML or ignored path)';
-          } else if (crawlStatus === 'FAILED') {
-            emptyWhy = 'Firecrawl scrape failed or content was too small';
-          } else {
-            emptyWhy = 'Response returned empty markdown';
-          }
-        }
-
-        console.log(`
-============================
-PAGE OBJECT
-============================
-title: ${pageObj.title}
-location: ${(pageObj.metadata as any)?.location || 'null'}
-html length: ${rawHtml.length}
-markdown length: ${pageObj.markdown.length}
-metadata: ${JSON.stringify(pageObj.metadata)}
-Crawl Status: ${pageObj.crawlStatus}
-Empty Reason: ${emptyWhy || 'N/A'}
-============================
-`);
-
-        return pageObj;
       });
 
       const batchResults = await Promise.all(batchPromises);

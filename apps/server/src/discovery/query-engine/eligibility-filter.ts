@@ -35,10 +35,9 @@ export class EligibilityFilter {
       'permanent residents only',
     ];
 
-    const matchedNegatives: string[] = [];
     for (const neg of negatives) {
       if (lower.includes(neg)) {
-        matchedNegatives.push(neg);
+        return { eligible: false, reason: `Explicit restriction matched: "${neg}"` };
       }
     }
 
@@ -59,67 +58,12 @@ export class EligibilityFilter {
       'chennai',
     ];
 
-    const matchedPositives = positives.filter((pos) => lower.includes(pos));
-
-    let eligible = true;
-    let reason = '';
-
-    if (matchedNegatives.length > 0) {
-      eligible = false;
-      reason = `Explicit restriction matched: "${matchedNegatives.join(', ')}"`;
-    } else if (matchedPositives.length === 0) {
-      eligible = false;
-      reason = 'No matching India hub or remote signal found';
+    const hasPositive = positives.some((pos) => lower.includes(pos));
+    if (!hasPositive) {
+      return { eligible: false, reason: 'No matching India hub or remote signal found' };
     }
 
-    if (!eligible) {
-      // Extract location sentences / lines for diagnostics
-      const lines = text.split('\n');
-      const locationLines = lines
-        .filter(
-          (line) =>
-            line.toLowerCase().includes('location') ||
-            positives.some((p) => line.toLowerCase().includes(p)),
-        )
-        .map((l) => l.trim())
-        .slice(0, 3);
-
-      const locationExtracted = locationLines.join(' | ') || 'Not found';
-      const country = lower.includes('india') ? 'India' : 'null';
-      const matchedCities = matchedPositives.filter((p) => p !== 'india' && p !== 'remote');
-      const city = matchedCities.length > 0 ? matchedCities.join(', ') : 'null';
-      const remoteDetected = lower.includes('remote');
-
-      console.log(`
----------- GEO FILTER ----------
-URL:
-${url || 'Unknown'}
-
-Title:
-${title || 'Unknown'}
-
-Location extracted:
-${locationExtracted}
-
-Country:
-${country}
-
-City:
-${city}
-
-Remote detected:
-${remoteDetected}
-
-Matched keywords:
-${[...matchedNegatives, ...matchedPositives].join(', ') || 'None'}
-
-Reject reason:
-${reason}
--------------------------------
-`);
-    }
-
-    return { eligible, reason: reason || undefined };
+    return { eligible: true };
   }
 }
 export default EligibilityFilter;

@@ -15,6 +15,9 @@ export class JobBoardExtractor {
     10,
   );
 
+  // Counter to limit RAW LINK diagnostic logs to first 3 Glassdoor links only
+  public static _glassdoorRawLinkLogCount = 0;
+
   // Reusable Domain-Specific opportunity and listing patterns
   private static readonly DOMAIN_PATTERNS: Record<
     string,
@@ -573,6 +576,18 @@ export class JobBoardExtractor {
 
       cardsFound++;
       totalLinksFound += pLinks.length;
+
+      // Log 1: RAW LINK — first 3 Glassdoor job links as extracted from markdown
+      for (const rawLink of pLinks) {
+        if (
+          rawLink.url.includes('glassdoor') &&
+          (rawLink.url.includes('/job-listing/') || rawLink.url.includes('jl=')) &&
+          JobBoardExtractor._glassdoorRawLinkLogCount < 3
+        ) {
+          JobBoardExtractor._glassdoorRawLinkLogCount++;
+          console.log(`RAW LINK:\n${rawLink.url}`);
+        }
+      }
 
       const scoredLinks = pLinks.map((link) => {
         let cleanUrlStr = link.url;

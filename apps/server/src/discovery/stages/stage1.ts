@@ -133,36 +133,6 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
 
     const isCustomMode = (context as any).runMode === 'custom';
 
-    for (const target of targets) {
-      try {
-        const originalInput = target.homepage;
-        const normalized = normalizeUrl(originalInput);
-        const originOnly = new URL(originalInput).origin;
-        const domainOnly = JobBoardExtractor.getBoardIdentifier(originalInput);
-
-        console.log(`
-----------------------------------------
-Input URL:
-${originalInput}
-
-Normalized URL:
-${normalized}
-
-Candidate URL:
-${originalInput}
-
-Domain:
-${domainOnly}
-
-Origin:
-${originOnly}
-----------------------------------------
-`);
-      } catch (err: any) {
-        console.error('[Stage 1] [Diagnostic Error]', err.message);
-      }
-    }
-
     // 2. Per-source strategy resolution
     for (const target of targets) {
       const now = new Date().toISOString();

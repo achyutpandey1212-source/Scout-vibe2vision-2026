@@ -22,7 +22,7 @@ export class FirecrawlClient {
     const pool = ProviderPoolFactory.discovery('firecrawl');
     const body = {
       url,
-      formats: ['markdown', 'html'],
+      formats: ['markdown'],
       onlyMainContent: true,
     };
 
@@ -95,45 +95,6 @@ ${url}
         }
 
         const data = await response.json();
-
-        // RAW FIRECRAWL RESULT Debug Logging
-        const rawSuccess = data?.success ?? false;
-        const rawMarkdown = data?.data?.markdown ?? '';
-        const rawHtml = data?.data?.html ?? '';
-        const rawMeta = data?.data?.metadata ?? {};
-        const rawTitle = rawMeta?.title ?? 'null';
-
-        console.log(`
-============================
-RAW FIRECRAWL RESULT
-============================
-URL:
-${url}
-Success:
-${rawSuccess}
-HTTP Status:
-${response.status}
-Error:
-${data?.error || 'null'}
-Has markdown:
-${!!rawMarkdown}
-Markdown length:
-${rawMarkdown.length}
-Has html:
-${!!rawHtml}
-HTML length:
-${rawHtml.length}
-Metadata:
-${JSON.stringify(rawMeta)}
-Raw title:
-${rawTitle}
-First 500 markdown chars:
-${rawMarkdown.substring(0, 500)}
-First 500 html chars:
-${rawHtml.substring(0, 500)}
-============================
-`);
-
         const parseResult = FirecrawlScrapeResponseSchema.safeParse(data);
         if (!parseResult.success) {
           throw new Error(`Invalid schema returned by Firecrawl: ${parseResult.error.message}`);
@@ -143,37 +104,6 @@ ${rawHtml.substring(0, 500)}
         return parseResult.data;
       } catch (error: any) {
         clearTimeout(timeoutId);
-
-        console.log(`
-============================
-RAW FIRECRAWL RESULT
-============================
-URL:
-${url}
-Success:
-false
-HTTP Status:
-Unknown (Network/Error)
-Error:
-${error.message || error}
-Has markdown:
-false
-Markdown length:
-0
-Has html:
-false
-HTML length:
-0
-Metadata:
-{}
-Raw title:
-null
-First 500 markdown chars:
-null
-First 500 html chars:
-null
-============================
-`);
 
         if (error.message && error.message.startsWith('BLOCKED:')) {
           throw error;
