@@ -6,6 +6,7 @@ import { normalizeUrl } from '../search/search-orchestrator';
 import { CrawlTarget, ISourceRegistryEntry } from '../sources/source-registry.types';
 import { generateQueries } from '../query-engine/query-generator';
 import { DashboardStateInstance } from '../utils/dashboard-state';
+import { JobBoardExtractor } from '../query-engine/job-board-extractor';
 
 export interface CandidateURL {
   url: string;
@@ -61,11 +62,12 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
 
     if (runMode === 'custom' && runCustomDomains.length > 0) {
       targets = runCustomDomains.map((d: string) => {
-        const cleanDomain = d.toLowerCase().trim();
+        const trimmed = d.trim();
+        const cleanDomain = JobBoardExtractor.getBoardIdentifier(trimmed);
         return {
           domain: cleanDomain,
           organization: cleanDomain.split('.')[0],
-          homepage: cleanDomain.startsWith('http') ? cleanDomain : `https://${cleanDomain}`,
+          homepage: trimmed.startsWith('http') ? trimmed : `https://${trimmed}`,
           strategy: 'direct',
           defaultTags: ['custom-crawl'],
           trustScore: 80,
@@ -130,6 +132,36 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
     const processedUrls = new Set<string>();
 
     const isCustomMode = (context as any).runMode === 'custom';
+
+    for (const target of targets) {
+      try {
+        const originalInput = target.homepage;
+        const normalized = normalizeUrl(originalInput);
+        const originOnly = new URL(originalInput).origin;
+        const domainOnly = JobBoardExtractor.getBoardIdentifier(originalInput);
+
+        console.log(`
+----------------------------------------
+Input URL:
+${originalInput}
+
+Normalized URL:
+${normalized}
+
+Candidate URL:
+${originalInput}
+
+Domain:
+${domainOnly}
+
+Origin:
+${originOnly}
+----------------------------------------
+`);
+      } catch (err: any) {
+        console.error('[Stage 1] [Diagnostic Error]', err.message);
+      }
+    }
 
     // 2. Per-source strategy resolution
     for (const target of targets) {

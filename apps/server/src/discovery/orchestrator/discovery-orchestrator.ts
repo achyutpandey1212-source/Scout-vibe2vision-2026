@@ -8,9 +8,7 @@ import { Stage2Crawling, CrawledPage } from '../stages/stage2';
 import { Stage3Extraction } from '../stages/stage3';
 import { Stage4QualityAcceptance } from '../stages/stage4';
 import { Stage5Persistence } from '../stages/stage5';
-import { DashboardStateInstance } from '../utils/dashboard-state';
-import { sourceRegistryService } from '../sources/source-registry.service';
-import { CANONICAL_TARGET_AUDIENCE, VERSION_CONSTANTS } from '@scout/shared';
+import { JobBoardExtractor } from '../query-engine/job-board-extractor';
 import crypto from 'crypto';
 
 function extractDomain(urlStr: string): string | null {
@@ -171,19 +169,22 @@ Total Targets Limit: ${totalTargetLimit}
 Discovery Mode: CUSTOM
 ================================
 
-Domains Submitted: ${runCustomDomains.length}
+Discovery Input
 
-${runCustomDomains.join('\n')}
+Submitted URLs: ${runCustomDomains.length}
+
+${runCustomDomains.map((url, i) => `[${i + 1}]\n${url}`).join('\n\n')}
 
 Sources Scheduled: ${runCustomDomains.length}
 `);
 
-    targets = runCustomDomains.map((domain) => {
-      const cleanDomain = domain.trim().toLowerCase();
+    targets = runCustomDomains.map((rawUrl) => {
+      const trimmed = rawUrl.trim();
+      const cleanDomain = JobBoardExtractor.getBoardIdentifier(trimmed);
       return {
         domain: cleanDomain,
         organization: cleanDomain.split('.')[0],
-        homepage: cleanDomain.startsWith('http') ? cleanDomain : `https://${cleanDomain}`,
+        homepage: trimmed.startsWith('http') ? trimmed : `https://${trimmed}`,
         strategy: 'direct',
         defaultTags: ['custom-crawl'],
         trustScore: 80,

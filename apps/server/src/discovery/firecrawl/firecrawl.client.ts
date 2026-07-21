@@ -22,7 +22,7 @@ export class FirecrawlClient {
     const pool = ProviderPoolFactory.discovery('firecrawl');
     const body = {
       url,
-      formats: ['markdown'],
+      formats: ['markdown', 'html'],
       onlyMainContent: true,
     };
 
@@ -41,6 +41,11 @@ export class FirecrawlClient {
       console.log(
         `[Firecrawl Client] Executing request with key (${telemetry.activeIndex + 1}/${telemetry.totalKeys})`,
       );
+
+      console.log(`
+Firecrawl Request URL:
+${url}
+`);
 
       try {
         const response = await fetch(this.baseUrl, {

@@ -14,6 +14,7 @@ export const FirecrawlScrapeMetadataSchema = z
 
 export const FirecrawlScrapeDataSchema = z.object({
   markdown: z.string().min(1, 'Scraped markdown cannot be empty'),
+  html: z.string().optional(),
   metadata: FirecrawlScrapeMetadataSchema.default({}),
 });
 

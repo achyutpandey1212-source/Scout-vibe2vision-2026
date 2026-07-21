@@ -108,4 +108,19 @@ describe('Stage1Discovery category routing', () => {
     expect(candidates[0].url).toBe('https://devfolio.co');
     expect(candidates[1].url).toBe('https://internshala.com');
   });
+
+  it('preserves full URL path and query parameters in custom runMode', async () => {
+    const context: any = {
+      runMode: 'custom',
+      runCustomDomains: [
+        'https://www.glassdoor.co.in/Job/india-startup-internship-frontend-jobs-SRCH_IL.0,5_IN115_KO6,33.htm',
+      ],
+    };
+
+    const candidates = await stage1.execute(context);
+    expect(candidates.length).toBe(1);
+    expect(candidates[0].url).toBe(
+      'https://www.glassdoor.co.in/Job/india-startup-internship-frontend-jobs-SRCH_IL.0,5_IN115_KO6,33.htm',
+    );
+  });
 });

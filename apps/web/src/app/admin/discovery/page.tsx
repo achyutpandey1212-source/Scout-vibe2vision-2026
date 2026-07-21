@@ -193,7 +193,7 @@ export default function AdminDiscoveryControlCenter() {
   const handleStartDaily = async () => {
     try {
       const customDomains = customDomainsInput
-        .split(',')
+        .split(/[\n;]+/)
         .map((d) => d.trim())
         .filter(Boolean);
 
