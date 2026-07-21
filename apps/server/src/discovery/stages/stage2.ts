@@ -68,11 +68,16 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
     const processedUrls = new Set<string>(candidates.map((c) => normalizeUrl(c.url)));
     const budgetManager = new CrawlBudgetManager();
 
-    // Listings-specific counters
+    // Listings-specific telemetry counters
     let boardPagesCount = 0;
     let listingsHarvestedCount = 0;
     let listingsCrawledCount = 0;
     let listingsDeduplicatedCount = 0;
+    let listingPagesSkippedCount = 0;
+    let jobDetailUrlsExtractedCount = 0;
+    let listingUrlsDiscardedCount = 0;
+    let queuePeakSize = seedQueue.length;
+    let recursiveExpansionsPrevented = 0;
 
     const MAX_TOTAL_DISCOVERED_LISTINGS_PER_RUN = parseInt(
       process.env.MAX_TOTAL_DISCOVERED_LISTINGS_PER_RUN || '250',
@@ -102,6 +107,11 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
     // Outer Loop: Process until both queues are empty
     while (opportunityQueue.length > 0 || seedQueue.length > 0) {
       batchNumber++;
+
+      const currentQueueSize = opportunityQueue.length + seedQueue.length;
+      if (currentQueueSize > queuePeakSize) {
+        queuePeakSize = currentQueueSize;
+      }
 
       // Concurrently process batch prioritizing Opportunity Queue
       const currentBatch: CandidateURL[] = [];
@@ -336,19 +346,29 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
           const isListingBoard = JobBoardExtractor.isBoardPage(candidate.url, rawMarkdown);
 
           if (isListingBoard) {
-            const boardUrlNormalized = normalizeUrl(candidate.url);
+            const boardNormalized = JobBoardExtractor.getBoardIdentifier(candidate.url);
 
-            if (!expandedBoardPages.has(boardUrlNormalized)) {
-              expandedBoardPages.add(boardUrlNormalized);
+            if (!expandedBoardPages.has(boardNormalized)) {
+              expandedBoardPages.add(boardNormalized);
               boardPagesCount++;
 
               const rawListings = JobBoardExtractor.extractListings(rawMarkdown, candidate.url);
               listingsHarvestedCount += rawListings.length;
 
               let uniqueAddedCount = 0;
+              let discardedListingsCount = 0;
+
               for (const listing of rawListings) {
                 const cleanListingUrl = JobBoardExtractor.cleanUrl(listing.listingUrl);
                 const normListingUrl = normalizeUrl(cleanListingUrl);
+
+                // Fix 1 & 3: URL Classification & Queue growth protection
+                const classification = JobBoardExtractor.classifyUrl(cleanListingUrl);
+                if (classification !== 'JOB_DETAIL') {
+                  discardedListingsCount++;
+                  listingUrlsDiscardedCount++;
+                  continue;
+                }
 
                 if (processedUrls.has(normListingUrl)) {
                   listingsDeduplicatedCount++;
@@ -358,11 +378,9 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
                 processedUrls.add(normListingUrl);
 
                 // Enforce global discovered listings limit per run
-                if (
-                  listingsHarvestedCount - listingsDeduplicatedCount <=
-                  MAX_TOTAL_DISCOVERED_LISTINGS_PER_RUN
-                ) {
+                if (jobDetailUrlsExtractedCount <= MAX_TOTAL_DISCOVERED_LISTINGS_PER_RUN) {
                   uniqueAddedCount++;
+                  jobDetailUrlsExtractedCount++;
                   opportunityQueue.push({
                     url: cleanListingUrl,
                     source: listing.company || candidate.source,
@@ -375,11 +393,21 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
                 }
               }
 
+              // Fix 6: Detailed Logging
+              console.log(`
+Listing Board Detected
+Domain:                  ${boardNormalized}
+Cards Found:             ${rawListings.length}
+Job Detail URLs:         ${uniqueAddedCount}
+Listing URLs Discarded:  ${discardedListingsCount}
+Duplicate URLs:          ${rawListings.length - uniqueAddedCount - discardedListingsCount}
+Queued:                  ${uniqueAddedCount}
+`);
+            } else {
+              recursiveExpansionsPrevented++;
+              listingPagesSkippedCount++;
               console.log(
-                `[Stage2] Detected Listing Board\nDomain: ${new URL(candidate.url).hostname}\nCards Found: ${rawListings.length}\nUnique URLs: ${uniqueAddedCount}\nQueued: ${uniqueAddedCount}\nSkipped Duplicates: ${rawListings.length - uniqueAddedCount}`,
-              );
-              console.log(
-                `[Stage2] Expanded Board: ${new URL(candidate.url).hostname}\nGenerated ${uniqueAddedCount} crawl targets`,
+                `[Stage 2] [Safeguard] Skipping expansion for already harvested board: ${boardNormalized}`,
               );
             }
 
@@ -409,12 +437,13 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
 
                 for (const job of extracted) {
                   const normJobUrl = normalizeUrl(job.url);
-                  if (!processedUrls.has(normJobUrl)) {
+                  const classification = JobBoardExtractor.classifyUrl(job.url);
+
+                  if (classification === 'JOB_DETAIL' && !processedUrls.has(normJobUrl)) {
                     processedUrls.add(normJobUrl);
 
                     if (budgetManager.canVisitCareerPage()) {
                       budgetManager.recordCareerPageVisit();
-                      // Normal discovered links can go directly to opportunityQueue
                       opportunityQueue.push({
                         url: job.url,
                         source: job.source,
@@ -425,15 +454,19 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
                         discoveredAt: new Date().toISOString(),
                       });
                     }
+                  } else if (classification !== 'JOB_DETAIL') {
+                    listingUrlsDiscardedCount++;
                   }
                 }
-              } else {
-                console.log(
-                  `[Crawl Diagnostics] Page: ${candidate.url} | Type: ${route} | Candidates Extracted: 0`,
-                );
               }
             }
           }
+        }
+
+        // Fix 4: Crawl Classification check for Stage 3 eligibility
+        const pageClassification = JobBoardExtractor.classifyUrl(candidate.url);
+        if (pageClassification !== 'JOB_DETAIL' && crawlStatus === 'SUCCESS') {
+          crawlStatus = 'SKIPPED';
         }
 
         return {
@@ -466,9 +499,11 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
       multiJobPagesCount > 0 ? Math.round((jobsExtractedCount / multiJobPagesCount) * 10) / 10 : 0;
 
     const avgListingsPerBoard =
-      boardPagesCount > 0 ? Math.round((listingsHarvestedCount / boardPagesCount) * 10) / 10 : 0;
+      boardPagesCount > 0
+        ? Math.round((jobDetailUrlsExtractedCount / boardPagesCount) * 10) / 10
+        : 0;
 
-    // Update global dashboard state metrics with Phase 2 yields
+    // Fix 7: Discovery Telemetry
     DashboardStateInstance.updateState({
       crawlCompleted: completedCount,
       pagesCrawled: DashboardStateInstance.getState().pagesCrawled + results.length,
@@ -484,6 +519,16 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
         careerPages: careerPagesCount,
         multiJobPages: multiJobPagesCount,
         jobsExtractedWithoutAI: jobsExtractedCount,
+        listingBoardsDetected: boardPagesCount,
+        listingPagesSkipped: listingPagesSkippedCount,
+        jobDetailUrlsExtracted: jobDetailUrlsExtractedCount,
+        jobDetailUrlsCrawled: listingsCrawledCount,
+        listingUrlsDiscarded: listingUrlsDiscardedCount,
+        duplicateListingUrls: listingsDeduplicatedCount,
+        queuePeakSize,
+        queueFinalSize: opportunityQueue.length + seedQueue.length,
+        averageJobUrlsPerBoard: avgListingsPerBoard,
+        recursiveExpansionsPrevented,
       },
     });
 

@@ -42,6 +42,177 @@ export class JobBoardExtractor {
   }
 
   /**
+   * Extracts clean domain name as the board identifier to prevent recursive crawls.
+   */
+  public static getBoardIdentifier(urlStr: string): string {
+    try {
+      const url = new URL(urlStr);
+      let host = url.hostname.toLowerCase();
+      if (host.startsWith('www.')) {
+        host = host.slice(4);
+      }
+      return host;
+    } catch {
+      return urlStr;
+    }
+  }
+
+  /**
+   * Classifies url to enforce only queueing real opportunity pages.
+   */
+  public static classifyUrl(
+    urlStr: string,
+  ):
+    | 'JOB_DETAIL'
+    | 'LISTING_BOARD'
+    | 'SEARCH_PAGE'
+    | 'PAGINATION'
+    | 'CATEGORY'
+    | 'FILTER'
+    | 'UNKNOWN' {
+    try {
+      const url = new URL(urlStr);
+      const host = url.hostname.toLowerCase();
+      const path = url.pathname.toLowerCase();
+      const search = url.search.toLowerCase();
+
+      // Pagination indicators
+      const hasPageParam =
+        url.searchParams.has('page') ||
+        url.searchParams.has('p') ||
+        url.searchParams.has('start') ||
+        url.searchParams.has('pg') ||
+        path.includes('/page/') ||
+        path.includes('/p/');
+      if (hasPageParam) {
+        return 'PAGINATION';
+      }
+
+      // Search engine / query filters
+      if (
+        url.searchParams.has('q') ||
+        url.searchParams.has('query') ||
+        url.searchParams.has('search') ||
+        path.includes('/search')
+      ) {
+        return 'SEARCH_PAGE';
+      }
+
+      // Geo / age / radius filters
+      if (
+        url.searchParams.has('loc') ||
+        url.searchParams.has('radius') ||
+        url.searchParams.has('fromage') ||
+        url.searchParams.has('fromAge') ||
+        path.includes('/filter/') ||
+        path.includes('/filters/')
+      ) {
+        return 'FILTER';
+      }
+
+      // Category paths
+      if (
+        path.includes('/category/') ||
+        path.includes('/categories/') ||
+        path.includes('/tag/') ||
+        path.includes('/tags/')
+      ) {
+        return 'CATEGORY';
+      }
+
+      // Glassdoor
+      if (host.includes('glassdoor.co')) {
+        if (path.includes('/job-listing/') || path.includes('/job-details/')) {
+          return 'JOB_DETAIL';
+        }
+        if (path.includes('/jobs') || path.includes('/job/')) {
+          return 'LISTING_BOARD';
+        }
+      }
+
+      // Indeed
+      if (host.includes('indeed.com')) {
+        if (path.includes('/viewjob') || search.includes('jk=')) {
+          return 'JOB_DETAIL';
+        }
+        if (path.includes('/jobs') || path.includes('/q-') || path.includes('/l-')) {
+          return 'LISTING_BOARD';
+        }
+      }
+
+      // Internshala
+      if (host.includes('internshala.com')) {
+        if (path.includes('/internship/detail/') || path.includes('/job/detail/')) {
+          return 'JOB_DETAIL';
+        }
+        if (path.includes('/internships') || path.includes('/jobs')) {
+          return 'LISTING_BOARD';
+        }
+      }
+
+      // Unstop
+      if (host.includes('unstop.com')) {
+        if (path.match(/\/jobs\/\w+-\d+/) || path.match(/\/internships\/\w+-\d+/)) {
+          return 'JOB_DETAIL';
+        }
+        if (
+          path.includes('/jobs') ||
+          path.includes('/internships') ||
+          path.includes('/opportunities')
+        ) {
+          return 'LISTING_BOARD';
+        }
+      }
+
+      // Greenhouse
+      if (host.includes('greenhouse.io')) {
+        if (path.includes('/jobs/') || path.match(/\/jobs\/\d+/)) {
+          return 'JOB_DETAIL';
+        }
+        return 'LISTING_BOARD';
+      }
+
+      // Lever
+      if (host.includes('lever.co')) {
+        const segments = path.split('/').filter(Boolean);
+        if (segments.length >= 2) {
+          return 'JOB_DETAIL';
+        }
+        return 'LISTING_BOARD';
+      }
+
+      // Ashby
+      if (host.includes('ashbyhq.com')) {
+        if (path.includes('/jobs/') || path.match(/\/jobs\/\d+/)) {
+          return 'JOB_DETAIL';
+        }
+        return 'LISTING_BOARD';
+      }
+
+      // General fallback
+      const isJobPath =
+        path.match(/\/(job|opening|vacancy|opportunity|detail)\//) || path.match(/\/\d{5,}/);
+      if (isJobPath) {
+        return 'JOB_DETAIL';
+      }
+
+      if (
+        path.includes('/jobs') ||
+        path.includes('/careers') ||
+        path.includes('/openings') ||
+        path.includes('/work-with-us') ||
+        path.includes('/join-us')
+      ) {
+        return 'LISTING_BOARD';
+      }
+
+      return 'UNKNOWN';
+    } catch {
+      return 'UNKNOWN';
+    }
+  }
+
+  /**
    * Classifies if the page is a job board listing page based on DOM/markdown heuristics.
    */
   public static isBoardPage(url: string, markdown: string): boolean {
@@ -55,50 +226,46 @@ export class JobBoardExtractor {
       u.includes('wellfound.com') ||
       u.includes('greenhouse.io') ||
       u.includes('lever.co') ||
-      u.includes('ashbyhq.com');
+      u.includes('ashbyhq.com') ||
+      u.includes('glassdoor.co');
 
-    if (!isKnownJobBoard) {
-      // General heuristics for other listing directories (e.g. repeated job links or cards)
-      const matches = markdown.match(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g) || [];
-      const jobUrlCount = matches.filter((m) => {
-        const urlPart = m.toLowerCase();
-        return (
-          urlPart.includes('/job/') ||
-          urlPart.includes('/jobs/') ||
-          urlPart.includes('/careers/') ||
-          urlPart.includes('/career/') ||
-          urlPart.includes('/opening/') ||
-          urlPart.includes('/openings/')
-        );
-      }).length;
-
-      // If page contains more than 8 repeated job links, classify as listing page
-      return jobUrlCount >= 8;
+    if (isKnownJobBoard) {
+      const classification = this.classifyUrl(url);
+      if (classification === 'JOB_DETAIL') {
+        return false;
+      }
+      if (
+        classification === 'LISTING_BOARD' ||
+        classification === 'SEARCH_PAGE' ||
+        classification === 'PAGINATION'
+      ) {
+        return true;
+      }
     }
 
-    // For known job boards, verify if it's a directory/listing list rather than a single job page
-    if (u.includes('indeed.com')) {
-      return u.includes('/jobs') || u.includes('/q-') || u.includes('/l-') || u.includes('filter');
-    }
-    if (u.includes('internshala.com')) {
-      return u.includes('/internships') || u.includes('/jobs') || u.includes('/matching');
-    }
-    if (u.includes('unstop.com')) {
-      return u.includes('/jobs') || u.includes('/internships') || u.includes('/opportunities');
-    }
-    if (u.includes('wellfound.com')) {
-      return u.includes('/jobs') || u.includes('/role') || u.includes('/company');
-    }
-    if (u.includes('greenhouse.io') || u.includes('lever.co') || u.includes('ashbyhq.com')) {
-      // Greenhouse/Lever/Ashby listing pages usually have company identifiers but not direct job paths
-      const isSingle =
-        u.match(/\/(jobs|requisitions|job|careers)\/\d+/) ||
-        u.match(/\/[a-f0-9-]{12,}/) ||
-        (u.includes('lever.co') && u.split('/').length > 4);
-      return !isSingle;
+    // Heuristics: require multiple strong signals
+    const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+    const matches = markdown.match(linkRegex) || [];
+
+    let jobUrlCount = 0;
+    for (const m of matches) {
+      const matchUrl = m.match(/\((https?:\/\/[^\s)]+)\)/)?.[1];
+      if (matchUrl && this.classifyUrl(matchUrl) === 'JOB_DETAIL') {
+        jobUrlCount++;
+      }
     }
 
-    return true;
+    let signals = 0;
+    if (jobUrlCount >= 5) signals++;
+
+    const textStatsCount = (markdown.match(/company|employer|location|stipend|salary/gi) || [])
+      .length;
+    if (textStatsCount >= 8) signals++;
+
+    const applyCount = (markdown.match(/apply|apply now|view details/gi) || []).length;
+    if (applyCount >= 5) signals++;
+
+    return signals >= 2;
   }
 
   /**
@@ -107,10 +274,8 @@ export class JobBoardExtractor {
   public static extractListings(markdown: string, url: string): ExtractedListing[] {
     const listings: ExtractedListing[] = [];
     const seenUrls = new Set<string>();
-    const u = url.toLowerCase();
     const sourceDomain = new URL(url).hostname.replace('www.', '');
 
-    // Heuristically find markdown links
     const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
     let match;
 
@@ -144,14 +309,12 @@ export class JobBoardExtractor {
         sourceDomain.includes('lever.co') ||
         sourceDomain.includes('ashbyhq.com')
       ) {
-        // Lever/Greenhouse single job details check
         isJobLink = !!(
           cleanUrlLower.match(/\/(jobs|requisitions|job|careers)\/\d+/) ||
           cleanUrlLower.match(/\/[a-f0-9-]{12,}/) ||
           (cleanUrlLower.includes('lever.co') && cleanUrlLower.split('/').length > 4)
         );
       } else {
-        // General crawler fallback heuristics
         isJobLink =
           cleanUrlLower.includes('/job/') ||
           cleanUrlLower.includes('/jobs/') ||
@@ -162,7 +325,6 @@ export class JobBoardExtractor {
       }
 
       if (isJobLink && titleText.length > 2) {
-        // Exclude general navigation links
         const lowerTitle = titleText.toLowerCase();
         if (
           lowerTitle === 'apply' ||

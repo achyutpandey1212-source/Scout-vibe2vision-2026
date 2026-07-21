@@ -46,4 +46,42 @@ describe('JobBoardExtractor', () => {
       expect(listings[0].listingUrl).toBe('https://www.indeed.com/rc/clk?jk=111');
     });
   });
+
+  describe('classifyUrl', () => {
+    it('should classify job details correctly', () => {
+      expect(JobBoardExtractor.classifyUrl('https://www.indeed.com/viewjob?jk=abc123')).toBe(
+        'JOB_DETAIL',
+      );
+      expect(
+        JobBoardExtractor.classifyUrl('https://glassdoor.com/job-listing/software-engineer-intern'),
+      ).toBe('JOB_DETAIL');
+      expect(JobBoardExtractor.classifyUrl('https://jobs.lever.co/google/1234-abcd')).toBe(
+        'JOB_DETAIL',
+      );
+    });
+
+    it('should classify non-job detail pages correctly', () => {
+      expect(JobBoardExtractor.classifyUrl('https://www.indeed.com/jobs?page=2')).toBe(
+        'PAGINATION',
+      );
+      expect(JobBoardExtractor.classifyUrl('https://www.indeed.com/search?q=intern')).toBe(
+        'SEARCH_PAGE',
+      );
+      expect(JobBoardExtractor.classifyUrl('https://www.indeed.com/jobs?loc=india')).toBe('FILTER');
+      expect(JobBoardExtractor.classifyUrl('https://www.indeed.com/category/software')).toBe(
+        'CATEGORY',
+      );
+    });
+  });
+
+  describe('getBoardIdentifier', () => {
+    it('should normalize domains as identifiers', () => {
+      expect(JobBoardExtractor.getBoardIdentifier('https://www.glassdoor.co.in/jobs?page=1')).toBe(
+        'glassdoor.co.in',
+      );
+      expect(JobBoardExtractor.getBoardIdentifier('https://indeed.com/jobs?q=intern')).toBe(
+        'indeed.com',
+      );
+    });
+  });
 });

@@ -65,6 +65,18 @@ export interface DashboardState {
   listingsCrawled?: number;
   listingsDeduplicated?: number;
   avgListingsPerBoard?: number;
+
+  // Discovery Engine V2.1 Telemetry metrics
+  listingBoardsDetected?: number;
+  listingPagesSkipped?: number;
+  jobDetailUrlsExtracted?: number;
+  jobDetailUrlsCrawled?: number;
+  listingUrlsDiscarded?: number;
+  duplicateListingUrls?: number;
+  queuePeakSize?: number;
+  queueFinalSize?: number;
+  averageJobUrlsPerBoard?: number;
+  recursiveExpansionsPrevented?: number;
 }
 
 class DashboardStateManager {
@@ -108,6 +120,16 @@ class DashboardStateManager {
     listingsCrawled: 0,
     listingsDeduplicated: 0,
     avgListingsPerBoard: 0,
+    listingBoardsDetected: 0,
+    listingPagesSkipped: 0,
+    jobDetailUrlsExtracted: 0,
+    jobDetailUrlsCrawled: 0,
+    listingUrlsDiscarded: 0,
+    duplicateListingUrls: 0,
+    queuePeakSize: 0,
+    queueFinalSize: 0,
+    averageJobUrlsPerBoard: 0,
+    recursiveExpansionsPrevented: 0,
   };
 
   private constructor() {}
