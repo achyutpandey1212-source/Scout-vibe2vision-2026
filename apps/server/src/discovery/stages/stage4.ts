@@ -354,6 +354,9 @@ export class Stage4QualityAcceptance implements IPipelineStage<
       maxScore = Math.max(maxScore, finalScore);
       minScore = Math.min(minScore, finalScore);
 
+      const orgTrace = (opp as any)._orgTrace || { stage3: opp.organization || '(null)' };
+      orgTrace.stage4 = opp.organization || '(null)';
+
       evaluated.push({
         ...opp,
         qualityScore: finalScore,
@@ -361,7 +364,8 @@ export class Stage4QualityAcceptance implements IPipelineStage<
         positiveReasons,
         penalties,
         qualityBreakdown: breakdown,
-      });
+        _orgTrace: orgTrace,
+      } as any);
     }
 
     const processed = opportunities.length;

@@ -379,7 +379,10 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
             extractionVersion: EXTRACTION_VERSION,
           },
           query: (page as any).query,
-        };
+          _orgTrace: {
+            stage3: normalized.organization || '(null)',
+          },
+        } as any;
 
         // 4. Validate output schema consistency
         const validation = validateOpportunity(enriched);

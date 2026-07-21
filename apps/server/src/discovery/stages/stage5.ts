@@ -81,32 +81,51 @@ export class Stage5Persistence implements IPipelineStage<
     const validatedOpps: QualityEvaluatedOpportunity[] = [];
 
     for (const opp of opportunities) {
-      const validation = OpportunityValidator.validate(opp);
-
       const queryKey = opp.query || 'unknown';
       if (!queryMetrics.has(queryKey)) {
         queryMetrics.set(queryKey, { pagesCrawled: 1, acceptedCount: 0, savedCount: 0 });
       }
       const qStat = queryMetrics.get(queryKey)!;
 
-      if (validation.accepted) {
-        opp.decision = 'ACCEPT';
-        opp.opportunityScore = validation.score;
-        opp.scoreBreakdown = validation.signals;
-        opp.goldOpportunity = validation.isGold;
-        opp.companyTier = validation.companyTier;
+      // Log D — Organization trace (printed once per opportunity)
+      const orgTrace = (opp as any)._orgTrace || {
+        stage3: opp.organization || '(null)',
+        stage4: opp.organization || '(null)',
+      };
+      orgTrace.stage5 = opp.organization || '(null)';
+      console.log(`
+ORG TRACE
+Stage 3: ${orgTrace.stage3}
+Stage 4: ${orgTrace.stage4}
+Stage 5: ${orgTrace.stage5}
+`);
+
+      // Preserve Stage 4 decisions (ACCEPT/REVIEW)
+      if (opp.decision === 'ACCEPT' || opp.decision === 'REVIEW') {
         qStat.acceptedCount++;
         validatedOpps.push(opp);
-      } else if (validation.review) {
-        opp.decision = 'REVIEW';
-        opp.opportunityScore = validation.score;
-        opp.scoreBreakdown = validation.signals;
-        opp.goldOpportunity = validation.isGold;
-        opp.companyTier = validation.companyTier;
-        validatedOpps.push(opp);
       } else {
-        opp.decision = 'REJECT';
-        opp.rejectionReason = validation.rejectionReasonCode;
+        const validation = OpportunityValidator.validate(opp);
+
+        if (validation.accepted) {
+          opp.decision = 'ACCEPT';
+          opp.opportunityScore = validation.score;
+          opp.scoreBreakdown = validation.signals;
+          opp.goldOpportunity = validation.isGold;
+          opp.companyTier = validation.companyTier;
+          qStat.acceptedCount++;
+          validatedOpps.push(opp);
+        } else if (validation.review) {
+          opp.decision = 'REVIEW';
+          opp.opportunityScore = validation.score;
+          opp.scoreBreakdown = validation.signals;
+          opp.goldOpportunity = validation.isGold;
+          opp.companyTier = validation.companyTier;
+          validatedOpps.push(opp);
+        } else {
+          opp.decision = 'REJECT';
+          opp.rejectionReason = validation.rejectionReasonCode;
+        }
       }
     }
 
@@ -133,6 +152,15 @@ export class Stage5Persistence implements IPipelineStage<
 
     for (const opp of candidates) {
       try {
+        // Log A — Before persistence
+        console.log(`
+SAVE CANDIDATE
+Title: ${opp.title}
+Organization: ${opp.organization || '(null)'}
+Application URL: ${opp.applicationUrl || '(null)'}
+Source URL: ${opp.sourceURL || '(null)'}
+ID: ${opp.id || (opp as any)._id || 'new'}
+`);
         let bestMatch: any = null;
         let highestConfidence = 0;
 
@@ -332,6 +360,7 @@ export class Stage5Persistence implements IPipelineStage<
     }
 
     // 2. Persistence execution: Run bulkWrite
+    let bulkReason = 'Success';
     if (bulkOps.length > 0) {
       try {
         const result = await OpportunityModel.bulkWrite(bulkOps, { ordered: false });
@@ -341,6 +370,7 @@ export class Stage5Persistence implements IPipelineStage<
         inserted = result.upsertedCount || 0;
         updated = result.modifiedCount || 0;
       } catch (bulkErr: any) {
+        bulkReason = bulkErr.message || 'Unknown BulkWrite Error';
         console.error(
           `[Stage 5] BulkWrite execution encountered errors (safely handled):`,
           bulkErr.message,
@@ -351,6 +381,16 @@ export class Stage5Persistence implements IPipelineStage<
         }
       }
     }
+
+    // Log B — Repository result
+    console.log(`
+SAVE RESULT
+Inserted: ${inserted}
+Updated: ${updated}
+Skipped Duplicate: ${duplicatesMerged}
+Validation Failed: ${failures}
+Reason: ${bulkReason}
+`);
 
     // 3. Archive Engine execution: Archive expired opportunities
     let archived = 0;

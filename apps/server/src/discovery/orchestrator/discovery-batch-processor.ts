@@ -197,13 +197,30 @@ Duration:     ${(durationMs / 1000).toFixed(1)} s
     }
 
     for (const opp of evaluatedOpps) {
-      const dom = extractDomain(opp.opportunityUrl || opp.sourceUrl || '');
+      const oppUrl =
+        opp.sourceURL || opp.applicationUrl || opp.opportunityUrl || opp.sourceUrl || '';
+      const dom = extractDomain(oppUrl);
       if (!dom) continue;
       const cleanDom = dom.toLowerCase().trim();
       if (domainMap.has(cleanDom)) {
         domainMap.get(cleanDom)!.oppsCount++;
       }
     }
+
+    // Log C — Yield calculation (printed immediately before SourceRegistry updates)
+    const totalExtracted = evaluatedOpps.length;
+    const totalAccepted = evaluatedOpps.filter((o) => o.decision === 'ACCEPT').length;
+    const totalSaved = evaluatedOpps.filter(
+      (o) => o.decision === 'ACCEPT' || o.decision === 'REVIEW',
+    ).length;
+    console.log(`
+YIELD SUMMARY
+Extracted: ${totalExtracted}
+Accepted: ${totalAccepted}
+Saved: ${totalSaved}
+Duplicates: 0
+Yield used: ${totalAccepted}
+`);
 
     for (const [dom, data] of domainMap.entries()) {
       const hasSuccessfulPage = data.pages.some((p) => p.crawlStatus === 'SUCCESS');
@@ -238,7 +255,8 @@ Duration:     ${(durationMs / 1000).toFixed(1)} s
       // 2. Count opportunity yields (where decision === 'ACCEPT')
       for (const opp of evaluatedOpps) {
         if (opp.decision !== 'ACCEPT') continue;
-        const oppUrl = opp.opportunityUrl || opp.sourceUrl || '';
+        const oppUrl =
+          opp.sourceURL || opp.applicationUrl || opp.opportunityUrl || opp.sourceUrl || '';
         const match = candidates.find((c) => c.url === oppUrl);
         if (
           match &&
