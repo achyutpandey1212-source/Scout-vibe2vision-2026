@@ -177,10 +177,16 @@ ${topCandidate?.matchedSkills?.length ? topCandidate.matchedSkills.join('\n') : 
 ======================================
 `);
 
-      // Adapt candidates for downstream pack builder
-      const scoredCandidates = top40Candidates.map((sc) => ({
+      // 5. Portfolio Construction (Stage 4)
+      await RecommendationRepository.updateProgressPhase(packId, 'DIVERSIFYING');
+      const { RecommendationPortfolioBuilder } =
+        await import('../../../recommendation/engine/recommendation-portfolio');
+      const portfolioBuilder = new RecommendationPortfolioBuilder();
+      const portfolio = portfolioBuilder.buildPortfolio(top40Candidates, snapshot);
+
+      const top5Candidates = portfolio.selectedCandidates.map((sc) => ({
         opportunity: sc.opportunity,
-        score: sc.totalScore,
+        score: sc.totalScore || sc.score,
         scoreBreakdown: sc.scoreBreakdown,
         matchedSkills: sc.matchedSkills,
         matchedProjects: sc.matchedProjects,
@@ -188,12 +194,38 @@ ${topCandidate?.matchedSkills?.length ? topCandidate.matchedSkills.join('\n') : 
         recommendationStrength: sc.recommendationStrength,
       }));
 
-      // 5. Diversifying
-      await RecommendationRepository.updateProgressPhase(packId, 'DIVERSIFYING');
-      let top5Candidates = scoredCandidates.slice(0, 5);
-      if (flags.enableDiversification) {
-        top5Candidates = DiversificationEngine.diversify(scoredCandidates, 5);
-      }
+      // Print Recommendation Portfolio Report
+      console.log(`
+======================================
+Recommendation Portfolio Report
+======================================
+
+Candidates Ranked: ${top40Candidates.length}
+
+Perfect Match:
+${portfolio.slots['perfectMatch']?.candidate?.opportunity?.title || 'N/A'}
+
+Hidden Gem:
+${portfolio.slots['hiddenGem']?.candidate?.opportunity?.title || 'N/A'}
+
+Fast Apply:
+${portfolio.slots['fastApply']?.candidate?.opportunity?.title || 'N/A'}
+
+Resume Builder:
+${portfolio.slots['resumeBuilder']?.candidate?.opportunity?.title || 'N/A'}
+
+Stretch Goal:
+${portfolio.slots['stretchGoal']?.candidate?.opportunity?.title || 'N/A'}
+
+--------------------------------------
+
+Unique Companies: ${portfolio.uniqueCompaniesCount}
+Unique Families: ${portfolio.uniqueRoleFamiliesCount}
+Unique Technologies Covered: ${portfolio.uniqueTechnologiesCount}
+Portfolio Diversity Score: ${portfolio.portfolioDiversityScore}/100
+
+======================================
+`);
 
       // 6. Personalizing (skip if AI Personalization flag is disabled)
       await RecommendationRepository.updateProgressPhase(packId, 'PERSONALIZING');
