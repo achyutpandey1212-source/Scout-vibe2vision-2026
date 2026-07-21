@@ -79,7 +79,11 @@ class SourceRegistryService {
     }
 
     // 2. Fetch all active sources matching custom filter criteria sorted deterministically
-    const baseQuery = { isActive: true, ...customQuery };
+    const mongoQuery = { ...customQuery };
+    const bypassDue = mongoQuery.bypassDueCheck;
+    delete mongoQuery.bypassDueCheck;
+
+    const baseQuery = { isActive: true, ...mongoQuery };
     const allActiveSources = await SourceRegistryModel.find(baseQuery).sort({ domain: 1 }).lean();
 
     if (allActiveSources.length === 0) {
@@ -102,7 +106,7 @@ class SourceRegistryService {
 
       // Check nextCrawlAt <= now
       const isDue = !source.nextCrawlAt || new Date(source.nextCrawlAt) <= now;
-      if (isDue) {
+      if (isDue || bypassDue) {
         selected.push(source as unknown as ISourceRegistryEntry);
       }
 

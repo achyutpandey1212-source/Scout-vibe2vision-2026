@@ -175,6 +175,8 @@ Total Targets Limit: ${totalTargetLimit}
     } else {
       filterQuery.category = runCategory;
     }
+  } else if (runMode === 'active') {
+    filterQuery.bypassDueCheck = true;
   } else if (runMode === 'custom' && runCustomDomains.length > 0) {
     const cleanDomains = runCustomDomains.map((d: string) => d.toLowerCase().trim());
     filterQuery.domain = { $in: cleanDomains };

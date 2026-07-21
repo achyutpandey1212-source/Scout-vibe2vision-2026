@@ -50,9 +50,9 @@ export default function AdminDiscoveryControlCenter() {
   const [dailyLogs, setDailyLogs] = useState<string[]>([]);
 
   // Daily Mode Start controls
-  const [runMode, setRunMode] = useState<'due' | 'all' | 'high-priority' | 'category' | 'custom'>(
-    'due',
-  );
+  const [runMode, setRunMode] = useState<
+    'due' | 'all' | 'high-priority' | 'category' | 'custom' | 'active'
+  >('due');
   const [runCategory, setRunCategory] = useState<string>('INTERNSHIPS');
   const [customDomainsInput, setCustomDomainsInput] = useState<string>('');
   const [showInactiveCategories, setShowInactiveCategories] = useState<boolean>(false);
@@ -682,6 +682,17 @@ export default function AdminDiscoveryControlCenter() {
                           className="accent-neutral-100"
                         />
                         <span>Due Today ({status?.registry?.sourcesDueToday || 0} scheduled)</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-neutral-300">
+                        <input
+                          type="radio"
+                          name="runMode"
+                          checked={runMode === 'active'}
+                          onChange={() => setRunMode('active')}
+                          disabled={status?.isRunning}
+                          className="accent-neutral-100"
+                        />
+                        <span>All Active Sources (Bypass Due Limits)</span>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer text-neutral-300">
                         <input
