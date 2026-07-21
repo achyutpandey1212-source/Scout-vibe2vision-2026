@@ -77,14 +77,16 @@ describe('JobBoardExtractor', () => {
 
     it('should classify non-job detail pages correctly', () => {
       expect(JobBoardExtractor.classifyUrl('https://www.indeed.com/jobs?page=2')).toBe(
-        'PAGINATION',
+        'LISTING_PAGE',
       );
       expect(JobBoardExtractor.classifyUrl('https://www.indeed.com/search?q=intern')).toBe(
         'SEARCH_PAGE',
       );
-      expect(JobBoardExtractor.classifyUrl('https://www.indeed.com/jobs?loc=india')).toBe('FILTER');
+      expect(JobBoardExtractor.classifyUrl('https://www.indeed.com/jobs?loc=india')).toBe(
+        'LISTING_PAGE',
+      );
       expect(JobBoardExtractor.classifyUrl('https://www.indeed.com/category/software')).toBe(
-        'CATEGORY',
+        'LISTING_PAGE',
       );
     });
   });

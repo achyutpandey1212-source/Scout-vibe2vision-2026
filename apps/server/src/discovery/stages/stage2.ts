@@ -50,12 +50,17 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
     const redisClient = redis.getClient();
     const results: CrawledPage[] = [];
 
-    // Filter and score seed candidates
+    // Initialize depth and traversal paths
     const seedQueue = candidates
       .filter((c) => {
         const scoreObj = CandidateScorer.scoreCandidate(c.url);
         return scoreObj.pageType !== 'BLOG' && scoreObj.pageType !== 'DOCUMENTATION';
       })
+      .map((c) => ({
+        ...c,
+        depth: (c as any).depth || 1,
+        path: (c as any).path || JobBoardExtractor.classifyUrl(c.url),
+      }))
       .sort((a, b) => {
         const scoreA = CandidateScorer.scoreCandidate(a.url).score;
         const scoreB = CandidateScorer.scoreCandidate(b.url).score;
@@ -63,10 +68,21 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
       });
 
     // Dedicated Opportunity Queue for direct listings discovered on board listing pages
-    const opportunityQueue: CandidateURL[] = [];
+    const opportunityQueue: any[] = [];
     const expandedBoardPages = new Set<string>();
     const processedUrls = new Set<string>(candidates.map((c) => normalizeUrl(c.url)));
     const budgetManager = new CrawlBudgetManager();
+
+    // Navigational Telemetry
+    let searchPagesCount = 0;
+    let companyPagesCount = 0;
+    let listingPagesCount = 0;
+    let jobDetailsCount = 0;
+    let maxNavigationDepth = 1;
+    let totalCardsFoundAcrossRuns = 0;
+    let pagesWithCardsCount = 0;
+    let jobsDiscoveredFromCompanies = 0;
+    const traversalsList: string[] = [];
 
     // Listings-specific telemetry counters
     let boardPagesCount = 0;
@@ -96,7 +112,6 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
       failuresByType[type] = (failuresByType[type] || 0) + 1;
     };
 
-    // Load configuration for adaptive concurrency
     const concurrencyRaw = process.env.DISCOVERY_FIRECRAWL_CONCURRENCY;
     const concurrency = concurrencyRaw ? parseInt(concurrencyRaw, 10) : 2;
     console.log(`[Stage 2] Running adaptive crawling with queue concurrency: ${concurrency}`);
@@ -113,8 +128,7 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
         queuePeakSize = currentQueueSize;
       }
 
-      // Concurrently process batch prioritizing Opportunity Queue
-      const currentBatch: CandidateURL[] = [];
+      const currentBatch: any[] = [];
       while (
         currentBatch.length < concurrency &&
         (opportunityQueue.length > 0 || seedQueue.length > 0)
@@ -130,7 +144,7 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
 
       const totalRemaining = opportunityQueue.length + seedQueue.length;
 
-      // Update telemetry state
+      // Update dashboard telemetry state
       DashboardStateInstance.updateState({
         currentStage: 'STAGE_2_CRAWLING',
         crawlQueueRemaining: totalRemaining,
@@ -149,15 +163,19 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
         const plan = CrawlPlanner.evaluate(candidate);
         const normalized = normalizeUrl(candidate.url);
         const cacheKey = `firecrawl:${normalized}`;
+        const parentDepth = candidate.depth || 1;
+        const parentPath = candidate.path || 'Unknown';
+
+        if (parentDepth > maxNavigationDepth) {
+          maxNavigationDepth = parentDepth;
+        }
 
         const route = OpportunityDiscoveryRouter.route(candidate.url);
         if (route === 'ATS_DIRECTORY' || route === 'SINGLE_OPPORTUNITY') atsPagesCount++;
         else if (route === 'MULTI_OPPORTUNITY_DIRECTORY') careerPagesCount++;
 
-        // Pre-crawl scoring
         const preScore = CandidateScorer.scoreCandidate(candidate.url);
 
-        // A. Strategy: SKIP
         if (plan.decision === 'SKIP' || preScore.score < 20) {
           if (plan.reason === 'SKIPPED_NON_HTML_RESOURCE') {
             DashboardStateInstance.updateState({
@@ -179,7 +197,6 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
           };
         }
 
-        // B. Strategy: Redis cache check
         let cachedContent: string | null = null;
         try {
           cachedContent = await redisClient.get(cacheKey);
@@ -205,14 +222,12 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
           }
         }
 
-        // C. Strategy: Scrape with rate-limited Firecrawl
         if (!cachedContent && plan.decision === 'USE_FIRECRAWL') {
           try {
             const scrapeResponse = await this.firecrawlClient.scrape(candidate.url);
             duration = Date.now() - startTime;
 
             rawMarkdown = scrapeResponse.data?.markdown || '';
-            // Validate content
             const validation = CrawlPlanner.validateContent(rawMarkdown);
             if (!validation.valid) {
               failedCount++;
@@ -311,7 +326,6 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
           }
         }
 
-        // D. Strategy: Snippet Fallback
         if (!cachedContent && plan.decision === 'USE_SNIPPET') {
           duration = Date.now() - startTime;
           rawMarkdown = candidate.snippet || '';
@@ -319,7 +333,6 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
           fetchMethod = 'snippet';
         }
 
-        // E. Eligibility, Freshness & Content Signals Filters (Pre-AI)
         if (crawlStatus === 'SUCCESS' && rawMarkdown.length > 10) {
           const eligibility = EligibilityFilter.isEligible(rawMarkdown);
           if (!eligibility.eligible) {
@@ -329,7 +342,6 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
             crawlStatus = 'FAILED';
             rawMarkdown = '';
           } else {
-            // 2. Freshness check
             const freshness = FreshnessFilter.isFresh(rawMarkdown);
             if (!freshness.fresh) {
               console.log(
@@ -341,16 +353,27 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
           }
         }
 
-        // F. Multi-Listing Job Board Detection & Extraction Guard
+        // F. Recursive Job Board & Company Jobs Page Harvesting
         if (crawlStatus === 'SUCCESS' && rawMarkdown.length > 10) {
           const classification = JobBoardExtractor.classifyUrl(candidate.url);
           const isListingBoard = JobBoardExtractor.isBoardPage(candidate.url, rawMarkdown);
 
+          // Update navigation counts
+          if (classification === 'SEARCH_PAGE') searchPagesCount++;
+          else if (classification === 'COMPANY_JOBS_PAGE') companyPagesCount++;
+          else if (classification === 'LISTING_PAGE') listingPagesCount++;
+          else if (classification === 'JOB_DETAIL') jobDetailsCount++;
+
           console.log(
-            `[Stage 2] [Board Detection] URL: ${candidate.url} | Class: ${classification} | isListingBoard: ${isListingBoard}`,
+            `[Stage 2] [Navigation] URL: ${candidate.url} | Class: ${classification} | Path: ${parentPath} | Depth: ${parentDepth}`,
           );
 
-          if (isListingBoard) {
+          if (
+            isListingBoard ||
+            classification === 'SEARCH_PAGE' ||
+            classification === 'LISTING_PAGE' ||
+            classification === 'COMPANY_JOBS_PAGE'
+          ) {
             const boardNormalized = JobBoardExtractor.getBoardIdentifier(candidate.url);
 
             if (!expandedBoardPages.has(boardNormalized)) {
@@ -360,34 +383,27 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
               const rawListings = JobBoardExtractor.extractListings(rawMarkdown, candidate.url);
               listingsHarvestedCount += rawListings.length;
 
-              console.log(
-                `[Stage 2] [Harvesting] Domain: ${boardNormalized} | Matches found: ${rawListings.length}`,
-              );
               if (rawListings.length > 0) {
-                console.log(
-                  `First 10 candidate hrefs:\n${rawListings
-                    .slice(0, 10)
-                    .map((l) => ` - ${l.listingUrl}`)
-                    .join('\n')}`,
-                );
+                pagesWithCardsCount++;
+                totalCardsFoundAcrossRuns += rawListings.length;
+              }
+
+              if (classification === 'COMPANY_JOBS_PAGE') {
+                jobsDiscoveredFromCompanies += rawListings.length;
               }
 
               let uniqueAddedCount = 0;
               let discardedListingsCount = 0;
-              const queueBefore = opportunityQueue.length;
 
               for (const listing of rawListings) {
                 const cleanListingUrl = JobBoardExtractor.cleanUrl(listing.listingUrl);
                 const normListingUrl = normalizeUrl(cleanListingUrl);
+                const childClassification = JobBoardExtractor.classifyUrl(cleanListingUrl);
 
-                // Fix 1 & 3: URL Classification & Queue growth protection
-                const listingClassification = JobBoardExtractor.classifyUrl(cleanListingUrl);
-                if (listingClassification !== 'JOB_DETAIL') {
+                // Decline assets and unclassified listings
+                if (childClassification === 'UNKNOWN') {
                   discardedListingsCount++;
                   listingUrlsDiscardedCount++;
-                  console.log(
-                    `[Stage 2] [Listing Discarded] URL: ${cleanListingUrl} | Class: ${listingClassification} | Reason: Not a JOB_DETAIL page`,
-                  );
                   continue;
                 }
 
@@ -398,10 +414,13 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
 
                 processedUrls.add(normListingUrl);
 
-                // Enforce global discovered listings limit per run
                 if (jobDetailUrlsExtractedCount <= MAX_TOTAL_DISCOVERED_LISTINGS_PER_RUN) {
                   uniqueAddedCount++;
                   jobDetailUrlsExtractedCount++;
+
+                  const nextPath = `${parentPath} -> ${JobBoardExtractor.getBoardIdentifier(cleanListingUrl)}`;
+                  traversalsList.push(nextPath);
+
                   opportunityQueue.push({
                     url: cleanListingUrl,
                     source: listing.company || candidate.source,
@@ -410,13 +429,13 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
                     snippet: '',
                     score: candidate.score,
                     discoveredAt: new Date().toISOString(),
+                    // Increment depth for recursive crawl
+                    depth: parentDepth + 1,
+                    path: nextPath,
                   });
                 }
               }
 
-              const queueAfter = opportunityQueue.length;
-
-              // Fix 6: Detailed Logging
               console.log(`
 Listing Board Detected
 Domain:                  ${boardNormalized}
@@ -426,8 +445,6 @@ Job Detail URLs:         ${uniqueAddedCount}
 Listing URLs Discarded:  ${discardedListingsCount}
 Duplicate URLs:          ${rawListings.length - uniqueAddedCount - discardedListingsCount}
 Queued:                  ${uniqueAddedCount}
-Queue Length Before:     ${queueBefore}
-Queue Length After:      ${queueAfter}
 `);
             } else {
               recursiveExpansionsPrevented++;
@@ -437,7 +454,7 @@ Queue Length After:      ${queueAfter}
               );
             }
 
-            // Skip AI extraction for board listing pages themselves
+            // Reject intermediate directories / listings from AI extraction
             crawlStatus = 'SKIPPED';
           } else {
             // Normal ATS or Multi-Opportunity directories
@@ -457,19 +474,24 @@ Queue Length After:      ${queueAfter}
               if (extracted.length > 0) {
                 multiJobPagesCount++;
                 jobsExtractedCount += extracted.length;
-                console.log(
-                  `[Crawl Diagnostics] Page: ${candidate.url} | Type: ${route} | Candidates Extracted: ${extracted.length}`,
-                );
 
                 for (const job of extracted) {
                   const normJobUrl = normalizeUrl(job.url);
                   const listingClassification = JobBoardExtractor.classifyUrl(job.url);
 
-                  if (listingClassification === 'JOB_DETAIL' && !processedUrls.has(normJobUrl)) {
+                  if (
+                    (listingClassification === 'JOB_DETAIL' ||
+                      listingClassification === 'COMPANY_JOBS_PAGE') &&
+                    !processedUrls.has(normJobUrl)
+                  ) {
                     processedUrls.add(normJobUrl);
 
                     if (budgetManager.canVisitCareerPage()) {
                       budgetManager.recordCareerPageVisit();
+
+                      const nextPath = `${parentPath} -> ${JobBoardExtractor.getBoardIdentifier(job.url)}`;
+                      traversalsList.push(nextPath);
+
                       opportunityQueue.push({
                         url: job.url,
                         source: job.source,
@@ -478,13 +500,12 @@ Queue Length After:      ${queueAfter}
                         snippet: '',
                         score: candidate.score,
                         discoveredAt: new Date().toISOString(),
+                        depth: parentDepth + 1,
+                        path: nextPath,
                       });
                     }
-                  } else if (listingClassification !== 'JOB_DETAIL') {
+                  } else {
                     listingUrlsDiscardedCount++;
-                    console.log(
-                      `[Stage 2] [Listing Discarded] ATS candidate URL: ${job.url} | Class: ${listingClassification} | Reason: Not a JOB_DETAIL page`,
-                    );
                   }
                 }
               }
@@ -492,12 +513,9 @@ Queue Length After:      ${queueAfter}
           }
         }
 
-        // Fix 4: Crawl Classification check for Stage 3 eligibility
+        // Final eligibility validation check
         const pageClassification = JobBoardExtractor.classifyUrl(candidate.url);
         if (pageClassification !== 'JOB_DETAIL' && crawlStatus === 'SUCCESS') {
-          console.log(
-            `[Stage 2] [Skip AI Extraction] URL: ${candidate.url} | Class: ${pageClassification} | Reason: URL is not a JOB_DETAIL page`,
-          );
           crawlStatus = 'SKIPPED';
         }
 
@@ -515,7 +533,6 @@ Queue Length After:      ${queueAfter}
         };
       });
 
-      // Await concurrently running requests for current batch before moving next
       const batchResults = await Promise.all(batchPromises);
       const mappedResults = batchResults.map((res, index) => ({
         ...res,
@@ -535,7 +552,37 @@ Queue Length After:      ${queueAfter}
         ? Math.round((jobDetailUrlsExtractedCount / boardPagesCount) * 10) / 10
         : 0;
 
-    // Fix 7: Discovery Telemetry
+    const avgCardsPerPage =
+      pagesWithCardsCount > 0
+        ? Math.round((totalCardsFoundAcrossRuns / pagesWithCardsCount) * 10) / 10
+        : 0;
+
+    const avgJobsPerCompany =
+      companyPagesCount > 0
+        ? Math.round((jobsDiscoveredFromCompanies / companyPagesCount) * 10) / 10
+        : 0;
+
+    // Log Navigation Diagnostics
+    console.log(`
+[Navigation Diagnostics]
+Search Pages:                      ${searchPagesCount}
+Company Pages:                     ${companyPagesCount}
+Listing Pages:                     ${listingPagesCount}
+Job Details:                       ${jobDetailsCount}
+Navigation Depth:                  ${maxNavigationDepth}
+Average cards per page:            ${avgCardsPerPage}
+Average jobs discovered per company: ${avgJobsPerCompany}
+
+Example Traversal Paths:
+${
+  traversalsList
+    .slice(0, 5)
+    .map((p) => ` - ${p}`)
+    .join('\n') || 'None'
+}
+`);
+
+    // Dashboard Telemetry
     DashboardStateInstance.updateState({
       crawlCompleted: completedCount,
       pagesCrawled: DashboardStateInstance.getState().pagesCrawled + results.length,

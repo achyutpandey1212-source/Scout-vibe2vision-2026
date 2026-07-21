@@ -46,13 +46,7 @@ export class JobBoardExtractor {
       listings: [/^\/$/i, /\/jobs/i, /\/q-/i, /\/l-/i],
     },
     'glassdoor.co': {
-      details: [
-        /\/job-listing\/[\w-]+/i,
-        /\/job-details\/[\w-]+/i,
-        /\/partner\/joblisting/i,
-        /\/jobs\//i,
-        /-job-/i,
-      ],
+      details: [/\/job-listing\/[\w-]+/i, /\/job-details\/[\w-]+/i, /\/partner\/joblisting/i],
       listings: [/^\/$/i, /\/jobs/i, /\/job/i],
     },
     'internshala.com': {
@@ -281,14 +275,7 @@ export class JobBoardExtractor {
    */
   public static classifyUrl(
     urlStr: string,
-  ):
-    | 'JOB_DETAIL'
-    | 'LISTING_BOARD'
-    | 'SEARCH_PAGE'
-    | 'PAGINATION'
-    | 'CATEGORY'
-    | 'FILTER'
-    | 'UNKNOWN' {
+  ): 'JOB_DETAIL' | 'COMPANY_JOBS_PAGE' | 'LISTING_PAGE' | 'SEARCH_PAGE' | 'UNKNOWN' {
     if (this.isAssetUrl(urlStr)) {
       return 'UNKNOWN';
     }
@@ -297,8 +284,9 @@ export class JobBoardExtractor {
       const url = new URL(urlStr);
       const host = url.hostname.toLowerCase();
       const path = url.pathname.toLowerCase();
+      const search = url.search.toLowerCase();
 
-      // Check pagination patterns
+      // Check pagination patterns -> LISTING_PAGE
       const hasPageParam =
         url.searchParams.has('page') ||
         url.searchParams.has('p') ||
@@ -307,10 +295,10 @@ export class JobBoardExtractor {
         path.includes('/page/') ||
         path.includes('/p/');
       if (hasPageParam) {
-        return 'PAGINATION';
+        return 'LISTING_PAGE';
       }
 
-      // Check search parameters
+      // Check search parameters -> SEARCH_PAGE
       if (
         url.searchParams.has('q') ||
         url.searchParams.has('query') ||
@@ -320,7 +308,7 @@ export class JobBoardExtractor {
         return 'SEARCH_PAGE';
       }
 
-      // Check filters
+      // Check filters -> LISTING_PAGE
       if (
         url.searchParams.has('loc') ||
         url.searchParams.has('radius') ||
@@ -329,17 +317,43 @@ export class JobBoardExtractor {
         path.includes('/filter/') ||
         path.includes('/filters/')
       ) {
-        return 'FILTER';
+        return 'LISTING_PAGE';
       }
 
-      // Check categories
+      // Check categories -> LISTING_PAGE
       if (
         path.includes('/category/') ||
         path.includes('/categories/') ||
         path.includes('/tag/') ||
         path.includes('/tags/')
       ) {
-        return 'CATEGORY';
+        return 'LISTING_PAGE';
+      }
+
+      // Glassdoor Company Jobs Pages
+      if (host.includes('glassdoor.co')) {
+        if (path.match(/\/jobs\/[\w-]+-e\d+/i) || path.match(/-jobs-e\d+/i)) {
+          return 'COMPANY_JOBS_PAGE';
+        }
+      }
+
+      // Indeed Company Jobs Pages
+      if (host.includes('indeed.com')) {
+        if (path.includes('/cmp/') && (path.includes('/jobs') || path.includes('/about'))) {
+          return 'COMPANY_JOBS_PAGE';
+        }
+      }
+
+      // Unstop Company Jobs Pages
+      if (host.includes('unstop.com')) {
+        if (path.includes('/company/') && path.includes('/jobs')) {
+          return 'COMPANY_JOBS_PAGE';
+        }
+      }
+
+      // Generic Company Jobs Pages
+      if (path.includes('/company/') && (path.includes('/jobs') || path.includes('/careers'))) {
+        return 'COMPANY_JOBS_PAGE';
       }
 
       // 1. Domain-specific pattern checks
@@ -354,7 +368,7 @@ export class JobBoardExtractor {
           // Check listing patterns
           for (const rx of patterns.listings) {
             if (rx.test(path)) {
-              return 'LISTING_BOARD';
+              return 'LISTING_PAGE';
             }
           }
 
@@ -372,7 +386,7 @@ export class JobBoardExtractor {
             }
           }
 
-          return 'LISTING_BOARD';
+          return 'LISTING_PAGE';
         }
       }
 
@@ -390,7 +404,7 @@ export class JobBoardExtractor {
         path.includes('/work-with-us') ||
         path.includes('/join-us')
       ) {
-        return 'LISTING_BOARD';
+        return 'LISTING_PAGE';
       }
 
       return 'UNKNOWN';
@@ -423,7 +437,7 @@ export class JobBoardExtractor {
       if (classification === 'JOB_DETAIL') {
         return false;
       }
-      return true; // Any non-JOB_DETAIL page on a known job board is by definition a LISTING_BOARD
+      return true; // Any non-JOB_DETAIL page on a known job board is by definition a listing board
     }
 
     // Heuristics: require multiple strong signals
@@ -490,7 +504,6 @@ export class JobBoardExtractor {
       }
 
       if (lineDetailUrl) {
-        // If we already have a different detail URL in the current block, push the old block and start a new one
         if (currentDetailUrl && currentDetailUrl !== lineDetailUrl) {
           blocks.push(currentBlock.join('\n'));
           currentBlock = [trimmed];
@@ -532,7 +545,6 @@ export class JobBoardExtractor {
     const resolvedLogs: string[] = [];
     const unresolvedLogs: string[] = [];
 
-    // Parse Next.js embedded hydration state payload if present (Step 2 Structured JSON)
     let hasHydrationJSON = false;
     const jsonMatches = markdown.match(/(__NEXT_DATA__|__INITIAL_STATE__)\s*=\s*(\{.*?\});/g) || [];
     for (const jsonMatch of jsonMatches) {
@@ -547,7 +559,6 @@ export class JobBoardExtractor {
       }
     }
 
-    // Split markdown using the intelligent card blocks parser
     const cardBlocks = this.splitIntoCardBlocks(markdown);
 
     for (const cardBlock of cardBlocks) {
@@ -562,13 +573,12 @@ export class JobBoardExtractor {
       cardsFound++;
       totalLinksFound += pLinks.length;
 
-      // Classify and score all links contained strictly within the boundaries of this card block
       const scoredLinks = pLinks.map((link) => {
         let cleanUrlStr = link.url;
         try {
           cleanUrlStr = this.cleanUrl(link.url);
         } catch {
-          // Keep raw if invalid
+          // Ignored
         }
 
         const classification = this.classifyUrl(cleanUrlStr);
@@ -583,12 +593,13 @@ export class JobBoardExtractor {
         };
       });
 
-      // Filter to only match real JOB_DETAIL targets
-      const candidateUrls = scoredLinks.filter((l) => l.classification === 'JOB_DETAIL');
+      // Filter to match BOTH JOB_DETAIL and COMPANY_JOBS_PAGE so they can be recursively harvested
+      const candidateUrls = scoredLinks.filter(
+        (l) => l.classification === 'JOB_DETAIL' || l.classification === 'COMPANY_JOBS_PAGE',
+      );
       totalCandidateUrlsFound += candidateUrls.length;
 
       if (candidateUrls.length > 0) {
-        // Resolve exactly one destination URL by selecting the highest scoring candidate URL
         const bestCandidate = candidateUrls.sort((a, b) => b.score - a.score)[0];
         cardsSuccessfullyResolved++;
 
@@ -613,7 +624,7 @@ export class JobBoardExtractor {
         const cardTitle = pLinks[0]?.text || 'Unknown';
         const bestGenericLink = scoredLinks.sort((a, b) => b.score - a.score)[0];
         const reason = bestGenericLink
-          ? `No link classified as JOB_DETAIL (Highest link class: ${bestGenericLink.classification}, score: ${bestGenericLink.score})`
+          ? `No link classified as JOB_DETAIL or COMPANY_JOBS_PAGE (Highest link class: ${bestGenericLink.classification}, score: ${bestGenericLink.score})`
           : 'No candidate links extracted in card block';
 
         unresolvedLogs.push(` - Title: ${cardTitle}\n   Reason: ${reason}`);
@@ -625,7 +636,6 @@ export class JobBoardExtractor {
     const avgCandidatesPerCard =
       cardsFound > 0 ? Math.round((totalCandidateUrlsFound / cardsFound) * 10) / 10 : 0;
 
-    // Output Diagnostics
     console.log(`
 Platform:                        ${sourceDomain}
 Cards Found:                     ${cardsFound}
