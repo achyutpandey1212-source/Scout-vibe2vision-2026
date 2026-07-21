@@ -6,27 +6,27 @@ import { OnboardingGuard } from '../guard/onboarding-guard';
 
 export class GenerateRecommendationsUseCase {
   /**
-   * Thin orchestrator determining onboarding gating, caching status, trigger locks, and enqueuing background tasks.
+   * Thin orchestrator determining onboarding gating, lifecycle state, caching status, trigger locks, and enqueuing background tasks.
    */
   static async execute(
     userId: string,
     forcedReason?: RecommendationGenerationReason,
   ): Promise<{
-    status: 'PENDING' | 'READY' | 'FAILED' | 'ONBOARDING_REQUIRED';
+    status: 'PENDING' | 'READY' | 'FAILED' | 'ONBOARDING_REQUIRED' | 'STALE';
     pack: IRecommendationPack | null;
   }> {
     // 0. Onboarding Gating Guard: verify onboarding is completed before queueing or generating
     const isCompleted = await OnboardingGuard.isOnboardingCompleted(userId);
     if (!isCompleted) {
       console.log(
-        `[Recommendation] Generation Skipped. Reason: Onboarding incomplete for user ${userId}`,
+        `[Recommendation Engine] Generation Skipped. Reason: Onboarding incomplete for user ${userId}`,
       );
       return { status: 'ONBOARDING_REQUIRED', pack: null };
     }
 
     const latestPack = await RecommendationService.getLatestPack(userId);
 
-    // 1. If currently generating, return PENDING immediately
+    // 1. If currently generating, return PENDING immediately (never launch duplicate worker)
     if (latestPack && latestPack.status === 'GENERATING') {
       return { status: 'PENDING', pack: latestPack };
     }
@@ -44,14 +44,13 @@ export class GenerateRecommendationsUseCase {
       // Check lock to prevent multiple concurrent triggers
       if (BackgroundGenerationService.isGenerating(userId)) {
         console.log(
-          `[Recommendation] Generation lock is active for user ${userId}. Returning PENDING.`,
+          `[Recommendation Engine] Generation lock active for user ${userId}. Returning existing job.`,
         );
-        return { status: 'PENDING', pack: latestPack };
+        return { status: latestPack ? 'READY' : 'PENDING', pack: latestPack };
       }
 
-      // Print startup log matching Discovery logs format
       console.log(
-        `[Recommendation] Cache invalid or missing. Enqueuing background task (Reason: ${triggerReason}).`,
+        `[Recommendation Engine] Cache invalid or fingerprint updated. Enqueuing background task (Reason: ${triggerReason}).`,
       );
 
       // Trigger background generation asynchronously (non-blocking)
@@ -61,7 +60,12 @@ export class GenerateRecommendationsUseCase {
         triggerReason as RecommendationGenerationReason,
       );
 
-      // Return status PENDING
+      // If an existing ready pack exists, serve it immediately as STALE while regenerating in background
+      if (latestPack && latestPack.status === 'READY') {
+        return { status: 'STALE', pack: latestPack };
+      }
+
+      // Return status PENDING for first-time generations
       return { status: 'PENDING', pack: latestPack };
     }
 

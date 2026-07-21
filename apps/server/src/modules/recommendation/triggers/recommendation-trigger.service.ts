@@ -10,40 +10,62 @@ export class RecommendationTriggerService {
     pack: IRecommendationPack | null,
     currentProfileHash: string,
   ): { shouldGenerate: boolean; reason?: RecommendationGenerationReason } {
-    console.log('[Recommendation] Checking cache...');
+    console.log(`
+----------------------------------------
+[Recommendation Engine] Cache Evaluation
+Saved Fingerprint:   ${pack?.profileHash || 'NONE'}
+Current Fingerprint: ${currentProfileHash}
+Pack Status:         ${pack?.status || 'NO_PACK'}
+----------------------------------------
+`);
 
     // 1. No recommendation pack exists
     if (!pack) {
-      console.log('[Recommendation] Cache miss: No pack exists');
+      console.log(
+        '[Recommendation Engine] Cache Miss: No recommendation pack found. (Reason: LOGIN)',
+      );
       return { shouldGenerate: true, reason: 'LOGIN' };
     }
 
-    // If the pack status is FAILED or GENERATING, we may want to regenerate
+    // 2. Previous generation failed
     if (pack.status === 'FAILED') {
-      console.log('[Recommendation] Cache miss: Previous generation failed');
+      console.log(
+        '[Recommendation Engine] Cache Miss: Previous generation failed. Retrying. (Reason: LOGIN)',
+      );
       return { shouldGenerate: true, reason: 'LOGIN' };
     }
 
-    // 2. Pack expired
+    // 3. Pack expired
     const now = new Date();
-    if (pack.expiresAt.getTime() < now.getTime()) {
-      console.log('[Recommendation] Pack expired');
+    if (pack.expiresAt && pack.expiresAt.getTime() < now.getTime()) {
+      console.log('[Recommendation Engine] Cache Miss: Pack expired. (Reason: CACHE_EXPIRED)');
       return { shouldGenerate: true, reason: 'CACHE_EXPIRED' };
     }
 
-    // 3. Profile hash changed
+    // 4. Recommendation Fingerprint mismatch (Profile or Resume data changed)
     if (pack.profileHash !== currentProfileHash) {
-      console.log('[Recommendation] Profile changed');
+      console.log(
+        `[Recommendation Engine] Fingerprint Mismatch. Reason: Profile data changed. Saved: ${pack.profileHash.substring(0, 8)}... Current: ${currentProfileHash.substring(0, 8)}... (Reason: PROFILE_UPDATED)`,
+      );
       return { shouldGenerate: true, reason: 'PROFILE_UPDATED' };
     }
 
-    // 4. Recommendation version changed
-    if (pack.recommendationVersion !== RECOMMENDATION_VERSION) {
-      console.log('[Recommendation] Version mismatch');
+    // 5. Version mismatch
+    if (pack.recommendationVersion && pack.recommendationVersion !== RECOMMENDATION_VERSION) {
+      console.log(
+        '[Recommendation Engine] Cache Miss: Engine version updated. (Reason: VERSION_CHANGED)',
+      );
       return { shouldGenerate: true, reason: 'VERSION_CHANGED' };
     }
 
-    console.log('[Recommendation] Cache hit');
+    console.log(`
+----------------------------------------
+[Recommendation Engine] Cache Status
+Fingerprint: MATCH
+Cache:       VALID
+Using cached recommendations.
+----------------------------------------
+`);
     return { shouldGenerate: false };
   }
 }

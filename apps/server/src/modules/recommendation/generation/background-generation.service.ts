@@ -65,11 +65,9 @@ export class BackgroundGenerationService {
       };
     }
 
-    // 3. Create placeholder GENERATING pack with required recommendationVersion
-    const profile = await ProfileModel.findOne({
-      userId: new mongoose.Types.ObjectId(userId),
-    }).exec();
-    const profileHash = profile ? profile.updatedAt?.getTime().toString() || 'v1' : 'v1';
+    // 3. Create placeholder GENERATING pack with SHA-256 profile fingerprint
+    const { RecommendationService } = await import('../service/recommendation.service');
+    const profileHash = await RecommendationService.generateProfileHash(userId);
 
     const pack = await RecommendationRepository.createPack({
       userId: new mongoose.Types.ObjectId(userId),
