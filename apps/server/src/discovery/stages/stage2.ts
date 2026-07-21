@@ -647,9 +647,9 @@ Queued:                  ${uniqueAddedCount}
           crawlStatus = 'SKIPPED';
         }
 
-        return {
+        const pageObj = {
           url: candidate.url,
-          title: candidate.source,
+          title: (cleanMetadata as any)?.title || candidate.source || 'Unknown',
           markdown: rawMarkdown,
           metadata: cleanMetadata,
           fetchMethod,
@@ -659,6 +659,38 @@ Queued:                  ${uniqueAddedCount}
           source: candidate.source,
           crawlReason: plan.reason,
         };
+
+        let rawHtml = '';
+        if (fetchMethod === 'firecrawl' && typeof scrapeResponse !== 'undefined') {
+          rawHtml = (scrapeResponse?.data as any)?.html || '';
+        }
+
+        let emptyWhy = '';
+        if (!pageObj.markdown) {
+          if (fetchMethod === 'skipped') {
+            emptyWhy = 'Fetch method skipped (non-HTML or ignored path)';
+          } else if (crawlStatus === 'FAILED') {
+            emptyWhy = 'Firecrawl scrape failed or content was too small';
+          } else {
+            emptyWhy = 'Response returned empty markdown';
+          }
+        }
+
+        console.log(`
+============================
+PAGE OBJECT
+============================
+title: ${pageObj.title}
+location: ${(pageObj.metadata as any)?.location || 'null'}
+html length: ${rawHtml.length}
+markdown length: ${pageObj.markdown.length}
+metadata: ${JSON.stringify(pageObj.metadata)}
+Crawl Status: ${pageObj.crawlStatus}
+Empty Reason: ${emptyWhy || 'N/A'}
+============================
+`);
+
+        return pageObj;
       });
 
       const batchResults = await Promise.all(batchPromises);

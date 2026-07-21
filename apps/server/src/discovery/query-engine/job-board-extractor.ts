@@ -84,8 +84,9 @@ export class JobBoardExtractor {
       const url = new URL(urlStr);
       const cleanParams = new URLSearchParams();
 
-      // Only allow parameter keys that identify the specific job post
-      const vitalParams = ['jk', 'id', 'jobid', 'oppid', 'r', 'requisition', 'postid'];
+      // Only allow parameter keys that identify the specific job post.
+      // 'jl' is Glassdoor's canonical job listing ID — without it all /job-listing/ URLs return 404.
+      const vitalParams = ['jk', 'jl', 'id', 'jobid', 'oppid', 'r', 'requisition', 'postid'];
 
       url.searchParams.forEach((val, key) => {
         const kLower = key.toLowerCase();
