@@ -9,6 +9,7 @@ export interface HiddenGemCardProps {
   title: string;
   organization: string;
   matchScore: number;
+  explanation?: string;
   isBookmarked?: boolean;
   onBookmarkToggle?: () => void;
   onApplyClick?: () => void;
@@ -18,6 +19,7 @@ export const HiddenGemCard: React.FC<HiddenGemCardProps> = ({
   title,
   organization,
   matchScore,
+  explanation,
   isBookmarked = false,
   onBookmarkToggle,
   onApplyClick,
@@ -25,27 +27,43 @@ export const HiddenGemCard: React.FC<HiddenGemCardProps> = ({
   return (
     <Card
       hoverable
-      className="min-w-[280px] w-[280px] relative overflow-hidden border border-amber-500/10 bg-amber-500/[0.005]"
+      onClick={() => {
+        if (onApplyClick) onApplyClick();
+      }}
+      className="min-w-[300px] w-[300px] relative overflow-hidden border border-amber-500/20 bg-amber-500/[0.01] cursor-pointer flex flex-col justify-between"
     >
       {/* Editorial corner stamp indicator */}
-      <div className="absolute top-0 right-0 w-16 h-16 bg-amber-500/[0.02] border-b border-l border-amber-500/10 rounded-bl-3xl flex items-center justify-center">
-        <Compass className="w-4 h-4 text-amber-600 dark:text-amber-500 opacity-60" />
+      <div className="absolute top-0 right-0 w-16 h-16 bg-amber-500/[0.04] border-b border-l border-amber-500/20 rounded-bl-3xl flex items-center justify-center">
+        <Compass className="w-4 h-4 text-amber-600 dark:text-amber-400 opacity-80" />
       </div>
 
-      <div className="p-6 pb-4 flex flex-col space-y-4 h-[180px] justify-between">
+      <div className="p-6 pb-4 flex flex-col space-y-3 justify-between h-full">
         <div className="space-y-1.5 pr-8">
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase text-amber-700 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+            <span>💎 Hidden Gem</span>
+          </span>
+
           <Typography
             variant="caption"
-            className="text-amber-700/80 dark:text-amber-400/80 text-[10px] font-semibold tracking-wider uppercase"
+            className="text-amber-800/80 dark:text-amber-300/80 text-[10px] font-semibold tracking-wider uppercase block pt-1"
           >
             {organization}
           </Typography>
-          <Typography variant="heading-s" className="line-clamp-2 leading-snug font-normal">
+          <Typography variant="heading-s" className="text-sm md:text-base font-normal leading-snug">
             {title}
           </Typography>
         </div>
 
-        <Stack direction="row" align="center" justify="between">
+        {explanation && (
+          <Typography
+            variant="body"
+            className="text-xs text-secondary/80 font-light leading-relaxed whitespace-normal break-words pt-1"
+          >
+            {explanation}
+          </Typography>
+        )}
+
+        <Stack direction="row" align="center" justify="between" className="pt-2">
           <MatchScore score={matchScore} />
 
           <div className="flex items-center gap-1">

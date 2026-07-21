@@ -22,21 +22,14 @@ import {
   ArrowLeft,
   Calendar,
   ExternalLink,
-  ShieldAlert,
   Sparkles,
   CheckSquare,
   Target,
   AlertCircle,
-  Heart,
+  HelpCircle,
 } from 'lucide-react';
 import { ROUTES } from '@/lib/constants/routes';
-import {
-  opportunitiesApi,
-  recommendationsApi,
-  bookmarksApi,
-  Opportunity,
-  Recommendation,
-} from '@/lib/api';
+import { opportunitiesApi, recommendationsApi, bookmarksApi, Opportunity } from '@/lib/api';
 
 export default function OpportunityDetailsPage() {
   const params = useParams();
@@ -47,13 +40,13 @@ export default function OpportunityDetailsPage() {
   const oppId = params.id as string;
 
   const [opportunity, setOpportunity] = useState<Opportunity | null>(null);
-  const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
+  const [recommendationItem, setRecommendationItem] = useState<any | null>(null);
   const [isBookmarked, setIsBookmarked] = useState(false);
 
   const loadingMessages = [
     'Finding opportunity details...',
-    'Verifying eligibility profiles...',
-    'Formulating match explanation...',
+    'Verifying candidate snapshot...',
+    'Retrieving Scout Career Report...',
     'Ready.',
   ];
 
@@ -74,30 +67,37 @@ export default function OpportunityDetailsPage() {
 
       if (recRes.data?.success) {
         const rawData = recRes.data.data;
-        let mapped: Recommendation[] = [];
+        let mapped: any[] = [];
         if (Array.isArray(rawData)) {
           mapped = rawData;
         } else if (rawData && typeof rawData === 'object') {
-          const keys: (
-            'perfectMatch' | 'hiddenGem' | 'stretchGoal' | 'quickWin' | 'confidenceBuilder'
-          )[] = ['perfectMatch', 'hiddenGem', 'stretchGoal', 'quickWin', 'confidenceBuilder'];
+          const keys = [
+            'perfectMatch',
+            'hiddenGem',
+            'stretchGoal',
+            'quickWin',
+            'confidenceBuilder',
+          ];
           keys.forEach((key) => {
             const item = rawData[key];
             const opportunityDoc = item?.opportunity || item?.opportunityId;
             if (item && opportunityDoc && typeof opportunityDoc === 'object') {
               mapped.push({
-                opportunity: opportunityDoc as any,
-                recommendationScore: item.score || 80,
-                matchedFactors: [],
-                missingFactors: item.missingSkills || [],
-                explanation: item.personalizedReason || item.whyNow || '',
+                ...item,
+                opportunity: opportunityDoc,
+                slot: key,
               });
             }
           });
         }
-        const found = mapped.find((r) => r.opportunity._id === oppId);
+        const found = mapped.find(
+          (r) =>
+            r.opportunity?._id === oppId ||
+            r.opportunity?.id === oppId ||
+            r.opportunityId === oppId,
+        );
         if (found) {
-          setRecommendation(found);
+          setRecommendationItem(found);
         }
       }
 
@@ -114,7 +114,7 @@ export default function OpportunityDetailsPage() {
   const handleBookmarkToggle = async () => {
     if (!opportunity) return;
     const nextStatus = !isBookmarked;
-    setIsBookmarked(nextStatus); // optimistic update
+    setIsBookmarked(nextStatus);
 
     try {
       if (nextStatus) {
@@ -123,80 +123,86 @@ export default function OpportunityDetailsPage() {
         await bookmarksApi.remove(opportunity._id);
       }
     } catch (err) {
-      console.error('Bookmark toggle error:', err);
-      setIsBookmarked(!nextStatus); // rollback
+      console.error('Failed to update bookmark:', err);
+      setIsBookmarked(!nextStatus); // revert on error
     }
   };
 
-  if (error && !loading) {
-    return (
-      <ProtectedRoute>
-        <DashboardLayout>
-          <Card className="text-center p-12 max-w-md mx-auto space-y-4">
-            <ShieldAlert className="w-12 h-12 text-rose-500 mx-auto" />
-            <Typography variant="heading-m">Opportunity Not Found</Typography>
-            <Typography variant="body" className="text-secondary/70">
-              {error}
-            </Typography>
-            <Button variant="primary" onClick={() => router.push(ROUTES.DASHBOARD)}>
-              Go Back Home
-            </Button>
-          </Card>
-        </DashboardLayout>
-      </ProtectedRoute>
-    );
-  }
+  useEffect(() => {
+    if (oppId) {
+      fetchData().finally(() => setLoading(false));
+    }
+  }, [oppId]);
 
-  // Derived scoring and intelligence parameters
-  const matchScore = recommendation ? recommendation.recommendationScore : 85;
+  const matchScore = recommendationItem?.score || (opportunity as any)?.matchScore || 80;
   const isWomenOnly =
-    opportunity?.isWomenOnly ||
-    opportunity?.genderEligibility?.toLowerCase().includes('women') ||
-    opportunity?.genderEligibility?.toLowerCase().includes('female') ||
-    opportunity?.tags?.some((t) => t.toLowerCase().includes('women'));
+    (opportunity as any)?.diversityPreference?.womenOnly ||
+    opportunity?.organization?.toLowerCase().includes('women');
 
   return (
     <ProtectedRoute>
       {loading ? (
-        <div className="min-h-screen flex items-center justify-center bg-[#FAF8F5] dark:bg-[#0B0C0E]">
-          <UniversalLoader
-            messages={loadingMessages}
-            intervalMs={300}
-            onComplete={() => {
-              fetchData().then(() => setLoading(false));
-            }}
-          />
-        </div>
+        <DashboardLayout>
+          <div className="min-h-[60vh] flex items-center justify-center">
+            <UniversalLoader messages={loadingMessages} />
+          </div>
+        </DashboardLayout>
+      ) : error || !opportunity ? (
+        <DashboardLayout>
+          <div className="min-h-[60vh] flex items-center justify-center p-6 text-center">
+            <Stack gap="md" align="center" className="max-w-md">
+              <AlertCircle className="w-12 h-12 text-destructive opacity-80" />
+              <Typography variant="heading-m">{error || 'Opportunity Not Found'}</Typography>
+              <Button variant="secondary" onClick={() => router.push(ROUTES.EXPLORE)}>
+                Back to Explore
+              </Button>
+            </Stack>
+          </div>
+        </DashboardLayout>
       ) : opportunity ? (
         <DashboardLayout>
           <PageTransition>
-            <Stack gap="lg" className="max-w-5xl mx-auto space-y-8">
-              {/* Back Action button */}
-              <div className="flex justify-between items-center">
+            <Stack gap="lg" className="w-full pb-16">
+              {/* Back button header */}
+              <div className="flex items-center justify-between">
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => router.push(ROUTES.DASHBOARD)}
+                  onClick={() => router.back()}
                   iconLeft={<ArrowLeft className="w-4 h-4" />}
                 >
-                  Back to Opportunities
+                  Back
                 </Button>
 
-                <Button
-                  variant={isBookmarked ? 'primary' : 'secondary'}
-                  size="sm"
-                  onClick={handleBookmarkToggle}
-                  iconLeft={<Heart className={`w-4 h-4 ${isBookmarked ? 'fill-current' : ''}`} />}
-                >
-                  {isBookmarked ? 'Saved' : 'Save opportunity'}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant={isBookmarked ? 'primary' : 'secondary'}
+                    size="sm"
+                    onClick={handleBookmarkToggle}
+                  >
+                    {isBookmarked ? 'Bookmarked' : 'Bookmark'}
+                  </Button>
+                  {(opportunity.applicationUrl || opportunity.sourceURL) && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => {
+                        const url = opportunity.applicationUrl || opportunity.sourceURL;
+                        if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                      }}
+                      iconRight={<ExternalLink className="w-3.5 h-3.5" />}
+                    >
+                      Apply Now
+                    </Button>
+                  )}
+                </div>
               </div>
 
-              {/* Split Page details layout */}
-              <Grid cols={1} colsMd={12} gap="lg" className="items-start gap-8">
-                {/* Left Column: Core Description & Details (8 cols) */}
-                <div className="md:col-span-8 space-y-8">
-                  <Card className="border border-border/40">
+              {/* Main Content Layout (12 cols) */}
+              <Grid cols={1} colsMd={12} gap="lg" className="items-start">
+                {/* Left Column: Opportunity Info (8 cols) */}
+                <div className="md:col-span-8 space-y-6">
+                  <Card className="border border-border/60">
                     <CardContent className="p-8 md:p-12 space-y-8">
                       {/* Upper details segment */}
                       <div className="space-y-3">
@@ -236,7 +242,7 @@ export default function OpportunityDetailsPage() {
                         </Typography>
                         <Typography
                           variant="body"
-                          className="text-secondary/80 font-light leading-relaxed whitespace-pre-line"
+                          className="text-secondary/80 font-light leading-relaxed whitespace-pre-line break-words"
                         >
                           {opportunity.description}
                         </Typography>
@@ -250,24 +256,9 @@ export default function OpportunityDetailsPage() {
                           </Typography>
                           <Typography
                             variant="body"
-                            className="text-secondary/80 font-light leading-relaxed"
+                            className="text-secondary/80 font-light leading-relaxed whitespace-pre-line break-words"
                           >
                             {opportunity.eligibility}
-                          </Typography>
-                        </div>
-                      )}
-
-                      {/* Program Benefits */}
-                      {opportunity.benefits && (
-                        <div className="space-y-3">
-                          <Typography variant="heading-s" className="font-medium text-foreground">
-                            Benefits
-                          </Typography>
-                          <Typography
-                            variant="body"
-                            className="text-secondary/80 font-light leading-relaxed"
-                          >
-                            {opportunity.benefits}
                           </Typography>
                         </div>
                       )}
@@ -278,7 +269,7 @@ export default function OpportunityDetailsPage() {
                           <Typography variant="heading-s" className="font-medium text-foreground">
                             Application Requirements
                           </Typography>
-                          <ul className="space-y-2.5 list-disc pl-5 text-sm font-light text-secondary/80 leading-relaxed">
+                          <ul className="space-y-2.5 list-disc pl-5 text-sm font-light text-secondary/80 leading-relaxed whitespace-pre-line break-words">
                             {opportunity.requirements.map((req, idx) => (
                               <li key={idx}>{req}</li>
                             ))}
@@ -313,116 +304,204 @@ export default function OpportunityDetailsPage() {
                   </Card>
                 </div>
 
-                {/* Right Column: Scout Intelligence sidebar (4 cols) */}
+                {/* Right Column: Scout AI Career Report sidebar (4 cols) */}
                 <div className="md:col-span-4 space-y-6">
-                  <Card className="border border-primary/20 bg-primary/[0.01]">
+                  <Card className="border border-primary/30 bg-primary/[0.015] shadow-sm">
                     <CardHeader className="border-b border-border/45 pb-4">
                       <Stack gap="xxs">
                         <div className="flex items-center gap-1.5 text-primary">
-                          <Sparkles className="w-4 h-4" />
+                          <Sparkles className="w-4 h-4 animate-pulse" />
                           <Typography
                             variant="label"
                             className="text-[10px] text-primary font-semibold tracking-widest uppercase"
                           >
-                            Scout Intelligence
+                            Scout AI Career Coach
                           </Typography>
                         </div>
                         <CardTitle className="text-base font-medium">
-                          Curated Compatibility
+                          Personalized Career Report
                         </CardTitle>
                       </Stack>
                     </CardHeader>
+
                     <CardContent className="pt-6 space-y-6 text-left">
-                      {/* Section: Why it matches */}
+                      {/* Section 1: Executive Summary */}
                       <div className="space-y-2">
                         <Typography
                           variant="label"
-                          className="text-[10px] text-foreground/80 tracking-widest uppercase font-medium"
+                          className="text-[10px] text-primary tracking-widest uppercase font-semibold block"
                         >
-                          Why it matches
+                          Executive Summary
                         </Typography>
-                        <p className="text-xs text-secondary/80 font-light leading-relaxed">
-                          {recommendation?.explanation ||
-                            `This opportunity contains tags matching your skills and work preferences (${opportunity.tags.join(', ')}).`}
+                        <p className="text-xs text-foreground/90 font-normal leading-relaxed whitespace-normal break-words">
+                          {recommendationItem?.executiveSummary ||
+                            recommendationItem?.personalizedReason ||
+                            `Scout selected this opportunity based on your core engineering projects and technical skills.`}
                         </p>
                       </div>
 
-                      {recommendation && recommendation.matchedFactors.length > 0 && (
-                        <>
-                          <Divider />
-                          {/* Section: Strengths */}
-                          <div className="space-y-2">
-                            <Typography
-                              variant="label"
-                              className="text-[10px] text-foreground/80 tracking-widest uppercase font-medium"
-                            >
-                              Your Strengths
-                            </Typography>
-                            <div className="space-y-1.5 text-xs text-secondary/80 font-light">
-                              {recommendation.matchedFactors.map((strength, idx) => (
-                                <div key={idx} className="flex items-center gap-2">
-                                  <Target className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                                  <span>{strength}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </>
-                      )}
-
-                      {recommendation && recommendation.missingFactors.length > 0 && (
-                        <>
-                          <Divider />
-                          {/* Section: Challenges */}
-                          <div className="space-y-2">
-                            <Typography
-                              variant="label"
-                              className="text-[10px] text-foreground/80 tracking-widest uppercase font-medium"
-                            >
-                              Possible Gaps
-                            </Typography>
-                            <div className="space-y-1.5 text-xs text-secondary/80 font-light">
-                              {recommendation.missingFactors.map((gap, idx) => (
-                                <div key={idx} className="flex items-start gap-2">
-                                  <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-                                  <span>{gap}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </>
+                      {/* Section 2: Why Scout Picked This */}
+                      {recommendationItem?.whyScoutPickedThis && (
+                        <div className="space-y-2">
+                          <Typography
+                            variant="label"
+                            className="text-[10px] text-foreground/70 tracking-widest uppercase font-medium block"
+                          >
+                            Why Scout Picked This
+                          </Typography>
+                          <p className="text-xs text-secondary/80 font-light leading-relaxed whitespace-normal break-words">
+                            {recommendationItem.whyScoutPickedThis}
+                          </p>
+                        </div>
                       )}
 
                       <Divider />
 
-                      {/* Section: Suggestions */}
+                      {/* Section 3: Strongest Strengths */}
                       <div className="space-y-2.5">
                         <Typography
                           variant="label"
-                          className="text-[10px] text-foreground/80 tracking-widest uppercase font-medium"
+                          className="text-[10px] text-emerald-600 dark:text-emerald-400 tracking-widest uppercase font-semibold block"
                         >
-                          Suggestions before applying
+                          Your Strongest Strengths
                         </Typography>
-                        <div className="space-y-2 text-xs text-secondary/80 font-light">
-                          <div className="flex items-start gap-2">
-                            <CheckSquare className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
-                            <span>Highlight technical key capabilities in CV</span>
-                          </div>
-                          <div className="flex items-start gap-2">
-                            <CheckSquare className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
-                            <span>Review application instructions on portal</span>
-                          </div>
+                        <div className="space-y-2 text-xs text-secondary/85 font-light">
+                          {(
+                            recommendationItem?.strongestStrengths ||
+                            opportunity.tags || ['Hands-on project experience with core stack']
+                          ).map((strength: string, idx: number) => (
+                            <div key={idx} className="flex items-start gap-2">
+                              <Target className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                              <span className="whitespace-normal break-words leading-relaxed">
+                                {strength}
+                              </span>
+                            </div>
+                          ))}
                         </div>
                       </div>
 
+                      {/* Section 4: Skill Gap Guidance (No Truncation, Full Readable Text) */}
+                      {recommendationItem?.missingSkills &&
+                        recommendationItem.missingSkills.length > 0 && (
+                          <>
+                            <Divider />
+                            <div className="space-y-2.5">
+                              <Typography
+                                variant="label"
+                                className="text-[10px] text-amber-600 dark:text-amber-400 tracking-widest uppercase font-semibold block"
+                              >
+                                Skill Gap Guidance
+                              </Typography>
+                              <div className="space-y-3 text-xs text-secondary/90 font-light">
+                                {recommendationItem.missingSkills.map(
+                                  (gap: string, idx: number) => (
+                                    <div key={idx} className="flex items-start gap-2.5">
+                                      <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                                      <span className="whitespace-normal break-words leading-relaxed text-xs">
+                                        {gap}
+                                      </span>
+                                    </div>
+                                  ),
+                                )}
+                              </div>
+                            </div>
+                          </>
+                        )}
+
+                      {/* Section 5: Resume Improvements */}
+                      {recommendationItem?.resumeImprovements &&
+                        recommendationItem.resumeImprovements.length > 0 && (
+                          <>
+                            <Divider />
+                            <div className="space-y-2.5">
+                              <Typography
+                                variant="label"
+                                className="text-[10px] text-foreground/70 tracking-widest uppercase font-medium block"
+                              >
+                                Resume Improvements
+                              </Typography>
+                              <div className="space-y-2 text-xs text-secondary/85 font-light">
+                                {recommendationItem.resumeImprovements.map(
+                                  (tip: string, idx: number) => (
+                                    <div key={idx} className="flex items-start gap-2">
+                                      <CheckSquare className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                                      <span className="whitespace-normal break-words leading-relaxed">
+                                        {tip}
+                                      </span>
+                                    </div>
+                                  ),
+                                )}
+                              </div>
+                            </div>
+                          </>
+                        )}
+
+                      {/* Section 6: Interview Preparation */}
+                      {recommendationItem?.interviewPrep &&
+                        recommendationItem.interviewPrep.length > 0 && (
+                          <>
+                            <Divider />
+                            <div className="space-y-2.5">
+                              <Typography
+                                variant="label"
+                                className="text-[10px] text-foreground/70 tracking-widest uppercase font-medium block"
+                              >
+                                Likely Interview Topics
+                              </Typography>
+                              <div className="space-y-2 text-xs text-secondary/85 font-light">
+                                {recommendationItem.interviewPrep.map(
+                                  (topic: string, idx: number) => (
+                                    <div key={idx} className="flex items-start gap-2">
+                                      <HelpCircle className="w-3.5 h-3.5 text-secondary/70 shrink-0 mt-0.5" />
+                                      <span className="whitespace-normal break-words leading-relaxed">
+                                        {topic}
+                                      </span>
+                                    </div>
+                                  ),
+                                )}
+                              </div>
+                            </div>
+                          </>
+                        )}
+
                       <Divider />
 
-                      {/* Section: Estimated Fit */}
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-secondary/70 font-light">
-                          Estimated compatibility
-                        </span>
-                        <span className="font-semibold text-primary">{matchScore}% Fit Score</span>
+                      {/* Section 7: Application Confidence & Verdict */}
+                      <div className="space-y-3 bg-accent/40 rounded-xl p-4 border border-border/50">
+                        <div className="flex justify-between items-center text-xs font-medium">
+                          <span className="text-secondary/70">Application Confidence</span>
+                          <span className="text-primary font-semibold">
+                            {recommendationItem?.applicationConfidence?.level || 'Competitive'}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between items-center text-xs font-medium">
+                          <span className="text-secondary/70">Scout Verdict</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                            {recommendationItem?.scoutVerdict?.verdict || 'Apply Immediately'}
+                          </span>
+                        </div>
+
+                        {recommendationItem?.scoutVerdict?.explanation && (
+                          <p className="text-[11px] text-secondary/80 font-light leading-relaxed pt-1 whitespace-normal break-words">
+                            {recommendationItem.scoutVerdict.explanation}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Section 8: Next Action */}
+                      <div className="space-y-2 pt-1">
+                        <Typography
+                          variant="label"
+                          className="text-[10px] text-primary tracking-widest uppercase font-semibold block"
+                        >
+                          Next Action
+                        </Typography>
+                        <p className="text-xs text-foreground/90 font-medium leading-relaxed bg-primary/5 p-3 rounded-lg border border-primary/20 whitespace-normal break-words">
+                          {recommendationItem?.nextAction ||
+                            recommendationItem?.firstAction ||
+                            'Review the application instructions and submit your details.'}
+                        </p>
                       </div>
 
                       <Button
@@ -435,7 +514,7 @@ export default function OpportunityDetailsPage() {
                         iconRight={<ExternalLink className="w-3.5 h-3.5" />}
                         disabled={!opportunity.applicationUrl && !opportunity.sourceURL}
                       >
-                        Apply on Portal
+                        Apply on Official Portal
                       </Button>
                     </CardContent>
                   </Card>

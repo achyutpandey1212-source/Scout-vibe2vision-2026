@@ -12,6 +12,7 @@ export interface FeaturedOpportunityCardProps {
   description: string;
   deadline: string;
   matchScore: number;
+  explanation?: string;
   tags?: string[];
   isBookmarked?: boolean;
   isWomenOnly?: boolean;

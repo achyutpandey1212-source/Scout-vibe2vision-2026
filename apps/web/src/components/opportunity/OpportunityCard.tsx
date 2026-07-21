@@ -12,6 +12,9 @@ export interface OpportunityCardProps {
   deadline: string;
   tags?: string[];
   matchScore?: number;
+  explanation?: string;
+  slotLabel?: string;
+  slotIcon?: string;
   isBookmarked?: boolean;
   isWomenOnly?: boolean;
   stipend?: string;
