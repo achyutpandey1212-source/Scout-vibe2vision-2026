@@ -7,6 +7,7 @@ import { CrawlTarget, ISourceRegistryEntry } from '../sources/source-registry.ty
 import { generateQueries } from '../query-engine/query-generator';
 import { DashboardStateInstance } from '../utils/dashboard-state';
 import { JobBoardExtractor } from '../query-engine/job-board-extractor';
+import { parseDiscoveryInput } from '../utils/input-parser';
 
 export interface CandidateURL {
   url: string;
@@ -30,7 +31,7 @@ export class Stage1Discovery implements IPipelineStage<DiscoveryContext, Candida
 
     const runMode = (context as any).runMode || 'due';
     const runCategory = (context as any).runCategory;
-    const runCustomDomains = (context as any).runCustomDomains || [];
+    const runCustomDomains: string[] = parseDiscoveryInput((context as any).runCustomDomains);
     let targets: CrawlTarget[] = [];
 
     const { sourceRegistryService } = await import('../sources/source-registry.service');

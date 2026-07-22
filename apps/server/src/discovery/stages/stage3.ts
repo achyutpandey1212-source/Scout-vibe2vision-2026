@@ -153,6 +153,7 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
     // Analytics tracking
     let pagesPassedDetector = 0;
     let pagesSkippedDetector = 0;
+    let skippedBeforeExtraction = 0;
     let successfulExtractions = 0;
 
     // Categorized failure counts (Task 2 & Task 4)
@@ -166,6 +167,7 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
 
     for (const page of crawledPages) {
       if (page.crawlStatus !== 'SUCCESS') {
+        skippedBeforeExtraction++;
         console.log(
           `[Stage 3] Skipping page ${page.url} due to Stage 2 crawl status: ${page.crawlStatus}`,
         );
@@ -510,19 +512,20 @@ ${rawExtracted?.text || 'No response returned from provider.'}
       }
     }
 
-    const failedCount = crawledPages.length - pagesSkippedDetector - successfulExtractions;
+    const failedCount = pagesPassedDetector - successfulExtractions;
 
     DashboardStateInstance.updateState({
       detectorSkipped: pagesSkippedDetector,
       aiProcessed: pagesPassedDetector,
     });
 
-    // ── Task 4: Detailed Summary Log Breakdown ──
+    // ── Detailed Summary Log Breakdown ──
     console.log(`
     ================================================
     Stage 3 Extraction Final Summary
     ================================================
     Pages Processed:         ${crawledPages.length}
+    Skipped Pages:           ${skippedBeforeExtraction}
     Detector Passed:         ${pagesPassedDetector}
     Detector Rejected:       ${pagesSkippedDetector}
     Extraction Success:      ${successfulExtractions}

@@ -9,6 +9,7 @@ import { Stage3Extraction } from '../stages/stage3';
 import { Stage4QualityAcceptance } from '../stages/stage4';
 import { Stage5Persistence } from '../stages/stage5';
 import { JobBoardExtractor } from '../query-engine/job-board-extractor';
+import { parseDiscoveryInput } from '../utils/input-parser';
 import crypto from 'crypto';
 
 function extractDomain(urlStr: string): string | null {
@@ -74,7 +75,8 @@ async function updateDomainCrawlStates(
         opportunitiesFound: data.oppsCount,
       });
     } else {
-      await sourceRegistryService.markFailed(dom);
+      const firstFailure = data.pages[0]?.failureReason || 'SOURCE_FAILURE';
+      await sourceRegistryService.markFailed(dom, firstFailure);
     }
   }
 }
@@ -159,7 +161,7 @@ Total Targets Limit: ${totalTargetLimit}
   // Build filter query based on run mode
   const runMode = (context as any).runMode || 'due';
   const runCategory = (context as any).runCategory;
-  const runCustomDomains: string[] = (context as any).runCustomDomains || [];
+  const runCustomDomains: string[] = parseDiscoveryInput((context as any).runCustomDomains);
 
   let targets: any[] = [];
 

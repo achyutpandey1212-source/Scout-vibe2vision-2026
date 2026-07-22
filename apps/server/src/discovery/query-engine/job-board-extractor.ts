@@ -35,20 +35,28 @@ export class JobBoardExtractor {
     },
     'unstop.com': {
       details: [
-        /\/competition\/[\w-]+-\d+/i,
-        /\/internship\/[\w-]+-\d+/i,
-        /\/job\/[\w-]+-\d+/i,
-        /\/hackathon\/[\w-]+-\d+/i,
-        /\/fellowship\/[\w-]+-\d+/i,
+        /\/competitions?\/[\w-]+-\d+/i,
+        /\/internships?\/[\w-]+-\d+/i,
+        /\/jobs?\/[\w-]+-\d+/i,
+        /\/hackathons?\/[\w-]+-\d+/i,
+        /\/fellowships?\/[\w-]+-\d+/i,
+        /\/opportunity\/[\w-]+-\d+/i,
         /\/opportunities\/[\w-]+-\d+/i,
         /\/o\/[\w-]+/i,
       ],
       listings: [
         /^\/$/i,
-        /\/jobs/i,
-        /\/internships/i,
-        /\/opportunities/i,
+        /\/jobs\/?$/i,
+        /\/internships\/?$/i,
+        /\/opportunities\/?$/i,
         /\/student-internships/i,
+        /\/online-internships/i,
+        /\/engineering-internships/i,
+        /\/all-internships/i,
+        /\/competitions\/?$/i,
+        /\/hackathons\/?$/i,
+        /\/fellowships\/?$/i,
+        /\/scholarships\/?$/i,
         /-internships/i,
         /-jobs/i,
       ],
@@ -189,7 +197,163 @@ export class JobBoardExtractor {
   }
 
   /**
-   * Scores discovered links using Step 3 Candidate scoring rules.
+   * Fix 2: Never create cards from UI elements (Logo, Menu, Search, Filter, Chevron, Icon, Avatar, Profile, Navigation, Footer, Header).
+   */
+  public static isUiComponentBlock(block: string, baseUrl?: string): boolean {
+    if (!block) return true;
+    const textLower = block.toLowerCase();
+    const lines = block
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+
+    // If block contains any link classified as JOB_DETAIL, it is NOT a UI component block!
+    const links = this.extractAllLinks(block, baseUrl);
+    const hasDetailLink = links.some((l) => this.classifyUrl(l.url) === 'JOB_DETAIL');
+    if (hasDetailLink) {
+      return false;
+    }
+
+    // Ignore block if fewer than 3 lines or < 30 characters of text
+    if (lines.length < 3 || block.trim().length < 30) {
+      return true;
+    }
+
+    const uiKeywords = [
+      'logo',
+      'menu',
+      'search',
+      'filter',
+      'chevron',
+      'icon',
+      'avatar',
+      'profile',
+      'navigation',
+      'footer',
+      'header',
+      'squarehalf',
+      'dualtone',
+      'dropdown',
+    ];
+
+    const containsUiKeyword = uiKeywords.some((kw) => textLower.includes(kw));
+    if (containsUiKeyword && lines.length <= 4) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Fix 1: Validates if a text block contains sufficient opportunity-specific signals.
+   * Requires at least TWO opportunity keywords or a direct detail link.
+   */
+  public static isOpportunityCardBlock(block: string, baseUrl?: string): boolean {
+    if (this.isUiComponentBlock(block, baseUrl)) {
+      return false;
+    }
+
+    const textLower = block.toLowerCase();
+    const opportunitySignals = [
+      'internship',
+      'job',
+      'hackathon',
+      'competition',
+      'fellowship',
+      'scholarship',
+      'apply',
+      'deadline',
+      'stipend',
+      'team size',
+      'location',
+      'register',
+      'prize',
+      'salary',
+      'hiring',
+      'view details',
+    ];
+
+    let matchCount = 0;
+    for (const signal of opportunitySignals) {
+      if (textLower.includes(signal)) {
+        matchCount++;
+      }
+    }
+
+    // Direct detail URL in block (or classified as JOB_DETAIL) adds +2 to signal count
+    const links = this.extractAllLinks(block, baseUrl);
+    const hasJobDetail = links.some((l) => this.classifyUrl(l.url) === 'JOB_DETAIL');
+    if (hasJobDetail) {
+      matchCount += 2;
+    }
+
+    return matchCount >= 2;
+  }
+
+  /**
+   * Fix 3: Extracts all links from markdown, HTML anchors, data attributes, onclick, Next.js JSON, or relative URLs.
+   */
+  public static extractAllLinks(
+    text: string,
+    baseUrl?: string,
+  ): { text: string; url: string; type: string }[] {
+    const links: { text: string; url: string; type: string }[] = [];
+    const seen = new Set<string>();
+
+    const addLink = (rawUrl: string, rawText: string, type: string) => {
+      let clean = (rawUrl || '').trim();
+      if (!clean) return;
+
+      if (clean.startsWith('/') && baseUrl) {
+        try {
+          clean = new URL(clean, baseUrl).toString();
+        } catch {
+          // Keep clean as is
+        }
+      }
+
+      if (this.isAssetUrl(clean)) return;
+
+      const dedupeKey = clean.toLowerCase();
+      if (!seen.has(dedupeKey)) {
+        seen.add(dedupeKey);
+        links.push({ text: rawText.trim() || 'Link', url: clean, type });
+      }
+    };
+
+    // 1. Markdown Links [text](url)
+    const mdRegex = /\[([^\]]*)\]\(((?:https?:\/\/|\/)[^\s)]+)\)/g;
+    let match;
+    while ((match = mdRegex.exec(text)) !== null) {
+      addLink(match[2], match[1], 'markdown');
+    }
+
+    // 2. HTML Anchor Links <a href="...">text</a>
+    const htmlRegex = /<a\s+[^>]*href=["']((?:https?:\/\/|\/)[^"']+)["'][^>]*>(.*?)<\/a>/gi;
+    while ((match = htmlRegex.exec(text)) !== null) {
+      const linkText = match[2].replace(/<[^>]+>/g, '').trim();
+      addLink(match[1], linkText, 'html');
+    }
+
+    // 3. Data-href / href / url attributes in HTML or JSON
+    const dataRegex =
+      /(?:data-href|href|url|link|path)["']?\s*[:=]\s*["']((?:https?:\/\/|\/)[^"'\s>]+)["']/gi;
+    while ((match = dataRegex.exec(text)) !== null) {
+      addLink(match[1], 'Detail Link', 'data');
+    }
+
+    // 4. Raw detail path URLs in text
+    const pathRegex =
+      /\/(?:internship|job|competition|hackathon|fellowship|opportunity|o)\/[\w-]+-\d+/gi;
+    while ((match = pathRegex.exec(text)) !== null) {
+      addLink(match[0], 'Opportunity Detail', 'raw');
+    }
+
+    return links;
+  }
+
+  /**
+   * Scores discovered links using Step 3 Candidate scoring rules (Fix 5).
    */
   public static scoreCandidateLink(
     urlStr: string,
@@ -207,6 +371,12 @@ export class JobBoardExtractor {
       return { score: -999, reasons: ['Asset URL/Extension matched'] };
     }
 
+    const classification = this.classifyUrl(urlStr);
+    if (classification === 'JOB_DETAIL') {
+      score += 100;
+      reasons.push('+100 Classified as JOB_DETAIL');
+    }
+
     // Opportunity keywords check
     if (urlLower.includes('internship') || urlLower.includes('intern')) {
       score += 40;
@@ -220,9 +390,13 @@ export class JobBoardExtractor {
       score += 30;
       reasons.push('+30 URL contains hiring/recruit');
     }
-    if (urlLower.includes('apply')) {
-      score += 20;
-      reasons.push('+20 URL contains apply');
+    if (
+      urlLower.includes('/apply') ||
+      textLower.includes('apply') ||
+      textLower.includes('register')
+    ) {
+      score += 80;
+      reasons.push('+80 Apply/Register link');
     }
 
     // Step 1: Platform specific pattern matches
@@ -266,24 +440,47 @@ export class JobBoardExtractor {
       reasons.push('+20 Context contains opportunity keywords');
     }
 
-    const applyTexts = [
-      'apply',
-      'apply now',
-      'register',
-      'view details',
-      'learn more',
-      'apply link',
-    ];
-    const hasApplyText = applyTexts.some((at) => textLower.includes(at) || textLower === 'apply');
-    if (hasApplyText) {
-      score += 20;
-      reasons.push('+20 Button/link matches apply/register');
+    // Fix 5: Penalties
+    if (urlLower.includes('/company/')) {
+      score -= 50;
+      reasons.push('-50 Company page link');
     }
 
-    // Negative filters
-    if (urlLower.includes('/search') || urlLower.includes('/jobs-in-')) {
+    if (urlLower.includes('/user/') || urlLower.includes('/profile/') || urlLower.includes('/u/')) {
       score -= 50;
-      reasons.push('-50 List page keyword matched');
+      reasons.push('-50 User profile link');
+    }
+
+    if (
+      urlLower.includes('/student-internships') ||
+      urlLower.includes('/online-internships') ||
+      urlLower.includes('/engineering-internships') ||
+      urlLower.includes('/all-internships') ||
+      urlLower.includes('/jobs-in-') ||
+      urlLower.includes('/categories')
+    ) {
+      score -= 100;
+      reasons.push('-100 Directory/Category link');
+    }
+
+    if (
+      urlLower.includes('facebook.com') ||
+      urlLower.includes('twitter.com') ||
+      urlLower.includes('whatsapp')
+    ) {
+      score -= 50;
+      reasons.push('-50 Share link');
+    }
+
+    if (
+      urlLower.includes('/navigation') ||
+      urlLower.includes('/login') ||
+      urlLower.includes('/register-user') ||
+      urlLower.includes('/about') ||
+      urlLower.includes('/contact')
+    ) {
+      score -= 100;
+      reasons.push('-100 Navigation link');
     }
 
     return { score, reasons };
@@ -325,6 +522,15 @@ export class JobBoardExtractor {
         path.includes('/search')
       ) {
         return 'SEARCH_PAGE';
+      }
+
+      // Fix 4: Explicit Unstop Directory exclusions -> LISTING_PAGE
+      if (host.includes('unstop.com')) {
+        const directoryRegex =
+          /\/(student-internships|online-internships|engineering-internships|all-internships|internships|jobs|competitions|hackathons|fellowships|scholarships)\/?$/i;
+        if (directoryRegex.test(path)) {
+          return 'LISTING_PAGE';
+        }
       }
 
       // Check filters & directory parameters -> LISTING_PAGE
@@ -467,13 +673,11 @@ export class JobBoardExtractor {
     }
 
     // Heuristics: require multiple strong signals
-    const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
-    const matches = markdown.match(linkRegex) || [];
+    const links = this.extractAllLinks(markdown, url);
 
     let jobUrlCount = 0;
-    for (const m of matches) {
-      const matchUrl = m.match(/\((https?:\/\/[^\s)]+)\)/)?.[1];
-      if (matchUrl && this.classifyUrl(matchUrl) === 'JOB_DETAIL') {
+    for (const l of links) {
+      if (this.classifyUrl(l.url) === 'JOB_DETAIL') {
         jobUrlCount++;
       }
     }
@@ -495,8 +699,18 @@ export class JobBoardExtractor {
    * Intelligent card block divider matching both multi-line cards and list-view single-line cards.
    */
   public static splitIntoCardBlocks(markdown: string, baseUrl?: string): string[] {
+    if (!markdown) return [];
+
+    // Intercept Unstop listing pages with domain-specific adapter
+    if (baseUrl && baseUrl.includes('unstop.com')) {
+      const unstopBlocks = UnstopAdapter.splitIntoCardBlocks(markdown, baseUrl);
+      if (unstopBlocks.length > 0) {
+        return unstopBlocks;
+      }
+    }
+
     const lines = markdown.split('\n');
-    const blocks: string[] = [];
+    const rawBlocks: string[] = [];
     let currentBlock: string[] = [];
     let currentDetailUrl: string | null = null;
 
@@ -504,71 +718,73 @@ export class JobBoardExtractor {
       const trimmed = line.trim();
       if (trimmed.length === 0) {
         if (currentBlock.length > 0) {
-          blocks.push(currentBlock.join('\n'));
+          rawBlocks.push(currentBlock.join('\n'));
           currentBlock = [];
           currentDetailUrl = null;
         }
         continue;
       }
 
-      // Extract all links in this line (supporting relative URLs)
-      const linkRegex = /\[([^\]]+)\]\(((?:https?:\/\/|\/)[^\s)]+)\)/g;
-      const lineLinks: string[] = [];
-      let match;
-      while ((match = linkRegex.exec(trimmed)) !== null) {
-        let href = match[2].trim();
-        if (href.startsWith('/') && baseUrl) {
-          try {
-            href = new URL(href, baseUrl).toString();
-          } catch {
-            // Keep original href
-          }
-        }
-        lineLinks.push(href);
-      }
-
-      // Find if there is a job detail URL on this line
+      const lineLinks = this.extractAllLinks(trimmed, baseUrl);
       let lineDetailUrl: string | null = null;
       for (const link of lineLinks) {
-        const clean = this.cleanUrl(link);
+        const clean = this.cleanUrl(link.url);
         if (this.classifyUrl(clean) === 'JOB_DETAIL') {
           lineDetailUrl = clean;
           break;
         }
       }
 
-      if (lineDetailUrl) {
-        if (currentDetailUrl && currentDetailUrl !== lineDetailUrl) {
-          blocks.push(currentBlock.join('\n'));
+      const isHeader = /^#{1,4}\s+/.test(trimmed) || /^<h[1-4]/i.test(trimmed);
+
+      if ((lineDetailUrl || isHeader) && currentBlock.length > 0) {
+        if (currentDetailUrl && lineDetailUrl && currentDetailUrl !== lineDetailUrl) {
+          rawBlocks.push(currentBlock.join('\n'));
+          currentBlock = [trimmed];
+          currentDetailUrl = lineDetailUrl;
+        } else if (isHeader) {
+          rawBlocks.push(currentBlock.join('\n'));
           currentBlock = [trimmed];
           currentDetailUrl = lineDetailUrl;
         } else {
           currentBlock.push(trimmed);
-          if (!currentDetailUrl) {
-            currentDetailUrl = lineDetailUrl;
-          }
+          if (!currentDetailUrl) currentDetailUrl = lineDetailUrl;
         }
       } else {
         currentBlock.push(trimmed);
+        if (!currentDetailUrl && lineDetailUrl) currentDetailUrl = lineDetailUrl;
       }
     }
 
     if (currentBlock.length > 0) {
-      blocks.push(currentBlock.join('\n'));
+      rawBlocks.push(currentBlock.join('\n'));
     }
 
-    return blocks.filter((b) => b.trim().length > 2);
+    // Filter using isOpportunityCardBlock (Fix 1 & Fix 2)
+    const validCards = rawBlocks.filter((b) => this.isOpportunityCardBlock(b, baseUrl));
+    if (validCards.length > 0) {
+      return validCards;
+    }
+
+    // Fallback if isOpportunityCardBlock was too strict: return non-UI blocks > 20 chars
+    return rawBlocks.filter((b) => !this.isUiComponentBlock(b, baseUrl) && b.length > 20);
   }
 
   /**
    * Extracts list of opportunities from job board page markdown using Card-Based Resolution.
    */
   public static extractListings(markdown: string, url: string): ExtractedListing[] {
+    // Intercept Unstop listing pages with domain-specific adapter
+    if (url && url.includes('unstop.com')) {
+      const unstopListings = UnstopAdapter.extractListings(markdown, url);
+      if (unstopListings.length > 0) {
+        return unstopListings;
+      }
+    }
+
     const listings: ExtractedListing[] = [];
     const seenUrls = new Set<string>();
     const sourceDomain = this.getBoardIdentifier(url);
-
-    const linkRegex = /\[([^\]]+)\]\(((?:https?:\/\/|\/)[^\s)]+)\)/g;
 
     let cardsFound = 0;
     let cardsSuccessfullyResolved = 0;
@@ -595,37 +811,14 @@ export class JobBoardExtractor {
 
     const cardBlocks = this.splitIntoCardBlocks(markdown, url);
 
-    for (const cardBlock of cardBlocks) {
-      const pLinks: { text: string; url: string }[] = [];
-      let linkMatch;
-      while ((linkMatch = linkRegex.exec(cardBlock)) !== null) {
-        let href = linkMatch[2].trim();
-        if (href.startsWith('/') && url) {
-          try {
-            href = new URL(href, url).toString();
-          } catch {
-            // Keep original href
-          }
-        }
-        pLinks.push({ text: linkMatch[1].trim(), url: href });
-      }
+    for (let cardIdx = 0; cardIdx < cardBlocks.length; cardIdx++) {
+      const cardBlock = cardBlocks[cardIdx];
+      const pLinks = this.extractAllLinks(cardBlock, url);
 
       if (pLinks.length === 0) continue;
 
       cardsFound++;
       totalLinksFound += pLinks.length;
-
-      // Log 1: RAW LINK — first 3 Glassdoor job links as extracted from markdown
-      for (const rawLink of pLinks) {
-        if (
-          rawLink.url.includes('glassdoor') &&
-          (rawLink.url.includes('/job-listing/') || rawLink.url.includes('jl=')) &&
-          JobBoardExtractor._glassdoorRawLinkLogCount < 3
-        ) {
-          JobBoardExtractor._glassdoorRawLinkLogCount++;
-          console.log(`RAW LINK:\n${rawLink.url}`);
-        }
-      }
 
       const scoredLinks = pLinks.map((link) => {
         let cleanUrlStr = link.url;
@@ -653,6 +846,50 @@ export class JobBoardExtractor {
       );
       totalCandidateUrlsFound += candidateUrls.length;
 
+      // Fix 6: Detailed diagnostic per card
+      const cardTitle =
+        pLinks
+          .map((l) => l.text)
+          .find(
+            (t) =>
+              t &&
+              t !== 'Link' &&
+              t !== 'Detail Link' &&
+              t !== 'Opportunity Detail' &&
+              t.length > 3,
+          ) || 'Opportunity Listing';
+
+      const diagLines: string[] = [];
+      diagLines.push(`Card ${cardsFound}`);
+      diagLines.push(`Title:\n${cardTitle}`);
+      diagLines.push(`Links Found:\n${scoredLinks.length}`);
+
+      for (let i = 0; i < scoredLinks.length; i++) {
+        const l = scoredLinks[i];
+        let rejectionReason = '';
+        if (l.classification === 'JOB_DETAIL') {
+          rejectionReason = 'Accepted';
+        } else if (
+          l.classification === 'LISTING_PAGE' ||
+          l.url.includes('student-internships') ||
+          l.url.includes('all-internships')
+        ) {
+          rejectionReason = 'Rejected:\nDirectory';
+        } else if (
+          l.url.includes('/navigation') ||
+          l.url.includes('/login') ||
+          l.url.includes('/about')
+        ) {
+          rejectionReason = 'Rejected:\nNavigation';
+        } else if (l.url.includes('/company/')) {
+          rejectionReason = 'Rejected:\nCompany page';
+        } else {
+          rejectionReason = `Rejected:\n${l.classification}`;
+        }
+
+        diagLines.push(`Link ${i + 1}\n${l.url}\n${rejectionReason}`);
+      }
+
       if (candidateUrls.length > 0) {
         const bestCandidate = candidateUrls.sort((a, b) => b.score - a.score)[0];
         cardsSuccessfullyResolved++;
@@ -669,19 +906,10 @@ export class JobBoardExtractor {
           });
         }
 
-        const resolutionMethod = hasHydrationJSON ? 'JSON' : 'anchor';
-        resolvedLogs.push(
-          ` - Title: ${bestCandidate.text || 'Unknown'}\n   Resolved URL: ${bestCandidate.url}\n   Method: ${resolutionMethod}`,
-        );
+        resolvedLogs.push(diagLines.join('\n'));
       } else {
         cardsMissingDestination++;
-        const cardTitle = pLinks[0]?.text || 'Unknown';
-        const bestGenericLink = scoredLinks.sort((a, b) => b.score - a.score)[0];
-        const reason = bestGenericLink
-          ? `No link classified as JOB_DETAIL or COMPANY_JOBS_PAGE (Highest link class: ${bestGenericLink.classification}, score: ${bestGenericLink.score})`
-          : 'No candidate links extracted in card block';
-
-        unresolvedLogs.push(` - Title: ${cardTitle}\n   Reason: ${reason}`);
+        unresolvedLogs.push(diagLines.join('\n'));
       }
     }
 
@@ -699,10 +927,12 @@ Average Links Per Card:          ${avgLinksPerCard}
 Average Candidate URLs Per Card: ${avgCandidatesPerCard}
 
 Resolved Cards Detail:
-${resolvedLogs.slice(0, 5).join('\n') || 'None'}
+--------------------------------
+${resolvedLogs.slice(0, 5).join('\n---\n') || 'None'}
 
 Unresolved Cards Detail:
-${unresolvedLogs.slice(0, 5).join('\n') || 'None'}
+--------------------------------
+${unresolvedLogs.slice(0, 5).join('\n---\n') || 'None'}
 `);
 
     if (listings.length === 0) {
@@ -712,4 +942,115 @@ ${unresolvedLogs.slice(0, 5).join('\n') || 'None'}
     return listings.slice(0, this.MAX_LISTINGS_PER_BOARD_PAGE);
   }
 }
+
+export class UnstopAdapter {
+  /**
+   * Restructures Unstop concatenated markdown cards using the pattern [**Title**...](URL).
+   */
+  public static splitIntoCardBlocks(markdown: string, baseUrl?: string): string[] {
+    const blocks: string[] = [];
+    const regex = /\[\*\*([^*]+)\*\*([\s\S]*?)\]\(((?:https?:\/\/unstop\.com|\/)[^)]+)\)/g;
+    let match;
+    while ((match = regex.exec(markdown)) !== null) {
+      const title = match[1].trim();
+      const body = match[2];
+      const url = match[3].trim();
+      blocks.push(`### [${title}](${url})\n${body}`);
+    }
+    return blocks;
+  }
+
+  /**
+   * Deterministic Unstop opportunities extractor.
+   */
+  public static extractListings(markdown: string, url: string): ExtractedListing[] {
+    const listings: ExtractedListing[] = [];
+    const seenUrls = new Set<string>();
+    const sourceDomain = JobBoardExtractor.getBoardIdentifier(url);
+
+    const cards = this.splitIntoCardBlocks(markdown, url);
+    let cardsFound = 0;
+    let cardsSuccessfullyResolved = 0;
+    let cardsMissingDestination = 0;
+
+    const resolvedLogs: string[] = [];
+    const unresolvedLogs: string[] = [];
+
+    for (const card of cards) {
+      const match = card.match(/^###\s+\[([^\]]+)\]\(([^)]+)\)/);
+      if (!match) continue;
+
+      cardsFound++;
+      const title = match[1].trim();
+      let rawUrl = match[2].trim();
+
+      if (rawUrl.startsWith('/') && url) {
+        try {
+          rawUrl = new URL(rawUrl, url).toString();
+        } catch {
+          // Ignored
+        }
+      }
+
+      const cleanUrl = JobBoardExtractor.cleanUrl(rawUrl);
+      const classification = JobBoardExtractor.classifyUrl(cleanUrl);
+      const isDetailUrl = classification === 'JOB_DETAIL';
+
+      const diagLines: string[] = [];
+      diagLines.push(`Card ${cardsFound}`);
+      diagLines.push(`Title:\n${title}`);
+      diagLines.push(`Links Found:\n1`);
+      diagLines.push(
+        `  Link 1: ${cleanUrl} -> ${isDetailUrl ? 'Accepted' : 'Rejected:\nDirectory'}`,
+      );
+
+      if (isDetailUrl) {
+        cardsSuccessfullyResolved++;
+        const cleanUrlLower = cleanUrl.toLowerCase();
+        if (!seenUrls.has(cleanUrlLower)) {
+          seenUrls.add(cleanUrlLower);
+
+          const bodyLines = card
+            .split('\n')
+            .slice(1)
+            .map((l) => l.replace(/\\/g, '').trim())
+            .filter(Boolean);
+          const company = bodyLines[0] || 'Unstop Partner';
+
+          listings.push({
+            title,
+            company,
+            listingUrl: cleanUrl,
+            location: 'Remote',
+            source: sourceDomain,
+          });
+        }
+        resolvedLogs.push(diagLines.join('\n'));
+      } else {
+        cardsMissingDestination++;
+        unresolvedLogs.push(diagLines.join('\n'));
+      }
+    }
+
+    console.log(`
+Platform:                        ${sourceDomain}
+Cards Found:                     ${cardsFound}
+Cards Successfully Resolved:     ${cardsSuccessfullyResolved}
+Cards Missing Destination:       ${cardsMissingDestination}
+Average Links Per Card:          1
+Average Candidate URLs Per Card: 1
+
+Resolved Cards Detail:
+--------------------------------
+${resolvedLogs.slice(0, 5).join('\n---\n') || 'None'}
+
+Unresolved Cards Detail:
+--------------------------------
+${unresolvedLogs.slice(0, 5).join('\n---\n') || 'None'}
+`);
+
+    return listings;
+  }
+}
+
 export default JobBoardExtractor;

@@ -186,11 +186,31 @@ class SourceRegistryService {
 
   /**
    * Records a failed crawl immediately. Deactivates the source after 5 consecutive failures.
+   * Infrastructure failures (401, 402, 429, timeout, network failure) do NOT increment failure count.
    */
-  async markFailed(domain: string): Promise<void> {
+  async markFailed(domain: string, failureType?: string): Promise<void> {
     const cleanDomain = domain.toLowerCase().trim();
     const source = await SourceRegistryModel.findOne({ domain: cleanDomain });
     if (!source) return;
+
+    const infraFailures = [
+      'PROVIDER_FAILURE',
+      'NETWORK_FAILURE',
+      'RATE_LIMIT',
+      'TIMEOUT',
+      'INVALID_API_KEY',
+      'CREDITS_EXHAUSTED',
+      'INFRASTRUCTURE_FAILURE',
+      'BLOCKED',
+      'NETWORK',
+    ];
+
+    if (failureType && infraFailures.includes(failureType.toUpperCase())) {
+      console.log(
+        `[SourceRegistry] Infrastructure failure recorded for ${cleanDomain} (${failureType}) — failure count not incremented.`,
+      );
+      return;
+    }
 
     const newFailureCount = (source.consecutiveFailures || 0) + 1;
     const shouldDeactivate = newFailureCount >= 5;
@@ -207,7 +227,7 @@ class SourceRegistryService {
 
     if (shouldDeactivate) {
       console.warn(
-        `[SourceRegistry] Source deactivated after 5 consecutive failures: ${cleanDomain}`,
+        `[SourceRegistry] Source deactivated after 5 consecutive content failures: ${cleanDomain}`,
       );
     }
   }

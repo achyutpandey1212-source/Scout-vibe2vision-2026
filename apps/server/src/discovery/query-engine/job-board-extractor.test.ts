@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import fs from 'fs';
+import path from 'path';
 import { JobBoardExtractor } from './job-board-extractor';
 
 describe('JobBoardExtractor', () => {
@@ -88,6 +90,72 @@ describe('JobBoardExtractor', () => {
       expect(JobBoardExtractor.classifyUrl('https://www.indeed.com/category/software')).toBe(
         'LISTING_PAGE',
       );
+    });
+  });
+
+  describe('Unstop Listing Extraction', () => {
+    it('should classify Unstop detail URLs as JOB_DETAIL and directory URLs as LISTING_PAGE', () => {
+      expect(
+        JobBoardExtractor.classifyUrl(
+          'https://unstop.com/internship/software-engineer-intern-walmart-123456',
+        ),
+      ).toBe('JOB_DETAIL');
+      expect(
+        JobBoardExtractor.classifyUrl('https://unstop.com/job/frontend-developer-amazon-987654'),
+      ).toBe('JOB_DETAIL');
+      expect(
+        JobBoardExtractor.classifyUrl(
+          'https://unstop.com/internship/student-internships?usertype=students&domain=2&oppstatus=open',
+        ),
+      ).toBe('LISTING_PAGE');
+    });
+
+    it('should extract Unstop internship listings while ignoring UI components', () => {
+      const url =
+        'https://unstop.com/internship/student-internships?usertype=students&domain=2&oppstatus=open';
+      const markdown = `
+        Unstop Logo
+        chevron_down
+        squarehalf_dualtone
+
+        ### [Software Engineer Internship](https://unstop.com/internship/software-engineer-intern-walmart-123456)
+        Company: Walmart
+        Stipend: ₹40,000 / month
+        Deadline: 15 Aug 2026
+        Location: Bengaluru
+        [Apply Now](https://unstop.com/internship/software-engineer-intern-walmart-123456)
+
+        ### [Frontend Developer Intern](https://unstop.com/job/frontend-developer-amazon-987654)
+        Company: Amazon
+        Stipend: ₹50,000 / month
+        Deadline: 20 Aug 2026
+        Location: Remote
+        [Apply Now](https://unstop.com/job/frontend-developer-amazon-987654)
+      `;
+
+      const listings = JobBoardExtractor.extractListings(markdown, url);
+      expect(listings.length).toBe(2);
+      expect(listings[0].listingUrl).toBe(
+        'https://unstop.com/internship/software-engineer-intern-walmart-123456',
+      );
+      expect(listings[1].listingUrl).toBe(
+        'https://unstop.com/job/frontend-developer-amazon-987654',
+      );
+    });
+
+    it('should correctly parse the actual crawled pages markdown file', () => {
+      const filePath = path.join(
+        __dirname,
+        '../../../../../crawled pages/unstop.com_internship_student-internships_usertype=students&domain=2&oppstatus=open.2026-07-22T05_36_17.350Z.md',
+      );
+      if (fs.existsSync(filePath)) {
+        const markdown = fs.readFileSync(filePath, 'utf8');
+        const url =
+          'https://unstop.com/internship/student-internships?usertype=students&domain=2&oppstatus=open';
+        const listings = JobBoardExtractor.extractListings(markdown, url);
+        expect(listings.length).toBeGreaterThanOrEqual(10);
+        console.log(`Listings Extracted from crawled page file: ${listings.length}`);
+      }
     });
   });
 

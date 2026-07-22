@@ -301,31 +301,98 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
 
             fetchMethod = 'firecrawl';
           } catch (crawlErr: unknown) {
-            failedCount++;
-
-            let type = 'NETWORK';
             const message = crawlErr instanceof Error ? crawlErr.message : String(crawlErr);
-            const isBlocked = message.includes('BLOCKED');
-            if (isBlocked) type = 'BLOCKED';
-            else if (message.includes('401')) type = 'INVALID_API_KEY';
-            else if (message.includes('429')) type = 'RATE_LIMIT';
-            else if (message.includes('timeout') || message.includes('timed out')) type = 'TIMEOUT';
+            console.warn(
+              `[Stage 2] [Firecrawl Error] ${candidate.url} failed (${message}). Attempting fallback fetch...`,
+            );
 
-            trackFailure(type);
+            // Fallback fetch execution
+            let fallbackMarkdown = candidate.snippet || '';
+            let fallbackTitle = candidate.source || 'Unknown';
+            let fallbackSuccess = false;
 
-            return {
-              url: candidate.url,
-              title: candidate.source,
-              markdown: '',
-              metadata: {},
-              fetchMethod: 'firecrawl' as const,
-              crawlStatus: type === 'BLOCKED' ? ('BLOCKED' as const) : ('FAILED' as const),
-              crawlTime: duration,
-              tokenEstimate: 0,
-              source: candidate.source,
-              crawlReason: plan.reason,
-              failureReason: type,
-            };
+            try {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 8000);
+              const httpRes = await fetch(candidate.url, {
+                headers: {
+                  'User-Agent':
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                },
+                signal: controller.signal,
+              });
+              clearTimeout(timeoutId);
+
+              if (httpRes.ok) {
+                const htmlText = await httpRes.text();
+                const titleMatch = htmlText.match(/<title[^>]*>([^<]+)<\/title>/i);
+                if (titleMatch) fallbackTitle = titleMatch[1].trim();
+
+                const cleanText = htmlText
+                  .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+                  .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+                  .replace(/<[^>]+>/g, ' ')
+                  .replace(/\s+/g, ' ')
+                  .trim();
+
+                if (cleanText.length > 20) {
+                  fallbackMarkdown = cleanText;
+                  fallbackSuccess = true;
+                }
+              }
+            } catch (fallbackErr: any) {
+              console.warn(
+                `[Stage 2] [Fallback Fetch Error] ${candidate.url}: ${fallbackErr.message}`,
+              );
+            }
+
+            if (!fallbackSuccess && candidate.snippet && candidate.snippet.length > 20) {
+              fallbackMarkdown = candidate.snippet;
+              fallbackSuccess = true;
+            }
+
+            if (fallbackSuccess) {
+              console.log(
+                `[Stage 2] [Fallback Success] Recovered content for ${candidate.url} via fallback fetch.`,
+              );
+              rawMarkdown = fallbackMarkdown;
+              cleanMetadata = {
+                domain: new URL(candidate.url).hostname,
+                title: fallbackTitle,
+                description: '',
+                language: 'en',
+              };
+              fetchMethod = 'snippet';
+              crawlStatus = 'SUCCESS';
+            } else {
+              failedCount++;
+              let type = 'PROVIDER_FAILURE';
+              const isBlocked = message.includes('BLOCKED') || message.includes('403');
+              if (isBlocked) type = 'BLOCKED';
+              else if (message.includes('401')) type = 'INVALID_API_KEY';
+              else if (message.includes('402')) type = 'PROVIDER_FAILURE';
+              else if (message.includes('429')) type = 'RATE_LIMIT';
+              else if (message.includes('timeout') || message.includes('timed out'))
+                type = 'TIMEOUT';
+              else type = 'NETWORK_FAILURE';
+
+              trackFailure(type);
+
+              return {
+                url: candidate.url,
+                title: candidate.source,
+                markdown: '',
+                metadata: {},
+                fetchMethod: 'firecrawl' as const,
+                crawlStatus: type === 'BLOCKED' ? ('BLOCKED' as const) : ('FAILED' as const),
+                crawlTime: duration,
+                tokenEstimate: 0,
+                source: candidate.source,
+                crawlReason: plan.reason,
+                failureReason: type,
+              };
+            }
           }
         }
 

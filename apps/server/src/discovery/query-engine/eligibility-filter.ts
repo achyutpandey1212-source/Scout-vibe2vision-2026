@@ -8,7 +8,7 @@ export class EligibilityFilter {
     url?: string,
     title?: string,
   ): { eligible: boolean; reason?: string } {
-    const lower = text.toLowerCase();
+    const combinedText = `${text || ''} ${title || ''} ${url || ''}`.toLowerCase();
 
     // Explicit geoblocking rules
     const negatives = [
@@ -36,12 +36,41 @@ export class EligibilityFilter {
     ];
 
     for (const neg of negatives) {
-      if (lower.includes(neg)) {
+      if (combinedText.includes(neg)) {
         return { eligible: false, reason: `Explicit restriction matched: "${neg}"` };
       }
     }
 
-    // Positive indicators (India hubs or Remote)
+    // Check hostname FIRST before page content inspection
+    if (url) {
+      try {
+        const hostname = new URL(url).hostname.toLowerCase();
+        const isIndiaDomain =
+          hostname === 'in.indeed.com' ||
+          hostname.endsWith('.in.indeed.com') ||
+          hostname.startsWith('in.') ||
+          hostname.endsWith('.co.in') ||
+          hostname.endsWith('.gov.in') ||
+          hostname.endsWith('.nic.in') ||
+          hostname.endsWith('.ac.in') ||
+          hostname.endsWith('.org.in') ||
+          hostname.endsWith('.edu.in') ||
+          hostname.endsWith('.res.in') ||
+          hostname.endsWith('.in') ||
+          hostname.includes('naukri.com') ||
+          hostname.includes('internshala.com') ||
+          hostname.includes('unstop.com') ||
+          hostname.includes('devfolio.co');
+
+        if (isIndiaDomain) {
+          return { eligible: true };
+        }
+      } catch {
+        // Ignore URL parsing errors
+      }
+    }
+
+    // Positive indicators (India hubs or Remote) for non-India domain hosts
     const positives = [
       'india',
       'remote',
@@ -56,9 +85,11 @@ export class EligibilityFilter {
       'gurgaon',
       'mumbai',
       'chennai',
+      'kolkata',
+      'ahmedabad',
     ];
 
-    const hasPositive = positives.some((pos) => lower.includes(pos));
+    const hasPositive = positives.some((pos) => combinedText.includes(pos));
     if (!hasPositive) {
       return { eligible: false, reason: 'No matching India hub or remote signal found' };
     }
