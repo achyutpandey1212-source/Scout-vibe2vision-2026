@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { OrigamiDecoration } from './decorations';
+import { BrandLogo } from '../branding';
 import { fadeVariants } from './motion';
 
 interface UniversalLoaderProps {
@@ -34,16 +34,14 @@ export const UniversalLoader: React.FC<UniversalLoaderProps> = ({
 
   return (
     <div className="min-h-[60vh] flex flex-col items-center justify-center p-8 text-center select-none space-y-8 max-w-md mx-auto">
-      {/* Drifting crane graphic */}
-      <div className="opacity-80 dark:opacity-60 scale-110">
-        <OrigamiDecoration
-          name="crane"
-          size={110}
-          floating
-          floatingOffset={8}
-          floatingDuration={5}
-        />
-      </div>
+      {/* Gentle Floating Brand Mark replacing origami graphic */}
+      <motion.div
+        animate={{ y: [0, -6, 0] }}
+        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+        className="opacity-90 dark:opacity-90"
+      >
+        <BrandLogo size="lg" showWordmark={false} />
+      </motion.div>
 
       {/* Sequential honest status messages */}
       <div className="h-10 flex items-center justify-center">

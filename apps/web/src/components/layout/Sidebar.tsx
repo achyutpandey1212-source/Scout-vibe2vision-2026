@@ -1,10 +1,18 @@
 'use client';
 
+/**
+ * ==========================================
+ *          SIDEBAR LAYOUT REFINEMENT
+ * ==========================================
+ * Refined authenticated application sidebar
+ */
+
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Compass, Bookmark } from 'lucide-react';
 import { ThemeToggle } from '../theme-toggle';
+import { BrandLogo } from '../branding';
 import { useAuth } from '@/context/auth-context';
 import { ROUTES } from '@/lib/constants/routes';
 
@@ -29,36 +37,22 @@ export const Sidebar: React.FC = () => {
 
   return (
     <aside
-      className="hidden md:flex flex-col w-64 h-screen sticky top-0 shrink-0 border-r border-border/80 bg-background/95 backdrop-blur select-none z-30 transition-colors duration-200"
+      className="hidden md:flex flex-col w-[260px] h-screen sticky top-0 shrink-0 border-r border-border/80 bg-background/95 backdrop-blur select-none z-30 transition-colors duration-200"
       aria-label="Primary navigation"
     >
       {/* ── Brand Logo Header ── */}
-      <div className="h-16 px-6 flex items-center border-b border-border/40">
+      <div className="h-20 px-6 flex items-center border-b border-border/40">
         <Link
           href={ROUTES.DASHBOARD}
-          className="flex items-center gap-3 outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-lg p-1 group"
+          className="flex items-center outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-xl p-1.5 transition-opacity hover:opacity-90"
         >
-          <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
-            <svg
-              className="w-5 h-5 stroke-[1.75]"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-            </svg>
-          </div>
-          <span className="font-display text-xl font-medium tracking-tight text-foreground">
-            Scout
-          </span>
+          <BrandLogo size="md" showWordmark={true} />
         </Link>
       </div>
 
-      {/* ── Primary Navigation (Centered Vertically) ── */}
-      <div className="flex-1 px-4 py-8 flex flex-col justify-center space-y-1.5">
-        <div className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+      {/* ── Primary Navigation (Middle) ── */}
+      <div className="flex-1 px-4 py-8 space-y-2">
+        <div className="px-3.5 mb-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 select-none">
           Navigation
         </div>
         {NAV_ITEMS.map((item) => {
@@ -73,13 +67,13 @@ export const Sidebar: React.FC = () => {
               aria-current={isActive ? 'page' : undefined}
               className={`flex items-center gap-3.5 px-3.5 py-3 rounded-xl text-sm font-medium transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                 isActive
-                  ? 'bg-primary/10 text-primary font-semibold shadow-xs'
-                  : 'text-secondary hover:text-foreground hover:bg-muted/60'
+                  ? 'bg-primary/10 border border-primary/20 text-primary font-semibold shadow-xs'
+                  : 'border border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
               }`}
             >
               <Icon
                 className={`w-4 h-4 transition-colors ${
-                  isActive ? 'text-primary' : 'text-secondary/70'
+                  isActive ? 'text-primary' : 'text-muted-foreground/70'
                 }`}
               />
               <span>{item.label}</span>
@@ -89,10 +83,10 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* ── Footer: Profile Shortcut & Theme Switcher ── */}
-      <div className="p-4 border-t border-border/50 flex items-center justify-between gap-2">
+      <div className="p-4 pb-6 border-t border-border/50 flex items-center justify-between gap-3">
         <Link
           href={ROUTES.PROFILE}
-          className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/60 flex-1 min-w-0 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 flex-1 min-w-0 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary border border-transparent hover:border-border/40"
           title="View profile settings"
         >
           {userPicture ? (

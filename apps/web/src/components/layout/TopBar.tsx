@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Search } from 'lucide-react';
 import { ThemeToggle } from '../theme-toggle';
+import { BrandLogo } from '../branding';
 import { useAuth } from '@/context/auth-context';
 import { ROUTES } from '@/lib/constants/routes';
 
@@ -58,19 +59,8 @@ export const TopBar: React.FC<TopBarProps> = ({ title, subtitle, onSearchClick }
         {/* Left: Mobile Brand Logo or Desktop Page Title */}
         <div className="flex items-center gap-3">
           {/* Mobile Logo Mark */}
-          <Link href={ROUTES.DASHBOARD} className="md:hidden flex items-center gap-2 pr-2">
-            <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-              <svg
-                className="w-4 h-4 stroke-[1.75]"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
-            </div>
+          <Link href={ROUTES.DASHBOARD} className="md:hidden flex items-center pr-2">
+            <BrandLogo size="sm" showWordmark={true} />
           </Link>
 
           <div className="flex flex-col">
