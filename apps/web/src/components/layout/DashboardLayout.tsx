@@ -1,29 +1,19 @@
 'use client';
 
 import React from 'react';
-import { useRouter } from 'next/navigation';
 import { AppLayout } from './AppLayout';
-import { TopNavigation } from '../ui/nav';
+import { Sidebar } from './Sidebar';
+import { TopBar } from './TopBar';
+import { MobileNav } from './MobileNav';
 import { Container } from '../ui/layout';
-import { useAuth } from '@/context/auth-context';
-import { ROUTES } from '@/lib/constants/routes';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
+  title?: string;
+  subtitle?: string;
 }
 
-export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
-  const { user, signOut } = useAuth();
-  const router = useRouter();
-
-  const handleNotificationsClick = () => {
-    router.push(ROUTES.NOTIFICATIONS);
-  };
-
-  const handleProfileClick = () => {
-    router.push(ROUTES.PROFILE);
-  };
-
+export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, title, subtitle }) => {
   const handleSearchClick = () => {
     // Simulated Search trigger
     const event = new CustomEvent('scout-search-trigger');
@@ -31,31 +21,38 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
   };
 
   return (
-    <AppLayout showAccents={true}>
-      <TopNavigation
-        userName={user?.name || 'Maya Sharma'}
-        userPicture={user?.picture || undefined}
-        isAuthenticated={!!user}
-        onNotificationsClick={handleNotificationsClick}
-        onProfileClick={handleProfileClick}
-        onSearchClick={handleSearchClick}
-      />
+    <AppLayout showAccents={false}>
+      <div className="flex min-h-screen w-full bg-background text-foreground">
+        {/* Desktop Fixed Left Sidebar */}
+        <Sidebar />
 
-      {/* Page Content Container */}
-      <div className="flex-1 w-full py-8 md:py-12">
-        <Container size="xl">{children}</Container>
+        {/* Main Content Area */}
+        <div className="flex-1 flex flex-col min-w-0 relative">
+          {/* Top Bar Header */}
+          <TopBar title={title} subtitle={subtitle} onSearchClick={handleSearchClick} />
+
+          {/* Main Page View Container */}
+          <main className="flex-1 w-full pb-24 md:pb-12">
+            <Container size="wide">{children}</Container>
+          </main>
+
+          {/* Editorial Footer */}
+          <footer className="w-full border-t border-border/60 py-6 bg-card/30 text-center text-xs text-muted-foreground relative z-10 hidden md:block">
+            <Container
+              size="wide"
+              className="flex flex-col sm:flex-row items-center justify-between gap-4"
+            >
+              <span>© {new Date().getFullYear()} Scout. All rights reserved.</span>
+              <span className="tracking-widest uppercase text-[10px] text-muted-foreground/60 font-sans">
+                Scout Opportunity Intelligence
+              </span>
+            </Container>
+          </footer>
+        </div>
+
+        {/* Mobile Dedicated Bottom Navigation */}
+        <MobileNav />
       </div>
-
-      {/* Editorial Footer */}
-      <footer className="w-full border-t border-border/80 py-8 bg-card/40 text-center text-xs text-secondary/60 relative z-10">
-        <Container
-          size="xl"
-          className="flex flex-col sm:flex-row items-center justify-between gap-4"
-        >
-          <span>© {new Date().getFullYear()} Scout. All rights reserved.</span>
-          <span className="tracking-widest uppercase text-[10px]">ZenKai Ecosystem</span>
-        </Container>
-      </footer>
     </AppLayout>
   );
 };
