@@ -68,10 +68,10 @@ export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(
             ref={ref}
             type={type}
             className={`
-              w-full text-sm font-light bg-card border rounded-full px-5 py-3 outline-none transition-all duration-200
-              ${icon ? 'pl-11' : 'pl-5'}
-              ${error ? 'border-destructive focus:ring-destructive/20' : 'border-border/80 focus:border-primary focus:ring-primary/20'}
-              focus:ring-4 placeholder-secondary/40 text-foreground
+              w-full text-sm font-light bg-card border rounded-xl min-h-[44px] px-4 py-2.5 outline-none transition-all duration-150
+              ${icon ? 'pl-11' : 'pl-4'}
+              ${error ? 'border-destructive focus:ring-2 focus:ring-destructive/20' : 'border-border/80 focus:border-primary focus:ring-2 focus:ring-primary/20'}
+              placeholder:text-muted-foreground/50 text-foreground
               disabled:opacity-40 disabled:cursor-not-allowed
               ${className}
             `.trim()}
@@ -282,9 +282,9 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
             id={selectId}
             ref={ref}
             className={`
-              w-full text-sm font-light bg-card border border-border/80 rounded-full px-5 py-3 outline-none appearance-none transition-all duration-200
-              ${error ? 'border-destructive focus:ring-destructive/20' : 'focus:border-primary focus:ring-primary/20'}
-              focus:ring-4 text-foreground
+              w-full text-sm font-light bg-card border border-border/80 rounded-xl min-h-[44px] px-4 py-2.5 outline-none appearance-none transition-all duration-150
+              ${error ? 'border-destructive focus:ring-2 focus:ring-destructive/20' : 'focus:border-primary focus:ring-2 focus:ring-primary/20'}
+              text-foreground
               disabled:opacity-40 disabled:cursor-not-allowed
               ${className}
             `.trim()}
