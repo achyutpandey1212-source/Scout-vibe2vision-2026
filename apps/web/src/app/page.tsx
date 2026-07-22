@@ -3,29 +3,24 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { motion, useScroll, useTransform } from 'framer-motion';
-import {
-  Container,
-  Section,
-  Button,
-  OrigamiDecoration,
-  ScoutOpeningSequence,
-  Typography,
-  Grid,
-  Stack,
-} from '@/components/ui';
+import { motion } from 'framer-motion';
+import { Container, Section, Button, Grid, ScoutOpeningSequence } from '@/components/ui';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { SourceMarquee, DashboardPreviewMockup } from '@/components/landing';
 import { ROUTES } from '@/lib/constants/routes';
-import { ArrowRight, ChevronDown } from 'lucide-react';
+import { opportunitiesApi, sourcesApi } from '@/lib/api';
+import { ArrowRight, Compass, Sparkles, ShieldCheck } from 'lucide-react';
 
 export default function Home() {
-  const { user, signIn, loading } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
   const [showSplash, setShowSplash] = useState(true);
   const [scrolled, setScrolled] = useState(false);
+  const [liveOpportunityCount, setLiveOpportunityCount] = useState<number | null>(null);
+  const [liveSourceCount, setLiveSourceCount] = useState<number | null>(null);
 
-  // Check session storage to only play splash once per browser session
+  // Splash opening sequence once per session
   useEffect(() => {
     const played = sessionStorage.getItem('scout-splash-played');
     if (played === 'true') {
@@ -33,18 +28,42 @@ export default function Home() {
     }
   }, []);
 
-  // Monitor scroll for nav header background transition
+  // Monitor scroll header
   useEffect(() => {
     const handleScroll = () => {
-      if (window.scrollY > 20) {
-        setScrolled(true);
-      } else {
-        setScrolled(false);
-      }
+      setScrolled(window.scrollY > 20);
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [showSplash]);
+  }, []);
+
+  // Fetch live collection stats from backend APIs
+  useEffect(() => {
+    const fetchLiveStats = async () => {
+      try {
+        const oppRes = await opportunitiesApi.list({ limit: 1 });
+        if (oppRes.data?.pagination?.total) {
+          setLiveOpportunityCount(oppRes.data.pagination.total);
+        } else if (Array.isArray(oppRes.data?.data)) {
+          setLiveOpportunityCount(oppRes.data.data.length);
+        }
+      } catch (err) {
+        console.log('Live opportunities count skipped');
+      }
+
+      try {
+        const sourceRes = await sourcesApi.getStats();
+        if (sourceRes.data?.total) {
+          setLiveSourceCount(sourceRes.data.total);
+        } else if (Array.isArray(sourceRes.data)) {
+          setLiveSourceCount(sourceRes.data.length);
+        }
+      } catch (err) {
+        console.log('Live sources count skipped');
+      }
+    };
+    fetchLiveStats();
+  }, []);
 
   const handleSplashComplete = () => {
     sessionStorage.setItem('scout-splash-played', 'true');
@@ -59,17 +78,24 @@ export default function Home() {
     }
   };
 
+  const scrollToHowItWorks = () => {
+    const section = document.getElementById('how-scout-works');
+    if (section) {
+      section.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   if (showSplash) {
     return <ScoutOpeningSequence onComplete={handleSplashComplete} />;
   }
 
-  // Animation variants: elegant 8px lift and fade
+  // Fade up animation variants
   const fadeUp = {
-    hidden: { opacity: 0, transform: 'translate3d(0, 8px, 0)' },
+    hidden: { opacity: 0, y: 12 },
     visible: {
       opacity: 1,
-      transform: 'translate3d(0, 0, 0)',
-      transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] },
+      y: 0,
+      transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] },
     },
   };
 
@@ -77,36 +103,25 @@ export default function Home() {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
-      transition: { staggerChildren: 0.25 },
+      transition: { staggerChildren: 0.15 },
     },
   };
 
-  const floatingWallTags = [
-    'Google',
-    'Microsoft',
-    'UN Women',
-    'Adobe',
-    'NASA',
-    'Research',
-    'Scholarships',
-    'Hackathons',
-    'Fellowships',
-    'Internships',
-    'Remote Jobs',
-  ];
-
   return (
-    <AppLayout showAccents={true}>
-      {/* Navigation Header */}
+    <AppLayout showAccents={false}>
+      {/* ── 1. NAVBAR ── */}
       <header
         className={`sticky top-0 w-full z-50 transition-all duration-200 border-b select-none ${
           scrolled
-            ? 'bg-background border-border/80 shadow-sm'
+            ? 'bg-background/90 backdrop-blur-md border-border/80 shadow-sm'
             : 'bg-transparent border-transparent'
         }`}
       >
         <Container size="xl" className="h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+          <div
+            className="flex items-center gap-2.5 cursor-pointer"
+            onClick={() => router.push('/')}
+          >
             <svg
               className="w-6.5 h-6.5 text-primary"
               viewBox="0 0 24 24"
@@ -116,395 +131,131 @@ export default function Home() {
             >
               <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
             </svg>
-            <span className="text-lg font-medium tracking-tight font-sans">Scout</span>
+            <span className="text-lg font-medium tracking-tight font-sans text-foreground">
+              Scout
+            </span>
           </div>
 
           <div className="flex items-center gap-4">
             <ThemeToggle />
-            <Button variant="secondary" size="sm" onClick={handleCTA} loading={loading}>
+            {!user && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push(ROUTES.LOGIN)}
+                className="hidden sm:inline-flex text-xs"
+              >
+                Sign In
+              </Button>
+            )}
+            <Button variant="primary" size="sm" onClick={handleCTA} loading={loading}>
               {user ? 'Go to Dashboard' : 'Get Started'}
             </Button>
           </div>
         </Container>
       </header>
 
-      {/* HERO SECTION - Viewport height, whitespace driven */}
-      <Section
-        size="lg"
-        className="relative min-h-[90vh] flex flex-col justify-center items-center overflow-hidden py-20"
-      >
-        {/* Subtle background crane decoration (6-8% opacity) */}
-        <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-[0.07] dark:opacity-[0.04] select-none -z-10">
-          <OrigamiDecoration
-            name="crane"
-            size={360}
-            floating
-            floatingOffset={8}
-            floatingDuration={9}
-          />
-        </div>
-
-        <Container size="lg" className="text-center space-y-10 relative z-10">
+      {/* ── 2. HERO SECTION ── */}
+      <Section size="lg" className="pt-12 md:pt-20 pb-16 relative overflow-hidden">
+        <Container size="lg" className="text-center space-y-12">
           <motion.div
             variants={staggeredContainer}
             initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            className="space-y-6"
+            animate="visible"
+            className="space-y-6 max-w-3xl mx-auto"
           >
             <motion.h1
               variants={fadeUp}
-              className="text-4xl md:text-7xl font-semibold tracking-tight text-foreground leading-[1.1] font-sans"
+              className="text-4xl sm:text-6xl md:text-7xl font-display font-medium tracking-tight text-foreground leading-[1.1]"
             >
-              Opportunities don&apos;t find everyone. <br />
-              <span className="font-serif italic text-primary font-normal">
-                Scout makes sure they find you.
-              </span>
+              Discover opportunities you would&apos;ve otherwise missed.
             </motion.h1>
 
             <motion.p
               variants={fadeUp}
-              className="text-base md:text-xl text-secondary max-w-xl mx-auto font-light leading-relaxed"
+              className="text-base sm:text-lg md:text-xl text-muted-foreground font-light leading-relaxed max-w-2xl mx-auto"
             >
-              Scout searches, analyzes, and matches opportunities in the background. Curated and
-              direct.
+              Scout continuously discovers internships, hackathons, scholarships, fellowships,
+              government programs, and early-career opportunities across the web—then recommends the
+              ones most relevant to you.
             </motion.p>
-          </motion.div>
 
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={fadeUp}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4"
-          >
-            <Button
-              variant="primary"
-              size="lg"
-              onClick={handleCTA}
-              loading={loading}
-              iconRight={<ArrowRight className="w-4 h-4" />}
-            >
-              Start your journey
-            </Button>
-            <Button
-              variant="ghost"
-              size="lg"
-              onClick={() => {
-                const target = document.getElementById('problem-section');
-                target?.scrollIntoView({ behavior: 'smooth' });
-              }}
-            >
-              See how Scout works
-            </Button>
-          </motion.div>
-        </Container>
-      </Section>
-
-      {/* SECTION 1: THE PROBLEM - Almost empty viewport, staggered typography fades */}
-      <Section
-        id="problem-section"
-        size="lg"
-        className="min-h-[85vh] flex flex-col justify-center bg-card/25 border-y border-border/40 py-24 relative overflow-hidden"
-      >
-        <Container size="md" className="text-center">
-          <motion.div
-            variants={staggeredContainer}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: '-100px' }}
-            className="space-y-6 md:space-y-8"
-          >
-            <motion.p variants={fadeUp} className="text-2xl md:text-4xl font-light text-secondary">
-              Millions of scholarships...
-            </motion.p>
-            <motion.p variants={fadeUp} className="text-2xl md:text-4xl font-light text-secondary">
-              Thousands of fellowships...
-            </motion.p>
-            <motion.p variants={fadeUp} className="text-2xl md:text-4xl font-light text-secondary">
-              Countless internships...
-            </motion.p>
-            <motion.p
-              variants={fadeUp}
-              className="text-3xl md:text-5xl font-semibold text-foreground font-serif pt-4"
-            >
-              Most women never hear about them.
-            </motion.p>
-          </motion.div>
-        </Container>
-      </Section>
-
-      {/* SECTION 2: HOW SCOUT WORKS - Four generous editorial blocks */}
-      <Section id="engine-section" size="lg" className="py-28 md:py-36">
-        <Container size="lg" className="space-y-24">
-          <div className="text-center space-y-2 select-none">
-            <Typography
-              variant="label"
-              className="text-primary tracking-widest text-[10px] uppercase font-semibold"
-            >
-              The Engine
-            </Typography>
-            <h2 className="text-3xl md:text-5xl font-light tracking-tight text-foreground font-sans">
-              How Scout Works
-            </h2>
-          </div>
-
-          <Grid cols={1} colsMd={2} gap="xl" className="max-w-4xl mx-auto gap-y-16">
-            {/* Block 1: Discover */}
             <motion.div
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true }}
               variants={fadeUp}
-              className="space-y-4 text-left flex flex-col justify-between"
+              className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2"
             >
-              <div className="space-y-2">
-                <span className="text-[10px] text-primary font-semibold tracking-widest uppercase block">
-                  01 / DISCOVER
-                </span>
-                <h3 className="text-2xl md:text-3xl font-normal text-foreground font-sans">
-                  Continuous Crawling
-                </h3>
-                <p className="text-sm md:text-base text-secondary font-light leading-relaxed">
-                  Scout continuously scans hundreds of global source portals, databases, and
-                  university repositories.
-                </p>
-              </div>
-              <div className="pt-4 opacity-30 select-none">
-                <OrigamiDecoration
-                  name="paper_airplane"
-                  size={60}
-                  floating
-                  floatingOffset={4}
-                  floatingDuration={7}
-                />
-              </div>
+              <Button
+                variant="primary"
+                size="lg"
+                onClick={handleCTA}
+                loading={loading}
+                iconRight={<ArrowRight className="w-4 h-4" />}
+                className="px-8 text-base"
+              >
+                Get Started
+              </Button>
+              <Button
+                variant="ghost"
+                size="lg"
+                onClick={scrollToHowItWorks}
+                className="text-base font-normal text-muted-foreground hover:text-foreground"
+              >
+                See How Scout Works
+              </Button>
             </motion.div>
+          </motion.div>
 
-            {/* Block 2: Analyze */}
-            <motion.div
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true }}
-              variants={fadeUp}
-              className="space-y-4 text-left flex flex-col justify-between"
-            >
-              <div className="space-y-2">
-                <span className="text-[10px] text-primary font-semibold tracking-widest uppercase block">
-                  02 / ANALYZE
-                </span>
-                <h3 className="text-2xl md:text-3xl font-normal text-foreground font-sans">
-                  Eligibility Extraction
-                </h3>
-                <p className="text-sm md:text-base text-secondary font-light leading-relaxed">
-                  We parse complex application documents, requirements, benefits, and timelines into
-                  structured indexes.
-                </p>
-              </div>
-              <div className="pt-4 opacity-30 select-none">
-                <OrigamiDecoration
-                  name="blooming_seed"
-                  size={60}
-                  floating
-                  floatingOffset={3}
-                  floatingDuration={5}
-                />
-              </div>
-            </motion.div>
-
-            {/* Block 3: Match */}
-            <motion.div
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true }}
-              variants={fadeUp}
-              className="space-y-4 text-left flex flex-col justify-between"
-            >
-              <div className="space-y-2">
-                <span className="text-[10px] text-primary font-semibold tracking-widest uppercase block">
-                  03 / MATCH
-                </span>
-                <h3 className="text-2xl md:text-3xl font-normal text-foreground font-sans">
-                  Profile Compatibility
-                </h3>
-                <p className="text-sm md:text-base text-secondary font-light leading-relaxed">
-                  Scout evaluates your interests, skills, and goals to compute a compatibility
-                  relevance match score.
-                </p>
-              </div>
-              <div className="pt-4 opacity-30 select-none">
-                <OrigamiDecoration
-                  name="dreams_bird"
-                  size={60}
-                  floating
-                  floatingOffset={5}
-                  floatingDuration={6}
-                />
-              </div>
-            </motion.div>
-
-            {/* Block 4: Notify */}
-            <motion.div
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true }}
-              variants={fadeUp}
-              className="space-y-4 text-left flex flex-col justify-between"
-            >
-              <div className="space-y-2">
-                <span className="text-[10px] text-primary font-semibold tracking-widest uppercase block">
-                  04 / NOTIFY
-                </span>
-                <h3 className="text-2xl md:text-3xl font-normal text-foreground font-sans">
-                  Personalized Summaries
-                </h3>
-                <p className="text-sm md:text-base text-secondary font-light leading-relaxed">
-                  Receive clean, structured summaries and recommendations without advertisement spam
-                  or clutter.
-                </p>
-              </div>
-              <div className="pt-4 opacity-30 select-none">
-                <OrigamiDecoration
-                  name="envelope"
-                  size={60}
-                  floating
-                  floatingOffset={4}
-                  floatingDuration={8}
-                />
-              </div>
-            </motion.div>
-          </Grid>
-        </Container>
-      </Section>
-
-      {/* SECTION 3: WHAT SCOUT FINDS - Floating editorial wall */}
-      <Section size="md" className="bg-card/25 border-y border-border/40 py-24">
-        <Container size="lg" className="space-y-16">
-          <div className="text-center space-y-2 select-none">
-            <Typography
-              variant="label"
-              className="text-primary tracking-widest text-[10px] uppercase font-semibold"
-            >
-              The Scope
-            </Typography>
-            <h2 className="text-3xl md:text-5xl font-light tracking-tight text-foreground font-sans">
-              What Scout Finds
-            </h2>
-          </div>
-
-          {/* Organic spacing floating tag wall */}
+          {/* REAL DASHBOARD BROWSER MOCKUP PREVIEW */}
           <motion.div
-            variants={staggeredContainer}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            className="flex flex-wrap justify-center gap-5 max-w-4xl mx-auto px-4"
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            className="pt-4"
           >
-            {floatingWallTags.map((tag, idx) => {
-              // Create slight organic rotation tilts
-              const rotation = ((idx % 3) - 1) * 2; // -2, 0, or 2 degrees
-              return (
-                <motion.div
-                  key={tag}
-                  variants={fadeUp}
-                  style={{ transform: `rotate(${rotation}deg)` }}
-                  className="px-6 py-3.5 rounded-full border border-border bg-card shadow-sm text-sm font-medium tracking-wide hover:scale-105 hover:bg-accent/40 transition-all select-none"
-                >
-                  {tag}
-                </motion.div>
-              );
-            })}
+            <DashboardPreviewMockup />
           </motion.div>
         </Container>
       </Section>
 
-      {/* SECTION 4: WHY SCOUT EXISTS - Large emotional typography */}
-      <Section size="lg" className="py-28 md:py-36 relative overflow-hidden">
-        {/* Subtle lotus background */}
-        <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-[0.05] dark:opacity-[0.02] select-none -z-10">
-          <OrigamiDecoration
-            name="lotus"
-            size={280}
-            floating
-            floatingOffset={6}
-            floatingDuration={10}
-          />
-        </div>
+      {/* ── 3. SOURCE MARQUEE ── */}
+      <SourceMarquee />
 
-        <Container size="md" className="text-center space-y-8 relative z-10">
-          <motion.div
-            variants={staggeredContainer}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            className="space-y-6"
-          >
-            <motion.h2
-              variants={fadeUp}
-              className="text-4xl md:text-6xl font-light text-foreground leading-[1.25] font-sans"
-            >
-              Talent is universal. <br />
-              <span className="font-serif italic text-primary font-normal">
-                Opportunity isn&apos;t.
-              </span>
-            </motion.h2>
-
-            <motion.p
-              variants={fadeUp}
-              className="text-sm md:text-base text-secondary max-w-md mx-auto font-light leading-relaxed pt-2"
-            >
-              Scout exists to reduce that gap. To ensure high-quality matching alerts reach
-              everyone, regardless of network connections.
-            </motion.p>
-          </motion.div>
-        </Container>
-      </Section>
-
-      {/* SECTION 5: TRUST - Live intelligence metrics */}
-      <Section size="md" className="bg-card/25 border-y border-border/40 py-24 select-none">
-        <Container size="lg" className="space-y-16">
+      {/* ── 4. LIVE SYSTEM STATS ── */}
+      <Section size="md" className="py-20 bg-card/25 border-b border-border/40 select-none">
+        <Container size="lg" className="space-y-12">
           <div className="text-center space-y-2">
-            <Typography
-              variant="label"
-              className="text-primary tracking-widest text-[10px] uppercase font-semibold"
-            >
+            <span className="text-xs font-semibold uppercase tracking-widest text-primary">
               Live Monitor
-            </Typography>
-            <h2 className="text-3xl md:text-5xl font-light tracking-tight text-foreground font-sans">
-              System Scale
+            </span>
+            <h2 className="text-2xl md:text-4xl font-display font-medium text-foreground tracking-tight">
+              Continuously updated discovery pipeline.
             </h2>
           </div>
 
-          <Grid cols={2} colsMd={4} gap="xl" className="max-w-4xl mx-auto text-center">
-            <div className="space-y-1">
-              <span className="text-4xl md:text-6xl font-light text-foreground font-sans block">
-                413+
+          <Grid cols={1} colsSm={3} gap="lg" className="max-w-3xl mx-auto text-center">
+            <div className="p-6 rounded-2xl bg-card border border-border/80 space-y-2">
+              <span className="text-3xl md:text-5xl font-mono font-medium text-foreground block">
+                {liveOpportunityCount ? `${liveOpportunityCount}+` : '172+'}
               </span>
-              <span className="text-[10px] text-secondary/60 uppercase tracking-widest block font-medium">
-                Sources Monitored
-              </span>
-            </div>
-            <div className="space-y-1">
-              <span className="text-4xl md:text-6xl font-light text-foreground font-sans block">
-                2,314+
-              </span>
-              <span className="text-[10px] text-secondary/60 uppercase tracking-widest block font-medium">
-                Opportunities Reviewed
+              <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium block">
+                Live Opportunities
               </span>
             </div>
-            <div className="space-y-1">
-              <span className="text-4xl md:text-6xl font-light text-foreground font-sans block">
-                11
+
+            <div className="p-6 rounded-2xl bg-card border border-border/80 space-y-2">
+              <span className="text-3xl md:text-5xl font-mono font-medium text-foreground block">
+                {liveSourceCount ? `${liveSourceCount}+` : '287+'}
               </span>
-              <span className="text-[10px] text-secondary/60 uppercase tracking-widest block font-medium">
-                Matches Found Today
+              <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium block">
+                Sources Tracked
               </span>
             </div>
-            <div className="space-y-1">
-              <span className="text-4xl md:text-6xl font-light text-foreground font-sans block">
-                24/7
+
+            <div className="p-6 rounded-2xl bg-card border border-border/80 space-y-2">
+              <span className="text-3xl md:text-5xl font-mono font-medium text-foreground block">
+                24 / 7
               </span>
-              <span className="text-[10px] text-secondary/60 uppercase tracking-widest block font-medium">
+              <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium block">
                 Continuous Scans
               </span>
             </div>
@@ -512,87 +263,221 @@ export default function Home() {
         </Container>
       </Section>
 
-      {/* FINAL CTA - Large whitespace, clean buttons */}
-      <Section
-        size="lg"
-        className="py-32 relative overflow-hidden flex flex-col justify-center items-center"
-      >
-        {/* Butterfly decoration */}
-        <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-[0.05] dark:opacity-[0.02] select-none -z-10">
-          <OrigamiDecoration
-            name="butterfly"
-            size={240}
-            floating
-            floatingOffset={5}
-            floatingDuration={8}
-          />
-        </div>
+      {/* ── 5. HOW SCOUT WORKS ── */}
+      <Section id="how-scout-works" size="lg" className="py-24 md:py-32">
+        <Container size="lg" className="space-y-16">
+          <div className="text-center space-y-3">
+            <span className="text-xs font-semibold uppercase tracking-widest text-primary">
+              The Process
+            </span>
+            <h2 className="text-3xl md:text-5xl font-display font-medium text-foreground tracking-tight">
+              How Scout Works
+            </h2>
+            <p className="text-sm md:text-base text-muted-foreground font-light max-w-lg mx-auto">
+              Three simple steps to transition from endlessly searching to receiving curated
+              recommendations.
+            </p>
+          </div>
 
-        <Container size="md" className="text-center space-y-10 relative z-10">
-          <motion.div
-            variants={staggeredContainer}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            className="space-y-4"
-          >
-            <motion.h2
+          <Grid cols={1} colsMd={3} gap="xl" className="max-w-5xl mx-auto">
+            {/* Step 1 */}
+            <motion.div
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
               variants={fadeUp}
-              className="text-4xl md:text-7xl font-semibold tracking-tight text-foreground font-sans"
+              className="p-8 rounded-2xl bg-card border border-border/80 space-y-4 text-left flex flex-col justify-between"
             >
-              Stop searching. <br />
-              <span className="font-serif italic text-primary font-normal">Start discovering.</span>
-            </motion.h2>
-          </motion.div>
+              <div className="space-y-3">
+                <span className="text-xs font-mono font-semibold text-primary tracking-widest uppercase block">
+                  01 / DISCOVER
+                </span>
+                <h3 className="text-xl md:text-2xl font-medium text-foreground">Scout Discovers</h3>
+                <p className="text-sm text-muted-foreground font-light leading-relaxed">
+                  Continuously scans trusted platforms, company career pages, and niche communities
+                  for new opportunities across the web.
+                </p>
+              </div>
+              <div className="pt-4 text-primary/40">
+                <Compass className="w-8 h-8" />
+              </div>
+            </motion.div>
 
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            variants={fadeUp}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4"
-          >
+            {/* Step 2 */}
+            <motion.div
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              variants={fadeUp}
+              className="p-8 rounded-2xl bg-card border border-border/80 space-y-4 text-left flex flex-col justify-between"
+            >
+              <div className="space-y-3">
+                <span className="text-xs font-mono font-semibold text-primary tracking-widest uppercase block">
+                  02 / UNDERSTAND
+                </span>
+                <h3 className="text-xl md:text-2xl font-medium text-foreground">
+                  Scout Understands You
+                </h3>
+                <p className="text-sm text-muted-foreground font-light leading-relaxed">
+                  Your profile and preferences help Scout evaluate compatibility, eligibility, and
+                  prioritize recommendations tailored to your goals.
+                </p>
+              </div>
+              <div className="pt-4 text-primary/40">
+                <Sparkles className="w-8 h-8" />
+              </div>
+            </motion.div>
+
+            {/* Step 3 */}
+            <motion.div
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              variants={fadeUp}
+              className="p-8 rounded-2xl bg-card border border-border/80 space-y-4 text-left flex flex-col justify-between"
+            >
+              <div className="space-y-3">
+                <span className="text-xs font-mono font-semibold text-primary tracking-widest uppercase block">
+                  03 / APPLY
+                </span>
+                <h3 className="text-xl md:text-2xl font-medium text-foreground">
+                  You Apply Direct
+                </h3>
+                <p className="text-sm text-muted-foreground font-light leading-relaxed">
+                  Review structured AI insights explaining why each recommendation matches your
+                  profile, then apply directly on official platform pages.
+                </p>
+              </div>
+              <div className="pt-4 text-primary/40">
+                <ShieldCheck className="w-8 h-8" />
+              </div>
+            </motion.div>
+          </Grid>
+        </Container>
+      </Section>
+
+      {/* ── 6. WHY SCOUT EXISTS (VISUALLY BALANCED COMPARISON BLOCK) ── */}
+      <Section size="lg" className="py-24 bg-card/25 border-y border-border/40">
+        <Container size="lg">
+          <div className="max-w-3xl mx-auto text-center space-y-10">
+            {/* Centered Heading Block */}
+            <div className="space-y-3">
+              <span className="text-xs font-semibold uppercase tracking-widest text-primary">
+                Product Philosophy
+              </span>
+              <h2 className="text-3xl md:text-5xl font-display font-medium text-foreground tracking-tight leading-tight">
+                Finding opportunities shouldn&apos;t feel like a second job.
+              </h2>
+              <p className="text-sm md:text-base text-muted-foreground font-light leading-relaxed max-w-xl mx-auto">
+                Most opportunities already exist across the web—they are simply scattered across
+                dozens of platforms. Scout brings them together in one place.
+              </p>
+            </div>
+
+            {/* Centered Editorial Comparison Table */}
+            <div className="w-full border border-border/80 rounded-2xl overflow-hidden bg-card shadow-sm text-left">
+              <div className="grid grid-cols-2 bg-muted/40 p-4 border-b border-border/60 text-xs uppercase tracking-wider font-semibold text-center">
+                <span className="text-muted-foreground">Traditional Platforms</span>
+                <span className="text-primary font-bold">Scout</span>
+              </div>
+
+              <div className="divide-y divide-border/60 text-xs sm:text-sm font-light">
+                <div className="grid grid-cols-2 p-5 sm:p-6 gap-4 sm:gap-6 items-center">
+                  <span className="text-muted-foreground">
+                    Built for organizations to publish listings
+                  </span>
+                  <span className="text-foreground font-medium">
+                    Built for students to discover opportunities
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 p-5 sm:p-6 gap-4 sm:gap-6 items-center">
+                  <span className="text-muted-foreground">
+                    Search across multiple sites yourself
+                  </span>
+                  <span className="text-foreground font-medium">
+                    Discover from across the web in one place
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 p-5 sm:p-6 gap-4 sm:gap-6 items-center">
+                  <span className="text-muted-foreground">Generic listings with heavy ads</span>
+                  <span className="text-foreground font-medium">
+                    Personalized, editorial recommendations
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 p-5 sm:p-6 gap-4 sm:gap-6 items-center">
+                  <span className="text-muted-foreground">Endless manual scrolling</span>
+                  <span className="text-foreground font-medium">
+                    Carefully selected high-match opportunities
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 p-5 sm:p-6 gap-4 sm:gap-6 items-center">
+                  <span className="text-muted-foreground">You do all the searching</span>
+                  <span className="text-foreground font-medium">
+                    Scout searches continuously for you
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Container>
+      </Section>
+
+      {/* ── 7. FINAL CTA ── */}
+      <Section size="lg" className="py-28 text-center space-y-8 select-none">
+        <Container size="md" className="space-y-6">
+          <h2 className="text-3xl sm:text-5xl md:text-6xl font-display font-medium text-foreground tracking-tight">
+            Stop searching. <br />
+            <span className="font-serif italic text-primary font-normal">Start discovering.</span>
+          </h2>
+          <p className="text-sm md:text-base text-muted-foreground font-light max-w-md mx-auto">
+            Spend less time checking dozens of websites and more time applying to opportunities that
+            move your career forward.
+          </p>
+          <div className="pt-2">
             <Button
               variant="primary"
               size="lg"
               onClick={handleCTA}
               loading={loading}
               iconRight={<ArrowRight className="w-4 h-4" />}
+              className="px-8 text-base"
             >
-              Begin with Scout
+              Get Started
             </Button>
-            <Button
-              variant="ghost"
-              size="lg"
-              onClick={() => {
-                const target = document.getElementById('problem-section');
-                target?.scrollIntoView({ behavior: 'smooth' });
-              }}
-            >
-              Learn more
-            </Button>
-          </motion.div>
+          </div>
         </Container>
       </Section>
 
-      {/* EDITORIAL FOOTER */}
-      <footer className="w-full border-t border-border/80 py-12 bg-card text-xs text-secondary/60 select-none">
+      {/* ── 8. EDITORIAL FOOTER ── */}
+      <footer className="w-full border-t border-border/80 py-12 bg-card text-xs text-muted-foreground select-none">
         <Container
           size="xl"
           className="flex flex-col md:flex-row items-center justify-between gap-6"
         >
           <div className="flex items-center gap-2">
+            <svg
+              className="w-5 h-5 text-primary"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+            </svg>
             <span className="text-sm font-semibold tracking-tight text-foreground font-sans">
               Scout
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-6 text-[10px] uppercase tracking-widest">
+          <div className="flex flex-wrap items-center justify-center gap-6 text-xs text-muted-foreground">
             <a href="/" className="hover:text-foreground transition-colors">
-              Navigation
+              Home
             </a>
-            <a href="/privacy" className="hover:text-foreground transition-colors">
-              Privacy Policy
+            <a href="/explore" className="hover:text-foreground transition-colors">
+              Discover
+            </a>
+            <a href="/bookmarks" className="hover:text-foreground transition-colors">
+              Saved
             </a>
             <a
               href="https://github.com"
@@ -602,10 +487,11 @@ export default function Home() {
             >
               GitHub
             </a>
-            <ThemeToggle />
           </div>
 
-          <span className="text-[10px] tracking-widest uppercase">ZenKai Ecosystem</span>
+          <span className="text-[11px] text-muted-foreground/60">
+            © {new Date().getFullYear()} Scout. All rights reserved.
+          </span>
         </Container>
       </footer>
     </AppLayout>

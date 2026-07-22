@@ -68,3 +68,8 @@ export const bookmarksApi = {
   add: (opportunityId: string) => api.post('/api/v1/bookmarks', { opportunityId }),
   remove: (opportunityId: string) => api.delete(`/api/v1/bookmarks/${opportunityId}`),
 };
+
+export const sourcesApi = {
+  getStats: () => api.get('/api/v1/discovery/sources/stats'),
+  list: () => api.get('/api/v1/discovery/sources'),
+};
