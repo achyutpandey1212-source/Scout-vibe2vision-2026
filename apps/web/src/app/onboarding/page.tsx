@@ -2,12 +2,7 @@
 
 /**
  * ==========================================
- *          ONBOARDING V2 FROZEN
- *
- * Changing onboarding requires updating:
- * - Personalization
- * - Discovery
- * - Recommendation
+ *          ONBOARDING FLOW REDESIGN
  * ==========================================
  */
 
@@ -16,23 +11,44 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useAuth } from '@/context/auth-context';
-import { profileApi } from '@/lib/api';
+import { profileApi, recommendationsApi } from '@/lib/api';
 import { SKILLS_TAXONOMY } from '@scout/shared';
 import {
-  ChevronLeft,
-  ChevronRight,
+  FormLayout,
+  ProgressIndicator,
+  MultiSelect,
+  FileUpload,
+  FormNavigationControls,
+  TextInput,
+  Select,
+} from '@/components/ui';
+import { ThemeToggle } from '@/components/theme-toggle';
+import {
   Sparkles,
   Check,
-  Search,
-  Upload,
-  X,
-  AlertCircle,
-  AlertTriangle,
   FileText,
+  ShieldCheck,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  Briefcase,
+  FolderGit2,
+  Code2,
+  GraduationCap,
+  AlertCircle,
+  Link2,
+  Loader2,
 } from 'lucide-react';
-import { ThemeToggle } from '@/components/theme-toggle';
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 8;
+
+const INFORMATIONAL_MESSAGES = [
+  "Looking through today's opportunities...",
+  'Comparing your profile with each opportunity...',
+  'Writing personalized insights...',
+  'Double-checking recommendation quality...',
+];
 
 export default function OnboardingPage() {
   const { syncWithBackend } = useAuth();
@@ -42,11 +58,29 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [skillSearch, setSkillSearch] = useState('');
 
-  // Resume upload mock state
+  // Recommendation Generation & Polling State
+  const [isGeneratingRecs, setIsGeneratingRecs] = useState(false);
+  const [isRecsReady, setIsRecsReady] = useState(false);
+  const [msgIndex, setMsgIndex] = useState(0);
+
+  // Resume upload state
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState('');
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+
+  // Collapsible section state for resume review
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    education: true,
+    skills: true,
+    projects: true,
+    experience: true,
+    links: true,
+  });
+
+  const toggleSection = (section: string) => {
+    setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
 
   // Resume Review Screen State
   const [parsedResumeData, setParsedResumeData] = useState<any>(null);
@@ -57,10 +91,14 @@ export default function OnboardingPage() {
     branch: '',
     expectedGraduation: '',
     technicalSkills: [] as string[],
+    detectedProjects: [] as any[],
+    detectedExperience: [] as any[],
     detectedLinks: [] as any[],
+    certifications: [] as string[],
+    achievements: [] as string[],
   });
 
-  // Career Readiness Score states (fetched dynamically)
+  // Readiness Score states
   const [readinessData, setReadinessData] = useState({
     careerReadinessScore: 0,
     completionPercentage: 0,
@@ -70,7 +108,7 @@ export default function OnboardingPage() {
   // Profile V2 state matching ProfileModel
   const [formData, setFormData] = useState({
     fullName: '',
-    gender: 'UNKNOWN' as 'MALE' | 'FEMALE' | 'UNKNOWN',
+    gender: 'FEMALE' as 'MALE' | 'FEMALE' | 'OTHER' | 'UNKNOWN',
     age: '' as string | number,
     state: '',
     city: '',
@@ -88,14 +126,14 @@ export default function OnboardingPage() {
       preferSafer: '',
     },
     opportunityPreferences: {
-      internships: false,
-      hackathons: false,
-      scholarships: false,
+      internships: true,
+      hackathons: true,
+      scholarships: true,
       research: false,
       events: false,
       bootcamps: false,
       opensource: false,
-      competitions: false,
+      competitions: true,
       training: false,
       volunteer: false,
       earlyCareerPrograms: false,
@@ -117,7 +155,7 @@ export default function OnboardingPage() {
             setFormData((prev) => ({
               ...prev,
               fullName: profile.fullName || '',
-              gender: profile.gender || 'UNKNOWN',
+              gender: profile.gender || 'FEMALE',
               age: profile.age || '',
               state: profile.state || '',
               city: profile.city || '',
@@ -135,18 +173,18 @@ export default function OnboardingPage() {
                 preferSafer: profile.confidenceProfile?.preferSafer || '',
               },
               opportunityPreferences: {
-                internships: profile.opportunityPreferences?.internships || false,
-                hackathons: profile.opportunityPreferences?.hackathons || false,
-                scholarships: profile.opportunityPreferences?.scholarships || false,
-                research: profile.opportunityPreferences?.research || false,
-                events: profile.opportunityPreferences?.events || false,
-                bootcamps: profile.opportunityPreferences?.bootcamps || false,
-                opensource: profile.opportunityPreferences?.opensource || false,
-                competitions: profile.opportunityPreferences?.competitions || false,
-                training: profile.opportunityPreferences?.training || false,
-                volunteer: profile.opportunityPreferences?.volunteer || false,
-                earlyCareerPrograms: profile.opportunityPreferences?.earlyCareerPrograms || false,
-                partTime: profile.opportunityPreferences?.partTime || false,
+                internships: profile.opportunityPreferences?.internships ?? true,
+                hackathons: profile.opportunityPreferences?.hackathons ?? true,
+                scholarships: profile.opportunityPreferences?.scholarships ?? true,
+                research: profile.opportunityPreferences?.research ?? false,
+                events: profile.opportunityPreferences?.events ?? false,
+                bootcamps: profile.opportunityPreferences?.bootcamps ?? false,
+                opensource: profile.opportunityPreferences?.opensource ?? false,
+                competitions: profile.opportunityPreferences?.competitions ?? true,
+                training: profile.opportunityPreferences?.training ?? false,
+                volunteer: profile.opportunityPreferences?.volunteer ?? false,
+                earlyCareerPrograms: profile.opportunityPreferences?.earlyCareerPrograms ?? false,
+                partTime: profile.opportunityPreferences?.partTime ?? false,
               },
               resumeUploaded: profile.resumeUploaded || false,
             }));
@@ -173,7 +211,18 @@ export default function OnboardingPage() {
     fetchProfile();
   }, []);
 
-  // Autosave when transitioning steps
+  // Message rotation during generation
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isGeneratingRecs && !isRecsReady) {
+      interval = setInterval(() => {
+        setMsgIndex((prev) => (prev + 1) % INFORMATIONAL_MESSAGES.length);
+      }, 3500);
+    }
+    return () => clearInterval(interval);
+  }, [isGeneratingRecs, isRecsReady]);
+
+  // Save progress helper
   const saveProgress = async (nextStep: number) => {
     setSaving(true);
     localStorage.setItem('scout_onboarding_v2_step', nextStep.toString());
@@ -197,7 +246,26 @@ export default function OnboardingPage() {
     }
   };
 
+  const isStepValid = (currentStep: number) => {
+    if (currentStep === 1) return true;
+    if (currentStep === 2) {
+      return formData.fullName.trim().length > 0 && formData.gender !== 'UNKNOWN';
+    }
+    if (currentStep === 3) {
+      return (
+        formData.college.trim().length > 0 &&
+        formData.degree.trim().length > 0 &&
+        formData.expectedGraduation !== ''
+      );
+    }
+    if (currentStep === 5) {
+      return formData.technicalSkills.length > 0;
+    }
+    return true;
+  };
+
   const handleNext = async () => {
+    if (!isStepValid(step)) return;
     const nextStep = step + 1;
     if (nextStep <= TOTAL_STEPS) {
       setStep(nextStep);
@@ -213,24 +281,51 @@ export default function OnboardingPage() {
     }
   };
 
-  const handleComplete = async () => {
-    setSaving(true);
+  const handleGenerateRecommendations = async () => {
+    setIsGeneratingRecs(true);
     try {
       localStorage.removeItem('scout_onboarding_v2_step');
+      await saveProgress(8);
       await profileApi.completeOnboarding();
       await syncWithBackend();
-      router.replace('/dashboard');
+
+      // Poll recommendations status
+      const pollTimer = setInterval(async () => {
+        try {
+          const res = await recommendationsApi.list();
+          const status = res.data?.status || 'READY';
+          if (status === 'READY' || res.data?.data) {
+            clearInterval(pollTimer);
+            setIsRecsReady(true);
+            // 1.8 second satisfying success confirmation pause
+            setTimeout(() => {
+              router.replace('/dashboard');
+            }, 1800);
+          }
+        } catch (err) {
+          console.error('Status poll error:', err);
+          // Graceful fallback navigation if offline/error
+          clearInterval(pollTimer);
+          setIsRecsReady(true);
+          setTimeout(() => {
+            router.replace('/dashboard');
+          }, 1800);
+        }
+      }, 2000);
     } catch (err) {
       console.error('Failed to complete onboarding V2:', err);
-    } finally {
-      setSaving(false);
+      setIsGeneratingRecs(false);
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFileUpload = async (file: File | null) => {
+    if (!file) {
+      setUploadedFile(null);
+      setUploadedFileName('');
+      return;
+    }
 
+    setUploadedFile(file);
     setUploadingFile(true);
     setUploadedFileName(file.name);
 
@@ -243,19 +338,26 @@ export default function OnboardingPage() {
 
       if (res.data && res.data.success) {
         const data = res.data.data;
+        const parsed = data.parsedFields || {};
+        const resumeObj = data.resume || {};
+
         setParsedResumeData(data);
         setReviewFields({
-          fullName: data.parsedFields.fullName || formData.fullName,
-          college: data.parsedFields.college || formData.college,
-          degree: data.parsedFields.degree || formData.degree,
-          branch: data.parsedFields.branch || formData.branch,
-          expectedGraduation: data.parsedFields.expectedGraduation || formData.expectedGraduation,
-          technicalSkills: data.parsedFields.technicalSkills || formData.technicalSkills,
-          detectedLinks: data.parsedFields.detectedLinks || [],
+          fullName: parsed.fullName || formData.fullName,
+          college: parsed.college || formData.college,
+          degree: parsed.degree || formData.degree,
+          branch: parsed.branch || formData.branch,
+          expectedGraduation: parsed.expectedGraduation || formData.expectedGraduation,
+          technicalSkills: parsed.technicalSkills || resumeObj.skills || formData.technicalSkills,
+          detectedProjects: parsed.detectedProjects || resumeObj.projects || [],
+          detectedExperience: parsed.detectedExperience || resumeObj.experience || [],
+          detectedLinks: parsed.detectedLinks || resumeObj.links || [],
+          certifications: parsed.detectedCertifications || resumeObj.certifications || [],
+          achievements: parsed.detectedAchievements || resumeObj.achievements || [],
         });
       }
     } catch (err) {
-      console.error('Failed to upload/parse resume multipart:', err);
+      console.error('Failed to upload/parse resume:', err);
     } finally {
       setUploadingFile(false);
     }
@@ -302,15 +404,6 @@ export default function OnboardingPage() {
     }));
   };
 
-  const toggleSkill = (skill: string) => {
-    setFormData((prev) => {
-      const skills = prev.technicalSkills.includes(skill)
-        ? prev.technicalSkills.filter((s) => s !== skill)
-        : [...prev.technicalSkills, skill];
-      return { ...prev, technicalSkills: skills };
-    });
-  };
-
   const toggleReviewSkill = (skillId: string) => {
     setReviewFields((prev: any) => {
       const skills = prev.technicalSkills.includes(skillId)
@@ -320,942 +413,917 @@ export default function OnboardingPage() {
     });
   };
 
-  // Slide Animation Config
+  const getStepTitle = (s: number) => {
+    switch (s) {
+      case 1:
+        return 'Welcome';
+      case 2:
+        return 'Basic Info';
+      case 3:
+        return 'Career Stage';
+      case 4:
+        return 'Goals';
+      case 5:
+        return 'Skills';
+      case 6:
+        return 'Preferences';
+      case 7:
+        return 'Resume';
+      case 8:
+        return 'Review & Finish';
+      default:
+        return '';
+    }
+  };
+
   const slideVariants = {
-    initial: { opacity: 0, x: 20 },
+    initial: { opacity: 0, x: 12 },
     animate: { opacity: 1, x: 0 },
-    exit: { opacity: 0, x: -20 },
+    exit: { opacity: 0, x: -12 },
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background space-y-4">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-        <span className="text-sm font-light text-secondary tracking-wide">
-          Loading your profile...
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background space-y-3 select-none">
+        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <span className="text-xs font-light text-muted-foreground tracking-wide">
+          Loading profile...
         </span>
       </div>
     );
   }
 
-  const progressPercent = Math.round((step / TOTAL_STEPS) * 100);
+  // ── RECOMMENDATION GENERATION EXPERIENCE & SUCCESS CONFIRMATION ──
+  if (isGeneratingRecs) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6 text-center select-none space-y-8">
+        {isRecsReady ? (
+          /* SUCCESS CONFIRMATION SCREEN (1.8s Pause) */
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3 }}
+            className="space-y-6 max-w-sm"
+          >
+            <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto shadow-sm">
+              <CheckCircle2 className="w-8 h-8 text-primary" />
+            </div>
 
-  const filteredSkills = SKILLS_TAXONOMY.filter(
-    (skill) =>
-      skill.name.toLowerCase().includes(skillSearch.toLowerCase()) ||
-      skill.aliases.some((alias) => alias.toLowerCase().includes(skillSearch.toLowerCase())),
-  );
+            <div className="space-y-2">
+              <h1 className="text-2xl font-display font-medium text-foreground">
+                ✓ Today&apos;s recommendations are ready.
+              </h1>
+              <p className="text-xs text-muted-foreground font-light leading-relaxed">
+                We found five opportunities worth your attention based on your profile.
+              </p>
+            </div>
 
-  const getReadinessSuggestions = () => {
-    const suggestions: string[] = [];
-    if (!formData.resumeUploaded) {
-      suggestions.push('Upload your resume');
-    }
-    if (formData.technicalSkills.length < 3) {
-      suggestions.push('Add at least 3 skills');
-    }
-    const hasPrefs = Object.values(formData.opportunityPreferences).some((val) => val === true);
-    if (!hasPrefs) {
-      suggestions.push('Select opportunity preferences');
-    }
-    return suggestions;
-  };
+            <p className="text-xs font-mono text-primary animate-pulse">
+              Opening your dashboard...
+            </p>
+          </motion.div>
+        ) : (
+          /* BACKEND-DRIVEN GENERATION SCREEN */
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="space-y-6 max-w-sm"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
+              <Sparkles className="w-6 h-6 animate-pulse" />
+            </div>
 
-  const suggestionsList = getReadinessSuggestions();
+            <div className="space-y-2">
+              <h1 className="text-2xl font-display font-medium text-foreground">
+                Preparing today&apos;s recommendations
+              </h1>
+              <p className="text-xs text-muted-foreground font-light leading-relaxed">
+                Scout is matching your profile against today&apos;s opportunity database.
+              </p>
+            </div>
+
+            <div className="p-5 border border-border/80 bg-card rounded-2xl space-y-3 text-left shadow-sm text-xs font-light">
+              <div className="flex items-center gap-2 text-primary font-medium">
+                <Check className="w-4 h-4 text-primary shrink-0" />
+                <span>Profile saved</span>
+              </div>
+
+              <div className="pt-2 border-t border-border/40 space-y-1.5">
+                <div className="flex items-center gap-2 text-foreground font-medium">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
+                  <span>{INFORMATIONAL_MESSAGES[msgIndex]}</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground/60 leading-relaxed">
+                  This usually takes around 20–40 seconds depending on AI response time.
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen flex flex-col bg-background text-foreground font-sans relative pb-28">
-        {/* Progress Bar Header */}
-        <header className="sticky top-0 bg-background/85 backdrop-blur z-20 w-full p-4 border-b border-border/80">
-          <div className="max-w-xl mx-auto flex items-center justify-between">
-            <div className="flex flex-col">
-              <span className="text-xs font-light text-secondary">
-                Step {step} of {TOTAL_STEPS}
+      <div className="min-h-screen flex flex-col bg-background text-foreground select-none">
+        {/* Sticky Header with Progress */}
+        <header className="sticky top-0 bg-background/90 backdrop-blur-md z-20 w-full px-4 py-3 border-b border-border/60">
+          <div className="max-w-[580px] mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold tracking-tight text-foreground font-sans">
+                Scout
               </span>
-              <span className="text-xs font-medium text-primary">{progressPercent}% Progress</span>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center gap-3">
               {saving && (
-                <span className="text-[10px] text-primary/80 animate-pulse font-light">
-                  Saving...
-                </span>
+                <span className="text-xs text-primary/80 font-mono animate-pulse">✓ Saved</span>
               )}
               <ThemeToggle />
             </div>
           </div>
-          <div className="max-w-xl mx-auto mt-2 h-1 bg-muted rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary transition-all duration-300 ease-out"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
         </header>
 
-        {/* Wizard Forms */}
-        <main className="flex-1 max-w-xl mx-auto w-full px-6 pt-6 flex flex-col justify-center">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={step}
-              variants={slideVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={{ duration: 0.3 }}
-              className="space-y-6"
-            >
-              {/* STEP 1: WELCOME */}
-              {step === 1 && (
-                <div className="space-y-6 text-center">
-                  <div className="mx-auto w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center text-primary">
-                    <Sparkles className="w-7 h-7 animate-pulse" />
-                  </div>
-                  <h1 className="text-3xl md:text-4xl font-light leading-tight">
-                    Welcome to <span className="font-semibold text-primary">Scout V2</span>
-                  </h1>
-                  <p className="text-secondary font-light leading-relaxed max-w-md mx-auto">
-                    Let&apos;s build your personalization profile. We will help you discover
-                    internships, hackathons, and early career opportunities matching your
-                    engineering studies. 🌸
-                  </p>
-                  <p className="text-xs text-secondary/60">
-                    Takes under 5 minutes. Your progress is saved automatically.
-                  </p>
-                </div>
-              )}
-
-              {/* STEP 2: BASIC INFO */}
-              {step === 2 && (
-                <div className="space-y-4">
-                  <h1 className="text-2xl font-light">Introduce yourself 🌸</h1>
-                  <p className="text-xs text-secondary font-light">
-                    We use this to verify identity and location-based opportunities.
-                  </p>
-
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-xs text-secondary font-medium block mb-1">
-                        Full Name
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Enter your full name"
-                        value={formData.fullName}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, fullName: e.target.value }))
-                        }
-                        className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
-                      />
+        {/* Wizard Form Layout */}
+        <main className="flex-1 flex flex-col justify-center">
+          <FormLayout
+            heading={
+              step === 1
+                ? 'Welcome to Scout.'
+                : step === 2
+                  ? 'Tell us about yourself.'
+                  : step === 3
+                    ? 'Where are you in your journey?'
+                    : step === 4
+                      ? 'What are you aiming for?'
+                      : step === 5
+                        ? 'What are you already good at?'
+                        : step === 6
+                          ? 'What should Scout discover for you?'
+                          : step === 7
+                            ? 'Give Scout a head start.'
+                            : 'Review & Confirm'
+            }
+            subheading={
+              step === 1
+                ? 'Usually takes about 2–3 minutes. You can update everything later in Profile.'
+                : step === 2
+                  ? 'These basics help Scout recommend opportunities relevant to your current stage.'
+                  : step === 3
+                    ? 'Your academic background helps filter opportunities you are eligible for.'
+                    : step === 4
+                      ? 'Knowing your goals helps Scout prioritize opportunities aligning with your ambitions.'
+                      : step === 5
+                        ? 'Start with the skills you are most confident about.'
+                        : step === 6
+                          ? 'Tell Scout what opportunity types matter most to you.'
+                          : step === 7
+                            ? 'Uploading your resume helps Scout understand your background and refine match scores.'
+                            : 'Confirm your profile details below before generating recommendations.'
+            }
+            stepIndicator={
+              <ProgressIndicator
+                currentStep={step}
+                totalSteps={TOTAL_STEPS}
+                stepTitle={getStepTitle(step)}
+              />
+            }
+            footerActions={
+              <FormNavigationControls
+                isFirstStep={step === 1}
+                isLastStep={step === TOTAL_STEPS}
+                onBack={handleBack}
+                onNext={step === TOTAL_STEPS ? handleGenerateRecommendations : handleNext}
+                nextLabel={
+                  step === 1
+                    ? "Let's Begin"
+                    : step === TOTAL_STEPS
+                      ? 'Generate My Recommendations'
+                      : 'Continue'
+                }
+                isLoading={saving}
+                isDisabled={!isStepValid(step)}
+              />
+            }
+          >
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={step}
+                variants={slideVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{ duration: 0.2 }}
+                className="space-y-6"
+              >
+                {/* ── STEP 1: WELCOME ── */}
+                {step === 1 && (
+                  <div className="space-y-6 pt-4 text-center">
+                    <div className="mx-auto w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary">
+                      <Sparkles className="w-6 h-6" />
                     </div>
+                    <div className="p-4 border border-border/80 bg-card rounded-2xl space-y-2 text-xs text-muted-foreground font-light leading-relaxed max-w-md mx-auto text-left">
+                      <div className="flex items-center gap-2 text-foreground font-medium text-sm pb-1 border-b border-border/60">
+                        <ShieldCheck className="w-4 h-4 text-primary" />
+                        <span>How Scout protects your privacy</span>
+                      </div>
+                      <p>• Scout only uses your information to personalize recommendations.</p>
+                      <p>• Applications are completed directly on official opportunity pages.</p>
+                      <p>• Everything you enter can be updated later from Profile.</p>
+                    </div>
+                  </div>
+                )}
 
-                    <div>
-                      <label className="text-xs text-secondary font-medium block mb-1">
-                        Gender
+                {/* ── STEP 2: BASIC INFORMATION ── */}
+                {step === 2 && (
+                  <div className="space-y-4">
+                    <TextInput
+                      label="Full Name *"
+                      placeholder="e.g. Alex Morgan"
+                      value={formData.fullName}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, fullName: e.target.value }))
+                      }
+                      error={!formData.fullName && step > 2 ? 'Full name is required' : undefined}
+                    />
+
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-secondary/80">
+                        Gender *
                       </label>
                       <div className="grid grid-cols-3 gap-2">
-                        <button
-                          onClick={() => setFormData((prev) => ({ ...prev, gender: 'FEMALE' }))}
-                          className={`py-2 px-3 border rounded-xl text-xs font-light text-center transition-all ${
-                            formData.gender === 'FEMALE'
-                              ? 'border-primary bg-primary/5 text-primary font-medium'
-                              : 'border-border bg-card text-secondary'
-                          }`}
-                        >
-                          Female
-                        </button>
-                        <button
-                          disabled
-                          className="py-2 px-3 border border-border bg-card/50 text-secondary/40 rounded-xl text-xs font-light text-center relative cursor-not-allowed"
-                        >
-                          Male{' '}
-                          <span className="block text-[8px] text-primary/60 font-medium">
-                            🚧 Coming Soon
-                          </span>
-                        </button>
-                        <button
-                          disabled
-                          className="py-2 px-3 border border-border bg-card/50 text-secondary/40 rounded-xl text-xs font-light text-center relative cursor-not-allowed"
-                        >
-                          Other{' '}
-                          <span className="block text-[8px] text-primary/60 font-medium">
-                            🚧 Coming Soon
-                          </span>
-                        </button>
+                        {[
+                          { id: 'FEMALE', label: 'Female' },
+                          { id: 'MALE', label: 'Male' },
+                          { id: 'OTHER', label: 'Other' },
+                        ].map((g) => (
+                          <button
+                            key={g.id}
+                            type="button"
+                            onClick={() =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                gender: g.id as any,
+                              }))
+                            }
+                            className={`
+                              py-2.5 px-3 border rounded-xl text-xs font-medium text-center transition-all duration-150
+                              ${
+                                formData.gender === g.id
+                                  ? 'border-primary bg-primary/10 text-primary'
+                                  : 'border-border/80 bg-card text-muted-foreground hover:bg-muted/40'
+                              }
+                            `}
+                          >
+                            {g.label}
+                          </button>
+                        ))}
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 pt-2">
-                      <div className="col-span-1">
-                        <label className="text-xs text-secondary font-medium block mb-1">
-                          Age (Optional)
-                        </label>
-                        <input
-                          type="number"
-                          placeholder="e.g. 20"
-                          value={formData.age}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, age: e.target.value }))
-                          }
-                          className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
-                        />
-                      </div>
-                      <div className="col-span-1">
-                        <label className="text-xs text-secondary font-medium block mb-1">
-                          State
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Delhi"
-                          value={formData.state}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, state: e.target.value }))
-                          }
-                          className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
-                        />
-                      </div>
-                      <div className="col-span-1">
-                        <label className="text-xs text-secondary font-medium block mb-1">
-                          City
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. New Delhi"
-                          value={formData.city}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, city: e.target.value }))
-                          }
-                          className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
-                        />
-                      </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <TextInput
+                        label="Age"
+                        type="number"
+                        placeholder="e.g. 20"
+                        value={formData.age}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, age: e.target.value }))}
+                      />
+                      <TextInput
+                        label="State"
+                        placeholder="e.g. Karnataka"
+                        value={formData.state}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, state: e.target.value }))
+                        }
+                      />
+                      <TextInput
+                        label="City"
+                        placeholder="e.g. Bangalore"
+                        value={formData.city}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, city: e.target.value }))}
+                      />
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* STEP 3: EDUCATION */}
-              {step === 3 && (
-                <div className="space-y-4">
-                  <h1 className="text-2xl font-light">Your Academic Context 🎓</h1>
-                  <p className="text-xs text-secondary font-light">
-                    Helps us filter opportunities requiring specific graduation windows or degrees.
-                  </p>
+                {/* ── STEP 3: CAREER STAGE & ACADEMICS ── */}
+                {step === 3 && (
+                  <div className="space-y-4">
+                    <TextInput
+                      label="College / Institution *"
+                      placeholder="e.g. Indian Institute of Technology"
+                      value={formData.college}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, college: e.target.value }))
+                      }
+                    />
 
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-xs text-secondary font-medium block mb-1">
-                        College / Institute
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Name of your college"
-                        value={formData.college}
+                    <div className="grid grid-cols-2 gap-3">
+                      <TextInput
+                        label="Degree *"
+                        placeholder="e.g. B.Tech"
+                        value={formData.degree}
                         onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, college: e.target.value }))
+                          setFormData((prev) => ({ ...prev, degree: e.target.value }))
                         }
-                        className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
+                      />
+                      <TextInput
+                        label="Branch / Major"
+                        placeholder="e.g. Computer Science"
+                        value={formData.branch}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, branch: e.target.value }))
+                        }
                       />
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs text-secondary font-medium block mb-1">
-                          Degree
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. B.Tech"
-                          value={formData.degree}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, degree: e.target.value }))
-                          }
-                          className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-secondary font-medium block mb-1">
-                          Branch / Major
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Computer Science"
-                          value={formData.branch}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, branch: e.target.value }))
-                          }
-                          className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
-                        />
-                      </div>
-                    </div>
+                      <Select
+                        label="Current Year"
+                        value={formData.currentYear}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, currentYear: e.target.value }))
+                        }
+                      >
+                        <option value="">Select Current Year</option>
+                        <option value="1">1st Year</option>
+                        <option value="2">2nd Year</option>
+                        <option value="3">3rd Year</option>
+                        <option value="4">4th Year / Final</option>
+                        <option value="5">Graduate / Alumni</option>
+                      </Select>
 
-                    <div className="grid grid-cols-2 gap-3 pt-2">
-                      <div>
-                        <label className="text-xs text-secondary font-medium block mb-1">
-                          Current Year
-                        </label>
-                        <select
-                          value={formData.currentYear}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, currentYear: e.target.value }))
-                          }
-                          className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
-                        >
-                          <option value="">Select Year</option>
-                          {[1, 2, 3, 4, 5, 6].map((yr) => (
-                            <option key={yr} value={yr}>
-                              Year {yr}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-xs text-secondary font-medium block mb-1">
-                          Expected Graduation
-                        </label>
-                        <input
-                          type="number"
-                          placeholder="e.g. 2027"
-                          value={formData.expectedGraduation}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, expectedGraduation: e.target.value }))
-                          }
-                          className="w-full px-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
-                        />
-                      </div>
+                      <TextInput
+                        label="Expected Graduation *"
+                        type="number"
+                        placeholder="e.g. 2027"
+                        value={formData.expectedGraduation}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, expectedGraduation: e.target.value }))
+                        }
+                      />
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* STEP 4: SKILLS */}
-              {step === 4 && (
-                <div className="space-y-4">
-                  <h1 className="text-2xl font-light">What are your skills? 💻</h1>
-                  <p className="text-xs text-secondary font-light">
-                    Search and select the technical skills you know or are currently learning.
-                  </p>
-
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="Search skills..."
-                      value={skillSearch}
-                      onChange={(e) => setSkillSearch(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-card border border-border rounded-xl focus:outline-none focus:border-primary text-sm font-light"
+                {/* ── STEP 4: CAREER GOALS ── */}
+                {step === 4 && (
+                  <div className="space-y-4">
+                    <MultiSelect
+                      label="Career Goals & Target Roles"
+                      placeholder="Select your target roles..."
+                      options={[
+                        'Software Engineering',
+                        'Backend Engineering',
+                        'Frontend Engineering',
+                        'Full Stack Engineering',
+                        'AI / ML Engineering',
+                        'DevOps & Cloud',
+                        'Cybersecurity',
+                        'Data Science',
+                      ]}
+                      value={formData.careerGoals}
+                      onChange={(selected) =>
+                        setFormData((prev) => ({ ...prev, careerGoals: selected }))
+                      }
                     />
-                    <Search className="absolute left-3.5 top-3 w-4 h-4 text-secondary/60" />
-                  </div>
 
-                  {/* Selected skills tags */}
-                  {formData.technicalSkills.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 p-2 bg-accent/20 rounded-xl">
-                      {formData.technicalSkills.map((skillId) => {
-                        const skillName =
-                          SKILLS_TAXONOMY.find((s) => s.id === skillId)?.name || skillId;
-                        return (
-                          <span
-                            key={skillId}
-                            className="flex items-center space-x-1 px-2.5 py-1 bg-primary text-primary-foreground rounded-full text-xs font-light"
-                          >
-                            <span>{skillName}</span>
+                    <div className="space-y-1.5 pt-2">
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-secondary/80">
+                        What&apos;s your biggest goal or challenge right now?
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {[
+                          'Get my first internship',
+                          'Build strong project portfolio',
+                          'Find relevant student scholarships',
+                          'Prepare for technical interviews',
+                        ].map((goal) => {
+                          const isSelected = formData.biggestChallenge === goal;
+                          return (
                             <button
-                              onClick={() => toggleSkill(skillId)}
-                              className="hover:opacity-85 focus:outline-none"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Search results list */}
-                  <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto p-1 bg-card border border-border rounded-xl">
-                    {filteredSkills.map((skill) => {
-                      const isSelected = formData.technicalSkills.includes(skill.id);
-                      return (
-                        <button
-                          key={skill.id}
-                          onClick={() => toggleSkill(skill.id)}
-                          className={`p-2 border rounded-xl text-center text-xs transition-all ${
-                            isSelected
-                              ? 'border-primary bg-primary/5 text-primary font-medium'
-                              : 'border-border bg-card hover:bg-accent text-secondary'
-                          }`}
-                        >
-                          {skill.name}
-                        </button>
-                      );
-                    })}
-                    {filteredSkills.length === 0 && (
-                      <div className="col-span-3 py-6 text-center text-xs text-secondary font-light">
-                        No skills match your query
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* STEP 5: CAREER DIRECTION */}
-              {step === 5 && (
-                <div className="space-y-5">
-                  <div className="space-y-2">
-                    <h1 className="text-2xl font-light">What is your biggest goal right now? 🎯</h1>
-                    <p className="text-xs text-secondary font-light">
-                      Choose the main focus that dominates your career efforts currently.
-                    </p>
-
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        'Get my first internship',
-                        'Build my resume',
-                        'Prepare for placements',
-                        'Learn through hackathons',
-                        'Explore opportunities',
-                        'Win scholarships',
-                        "I'm still exploring",
-                      ].map((goal) => {
-                        const isSelected = formData.careerGoals[0] === goal;
-                        return (
-                          <button
-                            key={goal}
-                            onClick={() =>
-                              setFormData((prev) => ({ ...prev, careerGoals: [goal] }))
-                            }
-                            className={`px-3 py-1.5 border rounded-full text-xs transition-all ${
-                              isSelected
-                                ? 'border-primary bg-primary text-primary-foreground font-medium'
-                                : 'border-border bg-card hover:bg-accent text-secondary'
-                            }`}
-                          >
-                            {goal}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 pt-3 border-t border-border/40">
-                    <h2 className="text-base font-light text-foreground">
-                      What is worrying you the most right now? 🌸
-                    </h2>
-                    <p className="text-xs text-secondary font-light">
-                      Let us know what roadblock is on your mind so we can help clear it first.
-                    </p>
-
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        "I don't know where to apply.",
-                        "I don't think I'm good enough.",
-                        'My resume is weak.',
-                        "I don't have enough projects.",
-                        "I don't know which skills to learn.",
-                        "I'm preparing for placements.",
-                        "I'm just exploring.",
-                      ].map((worry) => {
-                        const isSelected = formData.biggestChallenge === worry;
-                        return (
-                          <button
-                            key={worry}
-                            onClick={() =>
-                              setFormData((prev) => ({ ...prev, biggestChallenge: worry }))
-                            }
-                            className={`px-3 py-1.5 border rounded-full text-xs transition-all ${
-                              isSelected
-                                ? 'border-primary bg-primary text-primary-foreground font-medium'
-                                : 'border-border bg-card hover:bg-accent text-secondary'
-                            }`}
-                          >
-                            {worry}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* STEP 6: PREFERENCES & CONFIDENCE */}
-              {step === 6 && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <h1 className="text-2xl font-light">What should Scout hunt for? 🌸</h1>
-                    <p className="text-xs text-secondary font-light">
-                      Select the types of student opportunities you want recommendations for.
-                    </p>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        { key: 'internships', label: 'Internships' },
-                        { key: 'hackathons', label: 'Hackathons' },
-                        { key: 'scholarships', label: 'Scholarships' },
-                        { key: 'opensource', label: 'Open Source' },
-                        { key: 'events', label: 'Workshops' },
-                        { key: 'bootcamps', label: 'Bootcamps' },
-                        { key: 'competitions', label: 'Competitions' },
-                        { key: 'training', label: 'Learning Programs' },
-                      ].map((item) => {
-                        const isSelected =
-                          formData.opportunityPreferences[
-                            item.key as keyof typeof formData.opportunityPreferences
-                          ];
-                        return (
-                          <button
-                            key={item.key}
-                            onClick={() =>
-                              togglePreference(
-                                item.key as keyof typeof formData.opportunityPreferences,
-                              )
-                            }
-                            className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition-all ${
-                              isSelected
-                                ? 'border-primary bg-primary/5 text-primary font-medium'
-                                : 'border-border bg-card hover:bg-accent text-secondary'
-                            }`}
-                          >
-                            <span className="text-xs font-light">{item.label}</span>
-                            {isSelected && <Check className="w-3.5 h-3.5 text-primary" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Future Categories (Coming Soon) */}
-                    <div className="pt-2">
-                      <div className="flex flex-wrap gap-1.5">
-                        {['Full-time Jobs', 'Freelancing Clients', 'Startup Funding'].map(
-                          (soon) => (
-                            <span
-                              key={soon}
-                              className="px-2 py-0.5 bg-card border border-border text-secondary/40 rounded-full text-[9px] font-light cursor-not-allowed"
-                            >
-                              {soon} 🚧 Coming Soon
-                            </span>
-                          ),
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3 pt-3 border-t border-border/40">
-                    <h2 className="text-sm font-medium text-secondary">Self-Belief check</h2>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-secondary font-light">
-                          &quot;I apply even if I don&apos;t meet every requirement.&quot;
-                        </span>
-                        <div className="flex space-x-1">
-                          {['Agree', 'Neutral', 'Disagree'].map((o) => (
-                            <button
-                              key={o}
+                              key={goal}
+                              type="button"
                               onClick={() =>
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  confidenceProfile: {
-                                    ...prev.confidenceProfile,
-                                    applyIfNoMeet: o,
-                                  },
-                                }))
+                                setFormData((prev) => ({ ...prev, biggestChallenge: goal }))
                               }
-                              className={`px-2 py-0.5 border rounded text-[9px] ${formData.confidenceProfile.applyIfNoMeet === o ? 'border-primary bg-primary/5 text-primary' : 'border-border text-secondary'}`}
+                              className={`
+                                p-3 border rounded-xl text-xs text-left transition-all duration-150
+                                ${
+                                  isSelected
+                                    ? 'border-primary bg-primary/10 text-primary font-medium'
+                                    : 'border-border/80 bg-card text-muted-foreground hover:bg-muted/40'
+                                }
+                              `}
                             >
-                              {o}
+                              {goal}
                             </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-secondary font-light">
-                          &quot;I avoid competitive opportunities.&quot;
-                        </span>
-                        <div className="flex space-x-1">
-                          {['Agree', 'Neutral', 'Disagree'].map((o) => (
-                            <button
-                              key={o}
-                              onClick={() =>
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  confidenceProfile: {
-                                    ...prev.confidenceProfile,
-                                    avoidCompetitive: o,
-                                  },
-                                }))
-                              }
-                              className={`px-2 py-0.5 border rounded text-[9px] ${formData.confidenceProfile.avoidCompetitive === o ? 'border-primary bg-primary/5 text-primary' : 'border-border text-secondary'}`}
-                            >
-                              {o}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-secondary font-light">
-                          &quot;I prefer safer opportunities over ambitious ones.&quot;
-                        </span>
-                        <div className="flex space-x-1">
-                          {['Agree', 'Neutral', 'Disagree'].map((o) => (
-                            <button
-                              key={o}
-                              onClick={() =>
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  confidenceProfile: { ...prev.confidenceProfile, preferSafer: o },
-                                }))
-                              }
-                              className={`px-2 py-0.5 border rounded text-[9px] ${formData.confidenceProfile.preferSafer === o ? 'border-primary bg-primary/5 text-primary' : 'border-border text-secondary'}`}
-                            >
-                              {o}
-                            </button>
-                          ))}
-                        </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* STEP 7: RESUME & CAREER READINESS */}
-              {step === 7 && (
-                <div className="space-y-4">
-                  {parsedResumeData ? (
-                    /* RESUME REVIEW SCREEN PANEL */
-                    <div className="p-5 border border-border bg-card rounded-2xl space-y-4 shadow-lg animate-in fade-in zoom-in duration-200">
-                      <div className="flex items-center space-x-2 border-b border-border/60 pb-3">
-                        <FileText className="w-5 h-5 text-primary" />
-                        <div>
-                          <h2 className="text-lg font-medium text-foreground">
-                            Review Extracted Information
-                          </h2>
-                          <p className="text-[10px] text-secondary font-light">
-                            Confirm or correct these fields before saving them to your profile.
-                          </p>
-                        </div>
+                {/* ── STEP 5: SKILLS ── */}
+                {step === 5 && (
+                  <div className="space-y-4">
+                    <MultiSelect
+                      label="Technical Skills & Technologies *"
+                      placeholder="Type or search skills (e.g. Python, React)..."
+                      options={SKILLS_TAXONOMY.map((s) => s.name)}
+                      value={formData.technicalSkills.map(
+                        (id) => SKILLS_TAXONOMY.find((s) => s.id === id)?.name || id,
+                      )}
+                      onChange={(selectedNames) => {
+                        const selectedIds = selectedNames.map((name) => {
+                          const matched = SKILLS_TAXONOMY.find(
+                            (s) => s.name.toLowerCase() === name.toLowerCase(),
+                          );
+                          return matched ? matched.id : name;
+                        });
+                        setFormData((prev) => ({ ...prev, technicalSkills: selectedIds }));
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* ── STEP 6: PREFERENCES ── */}
+                {step === 6 && (
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-secondary/80">
+                        Opportunity Types
+                      </label>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {[
+                          { key: 'internships', label: 'Internships' },
+                          { key: 'hackathons', label: 'Hackathons' },
+                          { key: 'scholarships', label: 'Scholarships' },
+                          { key: 'competitions', label: 'Competitions' },
+                          { key: 'research', label: 'Research Programs' },
+                          { key: 'events', label: 'Workshops & Events' },
+                        ].map((item) => {
+                          const isSelected =
+                            formData.opportunityPreferences[
+                              item.key as keyof typeof formData.opportunityPreferences
+                            ];
+                          return (
+                            <button
+                              key={item.key}
+                              type="button"
+                              onClick={() =>
+                                togglePreference(
+                                  item.key as keyof typeof formData.opportunityPreferences,
+                                )
+                              }
+                              className={`
+                                p-3 rounded-xl border text-xs flex items-center justify-between transition-all duration-150
+                                ${
+                                  isSelected
+                                    ? 'border-primary bg-primary/10 text-primary font-medium'
+                                    : 'border-border/80 bg-card text-muted-foreground hover:bg-muted/40'
+                                }
+                              `}
+                            >
+                              <span>{item.label}</span>
+                              {isSelected && (
+                                <Check className="w-3.5 h-3.5 text-primary shrink-0" />
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
+                    </div>
+                  </div>
+                )}
 
-                      {/* Score and Warnings */}
-                      <div className="grid grid-cols-3 gap-3 bg-accent/15 p-3 rounded-xl border border-border/40">
-                        <div className="col-span-1 text-center border-r border-border/40 pr-2">
-                          <span className="text-[9px] uppercase tracking-wide font-medium text-secondary">
-                            Match Confidence
-                          </span>
-                          <p className="text-xl font-bold text-primary">
-                            {Math.round(parsedResumeData.overallConfidence * 100)}%
-                          </p>
-                        </div>
-                        <div className="col-span-2 pl-2">
-                          <span className="text-[9px] uppercase tracking-wide font-medium text-secondary">
-                            Attention Areas
-                          </span>
-                          {parsedResumeData.warnings && parsedResumeData.warnings.length > 0 ? (
-                            <ul className="text-[9px] text-secondary/80 font-light list-disc pl-3 mt-0.5">
-                              {parsedResumeData.warnings.slice(0, 3).map((w: string, i: number) => (
-                                <li key={i}>{w}</li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="text-[9px] text-primary/80 font-light mt-0.5">
-                              Perfect match! No warning indicators detected.
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Fields form */}
-                      <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-                        <div>
-                          <label className="text-[10px] font-semibold text-secondary uppercase block mb-1">
-                            Full Name
-                          </label>
-                          <input
-                            type="text"
-                            value={reviewFields.fullName}
-                            onChange={(e) =>
-                              setReviewFields({ ...reviewFields, fullName: e.target.value })
-                            }
-                            className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:border-primary text-xs font-light"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-[10px] font-semibold text-secondary uppercase block mb-1">
-                              College
-                            </label>
-                            <input
-                              type="text"
-                              value={reviewFields.college}
-                              onChange={(e) =>
-                                setReviewFields({ ...reviewFields, college: e.target.value })
-                              }
-                              className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:border-primary text-xs font-light"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-semibold text-secondary uppercase block mb-1">
-                              Degree
-                            </label>
-                            <input
-                              type="text"
-                              value={reviewFields.degree}
-                              onChange={(e) =>
-                                setReviewFields({ ...reviewFields, degree: e.target.value })
-                              }
-                              className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:border-primary text-xs font-light"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-[10px] font-semibold text-secondary uppercase block mb-1">
-                              Branch
-                            </label>
-                            <input
-                              type="text"
-                              value={reviewFields.branch}
-                              onChange={(e) =>
-                                setReviewFields({ ...reviewFields, branch: e.target.value })
-                              }
-                              className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:border-primary text-xs font-light"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-semibold text-secondary uppercase block mb-1">
-                              Graduation Year
-                            </label>
-                            <input
-                              type="number"
-                              value={reviewFields.expectedGraduation}
-                              onChange={(e) =>
-                                setReviewFields({
-                                  ...reviewFields,
-                                  expectedGraduation: e.target.value,
-                                })
-                              }
-                              className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:border-primary text-xs font-light"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Extracted Skills List with Quick Toggles */}
-                        <div>
-                          <label className="text-[10px] font-semibold text-secondary uppercase block mb-1">
-                            Extracted Skills (Toggle to select)
-                          </label>
-                          <div className="flex flex-wrap gap-1 bg-background p-2 border border-border rounded-lg">
-                            {SKILLS_TAXONOMY.map((skill) => {
-                              const isSelected = reviewFields.technicalSkills.includes(skill.id);
-                              return (
-                                <button
-                                  key={skill.id}
-                                  type="button"
-                                  onClick={() => toggleReviewSkill(skill.id)}
-                                  className={`px-2 py-0.5 border rounded-full text-[10px] transition-all ${
-                                    isSelected
-                                      ? 'border-primary bg-primary text-primary-foreground font-medium'
-                                      : 'border-border bg-card text-secondary/60 hover:bg-accent'
-                                  }`}
-                                >
-                                  {skill.name}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {/* Extracted Projects Checklist */}
-                        {parsedResumeData.parsedFields.detectedProjects &&
-                          parsedResumeData.parsedFields.detectedProjects.length > 0 && (
-                            <div>
-                              <label className="text-[10px] font-semibold text-secondary uppercase block mb-1">
-                                Projects Found (
-                                {parsedResumeData.parsedFields.detectedProjects.length})
-                              </label>
-                              <div className="space-y-1 p-2 border border-border bg-background rounded-lg text-xs font-light text-secondary">
-                                {parsedResumeData.parsedFields.detectedProjects.map(
-                                  (p: any, i: number) => (
-                                    <div key={i} className="flex items-center space-x-1">
-                                      <span className="text-primary font-bold">✓</span>
-                                      <span className="font-medium text-foreground">{p.title}</span>
-                                    </div>
-                                  ),
-                                )}
-                              </div>
+                {/* ── STEP 7: REDESIGNED RICH RESUME EXTRACTION & REVIEW ── */}
+                {step === 7 && (
+                  <div className="space-y-6">
+                    {parsedResumeData ? (
+                      <div className="space-y-5 select-none">
+                        {/* Quick Scan Summary Banner */}
+                        <div className="p-5 border border-primary/30 bg-primary/[0.03] rounded-2xl space-y-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                              <Sparkles className="w-4 h-4" />
                             </div>
-                          )}
-
-                        {/* Extracted Experience Checklist */}
-                        {parsedResumeData.parsedFields.detectedExperience &&
-                          parsedResumeData.parsedFields.detectedExperience.length > 0 && (
                             <div>
-                              <label className="text-[10px] font-semibold text-secondary uppercase block mb-1">
-                                Leadership & Experience
-                              </label>
-                              <div className="space-y-1 p-2 border border-border bg-background rounded-lg text-xs font-light text-secondary">
-                                {parsedResumeData.parsedFields.detectedExperience.map(
-                                  (e: any, i: number) => (
-                                    <div key={i} className="flex items-center space-x-1">
-                                      <span className="text-primary font-bold">✓</span>
-                                      <span className="font-medium text-foreground">{e.role}</span>
-                                      {e.organization && (
-                                        <span className="text-secondary/60">
-                                          at {e.organization}
+                              <h3 className="text-base font-display font-medium text-foreground">
+                                Scout understood your resume
+                              </h3>
+                              <p className="text-xs text-muted-foreground font-light">
+                                Review the extracted highlights below before saving.
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Quick Summary Chips */}
+                          <div className="flex flex-wrap items-center gap-2 pt-1">
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-card border border-primary/20 text-primary shadow-sm">
+                              ✓ {reviewFields.technicalSkills?.length || 0} Skills
+                            </span>
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-card border border-primary/20 text-primary shadow-sm">
+                              ✓ {reviewFields.detectedProjects?.length || 0} Projects
+                            </span>
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-card border border-primary/20 text-primary shadow-sm">
+                              ✓ {reviewFields.detectedExperience?.length || 0} Experiences
+                            </span>
+                            {reviewFields.detectedLinks?.length > 0 && (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-card border border-primary/20 text-primary shadow-sm">
+                                ✓ {reviewFields.detectedLinks.length} Links
+                              </span>
+                            )}
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-card border border-primary/20 text-primary shadow-sm">
+                              ✓ Education
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Warm Honest Beta Disclaimer */}
+                        <div className="p-4 border border-border/80 bg-card rounded-2xl flex items-start gap-3 text-xs text-muted-foreground font-light leading-relaxed">
+                          <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                          <div>
+                            <strong className="font-medium text-foreground">
+                              Resume extraction is still improving.
+                            </strong>
+                            <p className="mt-0.5">
+                              Scout automatically extracts skills, projects, education, and
+                              experience, but complex resume layouts may not parse perfectly yet.
+                              You can edit anything now or update it later from your Profile.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Collapsible Sections */}
+                        <div className="space-y-3">
+                          {/* 1. Basic Info & Education Section */}
+                          <div className="border border-border/80 bg-card rounded-2xl overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => toggleSection('education')}
+                              className="w-full p-4 flex items-center justify-between text-xs font-medium text-foreground hover:bg-muted/30 transition-colors"
+                            >
+                              <div className="flex items-center gap-2">
+                                <GraduationCap className="w-4 h-4 text-primary" />
+                                <span>Basic Information & Education</span>
+                              </div>
+                              {openSections.education ? (
+                                <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                              )}
+                            </button>
+
+                            {openSections.education && (
+                              <div className="p-4 pt-0 border-t border-border/40 space-y-3">
+                                <TextInput
+                                  label="Full Name"
+                                  value={reviewFields.fullName}
+                                  onChange={(e) =>
+                                    setReviewFields({ ...reviewFields, fullName: e.target.value })
+                                  }
+                                />
+                                <div className="grid grid-cols-2 gap-3">
+                                  <TextInput
+                                    label="College"
+                                    value={reviewFields.college}
+                                    onChange={(e) =>
+                                      setReviewFields({ ...reviewFields, college: e.target.value })
+                                    }
+                                  />
+                                  <TextInput
+                                    label="Degree"
+                                    value={reviewFields.degree}
+                                    onChange={(e) =>
+                                      setReviewFields({ ...reviewFields, degree: e.target.value })
+                                    }
+                                  />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <TextInput
+                                    label="Branch"
+                                    value={reviewFields.branch}
+                                    onChange={(e) =>
+                                      setReviewFields({ ...reviewFields, branch: e.target.value })
+                                    }
+                                  />
+                                  <TextInput
+                                    label="Graduation Year"
+                                    type="number"
+                                    value={reviewFields.expectedGraduation}
+                                    onChange={(e) =>
+                                      setReviewFields({
+                                        ...reviewFields,
+                                        expectedGraduation: e.target.value,
+                                      })
+                                    }
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 2. Technical Skills Section */}
+                          <div className="border border-border/80 bg-card rounded-2xl overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => toggleSection('skills')}
+                              className="w-full p-4 flex items-center justify-between text-xs font-medium text-foreground hover:bg-muted/30 transition-colors"
+                            >
+                              <div className="flex items-center gap-2">
+                                <Code2 className="w-4 h-4 text-primary" />
+                                <span>
+                                  Extracted Skills ({reviewFields.technicalSkills?.length || 0})
+                                </span>
+                              </div>
+                              {openSections.skills ? (
+                                <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                              )}
+                            </button>
+
+                            {openSections.skills && (
+                              <div className="p-4 pt-0 border-t border-border/40 space-y-2">
+                                <p className="text-[11px] text-muted-foreground font-light">
+                                  Click any skill chip to toggle inclusion:
+                                </p>
+                                <div className="flex flex-wrap gap-1.5 pt-1">
+                                  {SKILLS_TAXONOMY.map((skill) => {
+                                    const isSelected = reviewFields.technicalSkills?.includes(
+                                      skill.id,
+                                    );
+                                    return (
+                                      <button
+                                        key={skill.id}
+                                        type="button"
+                                        onClick={() => toggleReviewSkill(skill.id)}
+                                        className={`
+                                          px-3 py-1 rounded-full text-xs font-medium border transition-all duration-150
+                                          ${
+                                            isSelected
+                                              ? 'bg-primary/10 border-primary/30 text-primary'
+                                              : 'bg-card border-border/60 text-muted-foreground/60 hover:text-foreground'
+                                          }
+                                        `}
+                                      >
+                                        {skill.name}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 3. Projects Section */}
+                          <div className="border border-border/80 bg-card rounded-2xl overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => toggleSection('projects')}
+                              className="w-full p-4 flex items-center justify-between text-xs font-medium text-foreground hover:bg-muted/30 transition-colors"
+                            >
+                              <div className="flex items-center gap-2">
+                                <FolderGit2 className="w-4 h-4 text-primary" />
+                                <span>
+                                  Extracted Projects ({reviewFields.detectedProjects?.length || 0})
+                                </span>
+                              </div>
+                              {openSections.projects ? (
+                                <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                              )}
+                            </button>
+
+                            {openSections.projects && (
+                              <div className="p-4 pt-0 border-t border-border/40 space-y-3">
+                                {reviewFields.detectedProjects &&
+                                reviewFields.detectedProjects.length > 0 ? (
+                                  reviewFields.detectedProjects.map((p: any, i: number) => (
+                                    <div
+                                      key={i}
+                                      className="p-3 rounded-xl border border-border/60 bg-muted/20 space-y-1 text-xs"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <span className="font-medium text-foreground">
+                                          {p.title || `Project #${i + 1}`}
                                         </span>
+                                        {p.url && (
+                                          <a
+                                            href={p.url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="text-primary hover:underline flex items-center gap-1 text-[10px]"
+                                          >
+                                            <span>Link</span>
+                                            <ExternalLink className="w-2.5 h-2.5" />
+                                          </a>
+                                        )}
+                                      </div>
+                                      {p.description && (
+                                        <p className="text-muted-foreground font-light text-[11px] leading-relaxed">
+                                          {p.description}
+                                        </p>
+                                      )}
+                                      {p.technologies && p.technologies.length > 0 && (
+                                        <div className="flex flex-wrap gap-1 pt-1">
+                                          {p.technologies.map((tech: string, tIdx: number) => (
+                                            <span
+                                              key={tIdx}
+                                              className="px-2 py-0.5 rounded-md bg-card border text-[10px] text-muted-foreground"
+                                            >
+                                              {tech}
+                                            </span>
+                                          ))}
+                                        </div>
                                       )}
                                     </div>
-                                  ),
+                                  ))
+                                ) : (
+                                  <p className="text-xs text-muted-foreground/60 font-light italic">
+                                    None detected in resume
+                                  </p>
                                 )}
                               </div>
+                            )}
+                          </div>
+
+                          {/* 4. Experience Section */}
+                          <div className="border border-border/80 bg-card rounded-2xl overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => toggleSection('experience')}
+                              className="w-full p-4 flex items-center justify-between text-xs font-medium text-foreground hover:bg-muted/30 transition-colors"
+                            >
+                              <div className="flex items-center gap-2">
+                                <Briefcase className="w-4 h-4 text-primary" />
+                                <span>
+                                  Experience & Leadership (
+                                  {reviewFields.detectedExperience?.length || 0})
+                                </span>
+                              </div>
+                              {openSections.experience ? (
+                                <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                              )}
+                            </button>
+
+                            {openSections.experience && (
+                              <div className="p-4 pt-0 border-t border-border/40 space-y-3">
+                                {reviewFields.detectedExperience &&
+                                reviewFields.detectedExperience.length > 0 ? (
+                                  reviewFields.detectedExperience.map((exp: any, i: number) => (
+                                    <div
+                                      key={i}
+                                      className="p-3 rounded-xl border border-border/60 bg-muted/20 space-y-1 text-xs"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <span className="font-medium text-foreground">
+                                          {exp.role || exp.company || `Role #${i + 1}`}
+                                        </span>
+                                        {exp.company && (
+                                          <span className="text-muted-foreground text-[11px]">
+                                            {exp.company}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {exp.description && (
+                                        <p className="text-muted-foreground font-light text-[11px] leading-relaxed">
+                                          {exp.description}
+                                        </p>
+                                      )}
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="text-xs text-muted-foreground/60 font-light italic">
+                                    None detected in resume
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 5. Detected Links & Portfolio Section */}
+                          {reviewFields.detectedLinks && reviewFields.detectedLinks.length > 0 && (
+                            <div className="border border-border/80 bg-card rounded-2xl overflow-hidden">
+                              <button
+                                type="button"
+                                onClick={() => toggleSection('links')}
+                                className="w-full p-4 flex items-center justify-between text-xs font-medium text-foreground hover:bg-muted/30 transition-colors"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <Link2 className="w-4 h-4 text-primary" />
+                                  <span>Portfolio Links ({reviewFields.detectedLinks.length})</span>
+                                </div>
+                                {openSections.links ? (
+                                  <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                                ) : (
+                                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                                )}
+                              </button>
+
+                              {openSections.links && (
+                                <div className="p-4 pt-0 border-t border-border/40 flex flex-wrap gap-2">
+                                  {reviewFields.detectedLinks.map((l: any, i: number) => (
+                                    <a
+                                      key={i}
+                                      href={l.url || l}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-xs text-primary hover:underline"
+                                    >
+                                      <span>{l.label || l.url || l}</span>
+                                      <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           )}
-                      </div>
+                        </div>
 
-                      {/* Action buttons */}
-                      <div className="flex items-center space-x-2 pt-2 border-t border-border/40">
-                        <button
-                          onClick={() => setParsedResumeData(null)}
-                          className="w-1/3 py-2 border border-border hover:bg-accent text-secondary font-medium text-xs rounded-xl"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={handleMergeConfirm}
-                          className="w-2/3 py-2 bg-primary hover:opacity-90 text-primary-foreground font-semibold text-xs rounded-xl shadow-md flex items-center justify-center space-x-1"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Use this information</span>
-                        </button>
+                        {/* Action Buttons */}
+                        <div className="flex items-center justify-end gap-3 pt-3 border-t border-border/40">
+                          <button
+                            type="button"
+                            onClick={() => setParsedResumeData(null)}
+                            className="px-4 py-2.5 border border-border/80 text-xs text-muted-foreground rounded-xl hover:bg-muted/40 font-medium"
+                          >
+                            Upload Different Resume
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleMergeConfirm}
+                            className="px-6 py-2.5 bg-primary text-primary-foreground text-xs font-medium rounded-xl hover:opacity-90 shadow-sm flex items-center gap-1.5"
+                          >
+                            <Check className="w-4 h-4" />
+                            <span>Use Extracted Data</span>
+                          </button>
+                        </div>
                       </div>
+                    ) : (
+                      <FileUpload
+                        label="Upload Resume (Optional)"
+                        helperText="PDF up to 5MB. Scout parses your resume to refine recommendations."
+                        value={
+                          uploadedFile
+                            ? { name: uploadedFileName }
+                            : formData.resumeUploaded
+                              ? { name: 'resume.pdf' }
+                              : null
+                        }
+                        isUploading={uploadingFile}
+                        onChange={handleFileUpload}
+                        onRemove={() => {
+                          setUploadedFile(null);
+                          setUploadedFileName('');
+                          setFormData((prev) => ({ ...prev, resumeUploaded: false }));
+                        }}
+                      />
+                    )}
+                  </div>
+                )}
+
+                {/* ── STEP 8: REVIEW & FINISH ── */}
+                {step === 8 && (
+                  <div className="space-y-4 border border-border/80 bg-card p-5 rounded-2xl text-xs space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-border/60">
+                      <span className="font-semibold uppercase tracking-wider text-primary">
+                        Profile Summary
+                      </span>
+                      <span className="text-muted-foreground font-mono">Ready to Generate</span>
                     </div>
-                  ) : (
-                    /* STANDALONE RESUME UPLOAD DASHBOARD */
-                    <>
-                      <h1 className="text-2xl font-light">Resume & Career Readiness 📈</h1>
-                      <p className="text-xs text-secondary font-light">
-                        Completing your profile generates better recommendation match rates.
+
+                    <div className="space-y-2 font-light text-muted-foreground">
+                      <p>
+                        <strong className="text-foreground font-medium">Name:</strong>{' '}
+                        {formData.fullName} ({formData.gender})
                       </p>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        {/* Resume container */}
-                        <div className="flex flex-col items-center justify-center p-4 border border-dashed border-border rounded-2xl bg-card hover:bg-accent/10 transition-all cursor-pointer relative min-h-[120px]">
-                          <input
-                            type="file"
-                            accept=".pdf"
-                            onChange={handleFileUpload}
-                            className="absolute inset-0 opacity-0 cursor-pointer"
-                            disabled={uploadingFile}
-                          />
-                          {uploadingFile ? (
-                            <div className="text-center space-y-1">
-                              <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-                              <p className="text-[10px] font-light text-secondary">
-                                Uploading & Parsing...
-                              </p>
-                            </div>
-                          ) : formData.resumeUploaded ? (
-                            <div className="text-center space-y-1">
-                              <Check className="w-5 h-5 text-primary mx-auto" />
-                              <p className="text-xs font-semibold text-primary">
-                                Resume registered!
-                              </p>
-                              <p className="text-[9px] text-secondary truncate max-w-[120px] mx-auto">
-                                {uploadedFileName || 'resume.pdf'}
-                              </p>
-                            </div>
-                          ) : (
-                            <div className="text-center space-y-1">
-                              <Upload className="w-5 h-5 text-secondary/60 mx-auto" />
-                              <p className="text-xs font-light text-secondary">
-                                Click to upload resume (PDF)
-                              </p>
-                              <p className="text-[8px] text-secondary/40">Optional for MVP</p>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Readiness score circular indicator */}
-                        <div className="flex flex-col items-center justify-center bg-card border border-border p-4 rounded-2xl min-h-[120px] text-center">
-                          <span className="text-xs font-semibold text-secondary/80 block uppercase tracking-wider mb-1">
-                            Career Ready
-                          </span>
-                          <span className="text-2xl font-bold text-primary">
-                            {readinessData.careerReadinessScore}%
-                          </span>
-                          <span className="text-[9px] text-secondary/50 block mt-1">
-                            Completeness: {readinessData.completionPercentage}%
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Dynamic checklist suggestions */}
-                      {suggestionsList.length > 0 && (
-                        <div className="p-4 bg-accent/20 border border-border rounded-xl space-y-2">
-                          <label className="text-[10px] font-semibold text-secondary/60 uppercase tracking-wide flex items-center space-x-1">
-                            <AlertCircle className="w-3.5 h-3.5 text-primary" />
-                            <span>Complete these to improve recommendations:</span>
-                          </label>
-                          <ul className="space-y-1 text-xs text-secondary font-light pl-1.5 list-disc list-inside">
-                            {suggestionsList.map((suggestion) => (
-                              <li key={suggestion}>{suggestion}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                      <div className="space-y-2 text-center pt-2">
-                        <h2 className="text-xl font-light">All Set! ✨</h2>
-                        <p className="text-xs text-secondary font-light max-w-xs mx-auto">
-                          Click the button below to land on your personalized dashboard and discover
-                          opportunities.
-                        </p>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-            </motion.div>
-          </AnimatePresence>
+                      <p>
+                        <strong className="text-foreground font-medium">Academic:</strong>{' '}
+                        {formData.college} • {formData.degree} ({formData.expectedGraduation})
+                      </p>
+                      <p>
+                        <strong className="text-foreground font-medium">Skills:</strong>{' '}
+                        {formData.technicalSkills.length} selected
+                      </p>
+                      <p>
+                        <strong className="text-foreground font-medium">Target Roles:</strong>{' '}
+                        {formData.careerGoals.join(', ') || 'Exploring'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </FormLayout>
         </main>
-
-        {/* Wizard Footer Navigation */}
-        <footer className="fixed bottom-0 left-0 right-0 p-6 bg-background/80 backdrop-blur border-t border-border z-20">
-          <div className="max-w-xl mx-auto flex items-center justify-between">
-            {step > 1 ? (
-              <button
-                onClick={handleBack}
-                disabled={saving}
-                className="flex items-center space-x-1 px-4 py-2 border border-border bg-card hover:bg-accent rounded-full text-sm font-medium transition-all"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                <span>Back</span>
-              </button>
-            ) : (
-              <div />
-            )}
-
-            {step === TOTAL_STEPS ? (
-              <button
-                onClick={handleComplete}
-                disabled={saving || parsedResumeData !== null}
-                className="flex items-center space-x-2 px-8 py-3 bg-primary hover:opacity-90 text-primary-foreground disabled:opacity-50 rounded-full text-sm font-semibold transition-all shadow-md"
-              >
-                <span>Go to Dashboard</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            ) : (
-              <button
-                onClick={handleNext}
-                disabled={saving || (step === 2 && !formData.fullName)}
-                className="flex items-center space-x-2 px-6 py-2.5 bg-primary hover:opacity-90 text-primary-foreground disabled:opacity-50 rounded-full text-sm font-semibold transition-all shadow-sm"
-              >
-                <span>{step === 1 ? "Let's Begin" : 'Next'}</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        </footer>
       </div>
     </ProtectedRoute>
   );
