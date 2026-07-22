@@ -230,12 +230,16 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
             duration = Date.now() - startTime;
 
             rawMarkdown = scrapeResponse.data?.markdown || '';
+            console.log(
+              `[Stage 2 DEBUG] URL: ${candidate.url} | Markdown length: ${rawMarkdown.length}`,
+            );
 
-            const validation = CrawlPlanner.validateContent(rawMarkdown);
+            const validation = CrawlPlanner.validateContent(rawMarkdown, candidate.url);
             if (!validation.valid) {
               failedCount++;
               const type = validation.reason || 'CONTENT_TOO_SMALL';
               trackFailure(type);
+              console.log(`[Stage 2 DEBUG] FAILED REASON: ${type} for URL: ${candidate.url}`);
 
               return {
                 url: candidate.url,
@@ -378,6 +382,9 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
               else type = 'NETWORK_FAILURE';
 
               trackFailure(type);
+              console.log(
+                `[Stage 2 DEBUG] FAILED REASON: ${type} for URL: ${candidate.url} | Error: ${message}`,
+              );
 
               return {
                 url: candidate.url,
@@ -410,6 +417,9 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
             console.log(
               `[Stage 2] [Filter Rejected] ${candidate.url} (Geo-restricted: ${eligibility.reason})`,
             );
+            console.log(
+              `[Stage 2 DEBUG] FAILED REASON: GEO_FILTER_REJECTED for URL: ${candidate.url}`,
+            );
             crawlStatus = 'FAILED';
             rawMarkdown = '';
           } else {
@@ -417,6 +427,9 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
             if (!freshness.fresh) {
               console.log(
                 `[Stage 2] [Filter Rejected] ${candidate.url} (Expired/Past year: ${freshness.reason})`,
+              );
+              console.log(
+                `[Stage 2 DEBUG] FAILED REASON: FRESHNESS_FILTER_REJECTED for URL: ${candidate.url}`,
               );
               crawlStatus = 'FAILED';
               rawMarkdown = '';
@@ -426,7 +439,11 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
 
         // F. Recursive Job Board & Company Jobs Page Harvesting
         if (crawlStatus === 'SUCCESS' && rawMarkdown.length > 10) {
+          console.log(
+            `[Stage 2 DEBUG] Pre-Classification - Domain: ${new URL(candidate.url).hostname} | URL: ${candidate.url}`,
+          );
           const classification = JobBoardExtractor.classifyUrl(candidate.url);
+          console.log(`[Stage 2 DEBUG] Post-Classification - Detected class: ${classification}`);
           const isListingBoard = JobBoardExtractor.isBoardPage(candidate.url, rawMarkdown);
 
           // Update navigation counts
@@ -451,6 +468,14 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
               expandedBoardPages.add(boardNormalized);
               boardPagesCount++;
 
+              const adapterName = candidate.url.includes('unstop.com')
+                ? 'UnstopAdapter'
+                : candidate.url.includes('internshala.com')
+                  ? 'InternshalaAdapter'
+                  : 'Generic';
+              console.log(
+                `[Stage 2 DEBUG] Dispatched to extractListings for URL: ${candidate.url} | Using adapter: ${adapterName}`,
+              );
               const rawListings = JobBoardExtractor.extractListings(rawMarkdown, candidate.url);
               listingsHarvestedCount += rawListings.length;
 

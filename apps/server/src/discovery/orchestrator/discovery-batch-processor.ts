@@ -230,9 +230,9 @@ Yield used: ${totalAccepted}
           opportunitiesFound: data.oppsCount,
         });
         await sourceRegistryService.recordRunOutcome(dom, data.oppsCount);
+      } else {
         const firstFailure = data.pages[0]?.failureReason || 'SOURCE_FAILURE';
         await sourceRegistryService.markFailed(dom, firstFailure);
-        // Avoid calling recordRunOutcome on crawl failure/crash to protect yield metrics
       }
     }
 

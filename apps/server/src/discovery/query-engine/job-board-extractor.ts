@@ -76,8 +76,19 @@ export class JobBoardExtractor {
       listings: [/^\/$/i, /\/jobs\/?$/i, /\/Job\/.*-jobs-/i, /\/Job\/[a-z-]+-jobs-SRCH_/i],
     },
     'internshala.com': {
+      // Detail URLs: /internship/detail/<slug> and /job/detail/<slug>
       details: [/\/internship\/detail\/[\w-]+/i, /\/job\/detail\/[\w-]+/i],
-      listings: [/^\/$/i, /\/internships/i, /\/jobs/i],
+      // Listing URLs: category pages like /internships/<category>/ but NOT /internship/detail
+      listings: [
+        /^\/$/i,
+        /^\/internships\/?$/i,
+        /^\/jobs\/?$/i,
+        /^\/internships\/[\w-]+-internship\/?$/i, // /internships/ai-agent-development-internship/
+        /^\/internships\/[\w-]+-internships\/?$/i, // /internships/work-from-home-ai-agent-development-internships/
+        /^\/internships\/[\w-]+-internship-in-[\w-]+\/?$/i, // /internships/ai-agent-development-internship-in-delhi/
+        /^\/jobs\/[\w-]+-job\/?$/i,
+        /\/internships\/keywords\/[\w-]+/i,
+      ],
     },
     'hackerrank.com': {
       details: [/\/jobs\/[\w-]+/i, /\/careers\/[\w-]+/i],
@@ -709,6 +720,22 @@ export class JobBoardExtractor {
       }
     }
 
+    // Intercept Internshala listing pages with domain-specific adapter
+    if (baseUrl && baseUrl.includes('internshala.com')) {
+      const internshalaBlocks = InternshalaAdapter.splitIntoCardBlocks(markdown, baseUrl);
+      if (internshalaBlocks.length > 0) {
+        return internshalaBlocks;
+      }
+    }
+
+    // Intercept Glassdoor listing pages with domain-specific adapter
+    if (baseUrl && baseUrl.includes('glassdoor.')) {
+      const glassdoorBlocks = GlassdoorAdapter.splitIntoCardBlocks(markdown, baseUrl);
+      if (glassdoorBlocks.length > 0) {
+        return glassdoorBlocks;
+      }
+    }
+
     const lines = markdown.split('\n');
     const rawBlocks: string[] = [];
     let currentBlock: string[] = [];
@@ -779,6 +806,22 @@ export class JobBoardExtractor {
       const unstopListings = UnstopAdapter.extractListings(markdown, url);
       if (unstopListings.length > 0) {
         return unstopListings;
+      }
+    }
+
+    // Intercept Internshala listing pages with domain-specific adapter
+    if (url && url.includes('internshala.com')) {
+      const internshalaListings = InternshalaAdapter.extractListings(markdown, url);
+      if (internshalaListings.length > 0) {
+        return internshalaListings;
+      }
+    }
+
+    // Intercept Glassdoor listing pages with domain-specific adapter
+    if (url && url.includes('glassdoor.')) {
+      const glassdoorListings = GlassdoorAdapter.extractListings(markdown, url);
+      if (glassdoorListings.length > 0) {
+        return glassdoorListings;
       }
     }
 
@@ -1050,6 +1093,439 @@ ${unresolvedLogs.slice(0, 5).join('\n---\n') || 'None'}
 `);
 
     return listings;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// InternshalaAdapter
+// Deterministic adapter for internshala.com listing pages.
+//
+// Page structure (from crawled markdown analysis):
+//   ## [Opportunity Title](/internship/detail/<slug>)
+//   <Company Name>
+//   [Actively hiring] (optional badge)
+//   ![](...logo...)  (optional image)
+//   <Location>
+//   ₹ X[,XXX] /month  OR  Unpaid
+//   <N> Months
+//   <Multi-line description text>
+//   <Skill1>\n<Skill2>\n...
+//   <relative time> ("3 days ago", "Just now", "1 week ago")
+//   [Job offer ...] (optional)
+//   [Part time] (optional badge)
+//
+// Noise detected and suppressed:
+//   - Filter dropdown text (huge comma-separated profile list)
+//   - Breadcrumb nav block (Home / Internships / ...)
+//   - Ad banners (trainings.internshala.com links)
+//   - Registration nudge block ("Register now to...")
+//   - "Find More Related Internships" section (/internships/<category>/ links)
+//   - Pagination footer
+//   - Static image links (internshala-uploads.internshala.com)
+// ─────────────────────────────────────────────────────────────────────────────
+export class InternshalaAdapter {
+  // Matches Internshala detail URL segments:
+  // /internship/detail/<slug>  or  /job/detail/<slug>
+  private static readonly DETAIL_PATH_REGEX = /\/(?:internship|job)\/detail\/[\w-]+/i;
+
+  // Matches ad banner blocks that link to trainings.internshala.com
+  private static readonly AD_BANNER_REGEX = /trainings\.internshala\.com/i;
+
+  // Matches registration nudge section anchors
+  private static readonly REGISTRATION_NUDGE_REGEX =
+    /Register now to|Continue with Google|Continue with Email|By continuing, you agree/i;
+
+  // Matches the "Find More Related Internships" trailing section
+  private static readonly FOOTER_SECTION_REGEX = /##?\s*Find More Related Internships/i;
+
+  // Matches relative time strings that appear at the bottom of each card
+  private static readonly RELATIVE_TIME_REGEX =
+    /^(\d+\s+(?:day|days|week|weeks|month|months)\s+ago|Just now)$/i;
+
+  /**
+   * Split Internshala markdown into per-opportunity card blocks.
+   *
+   * Internshala uses H2 headings for each opportunity card:
+   *   ## [Title](https://internshala.com/internship/detail/<slug>)
+   *
+   * Each card runs from its H2 heading to the next H2 heading.
+   * We stop processing once we hit the "Find More Related Internships" footer section
+   * or an ad banner section.
+   */
+  public static splitIntoCardBlocks(markdown: string, _baseUrl?: string): string[] {
+    const blocks: string[] = [];
+    const lines = markdown.split('\n');
+
+    let currentBlock: string[] = [];
+    let inFooterSection = false;
+    let inAdBanner = false;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      // Detect "Find More Related Internships" footer — stop collecting cards
+      if (this.FOOTER_SECTION_REGEX.test(trimmed)) {
+        inFooterSection = true;
+      }
+      if (inFooterSection) continue;
+
+      // Detect ad banner blocks — skip until next H2 card heading
+      if (this.AD_BANNER_REGEX.test(trimmed)) {
+        inAdBanner = true;
+      }
+
+      // Detect a new card heading: ## [Title](detail URL)
+      const h2Match = trimmed.match(
+        /^##\s+\[([^\]]+)\]\((https?:\/\/internshala\.com\/(?:internship|job)\/detail\/[^)]+|\/?(?:internship|job)\/detail\/[^)]+)\)/,
+      );
+
+      if (h2Match) {
+        // Save the previous block if it has content
+        if (currentBlock.length > 0) {
+          const joined = currentBlock.join('\n').trim();
+          if (joined.length > 0) blocks.push(joined);
+        }
+        currentBlock = [trimmed];
+        inAdBanner = false; // new card heading resets ad banner suppression
+        continue;
+      }
+
+      // Skip ad banner body lines
+      if (inAdBanner) continue;
+
+      // Skip registration nudge lines
+      if (this.REGISTRATION_NUDGE_REGEX.test(trimmed)) continue;
+
+      // Only add content if we're inside a card block
+      if (currentBlock.length > 0) {
+        currentBlock.push(trimmed);
+      }
+    }
+
+    // Flush the last block
+    if (currentBlock.length > 0) {
+      const joined = currentBlock.join('\n').trim();
+      if (joined.length > 0) blocks.push(joined);
+    }
+
+    // Filter blocks: must start with ## [Title](internshala detail URL)
+    return blocks.filter((b) => /^##\s+\[/.test(b) && this.DETAIL_PATH_REGEX.test(b));
+  }
+
+  /**
+   * Extracts structured opportunity listings from an Internshala listing page.
+   */
+  public static extractListings(markdown: string, url: string): ExtractedListing[] {
+    const listings: ExtractedListing[] = [];
+    const seenUrls = new Set<string>();
+    const sourceDomain = JobBoardExtractor.getBoardIdentifier(url);
+
+    const cards = this.splitIntoCardBlocks(markdown, url);
+
+    let cardsFound = 0;
+    let cardsSuccessfullyResolved = 0;
+    let cardsMissingDestination = 0;
+
+    const resolvedLogs: string[] = [];
+    const unresolvedLogs: string[] = [];
+
+    for (const card of cards) {
+      // Parse heading: ## [Title](URL)
+      const headingMatch = card.match(/^##\s+\[([^\]]+)\]\(([^)]+)\)/);
+      if (!headingMatch) continue;
+
+      cardsFound++;
+      const rawTitle = headingMatch[1].trim();
+      let rawUrl = headingMatch[2].trim();
+
+      // Resolve relative URLs
+      if (rawUrl.startsWith('/')) {
+        try {
+          rawUrl = new URL(rawUrl, 'https://internshala.com').toString();
+        } catch {
+          // keep as-is
+        }
+      }
+
+      const cleanUrl = JobBoardExtractor.cleanUrl(rawUrl);
+      const classification = JobBoardExtractor.classifyUrl(cleanUrl);
+      const isDetail = classification === 'JOB_DETAIL';
+
+      const diagLines: string[] = [];
+      diagLines.push(`Card ${cardsFound}`);
+      diagLines.push(`Title: ${rawTitle}`);
+      diagLines.push(`URL: ${cleanUrl}`);
+
+      if (!isDetail) {
+        const reason = `Rejected: ${classification} (not a detail page)`;
+        diagLines.push(reason);
+        cardsMissingDestination++;
+        unresolvedLogs.push(diagLines.join('\n'));
+        continue;
+      }
+
+      diagLines.push(`Accepted: ${classification}`);
+
+      // Extract company name: first non-empty line after the heading that isn't a badge/image/stipend
+      const bodyLines = card
+        .split('\n')
+        .slice(1) // skip heading
+        .map((l) => l.trim())
+        .filter(
+          (l) =>
+            l.length > 0 &&
+            !l.startsWith('![') && // skip ANY logo/image markdown
+            !l.startsWith('Actively hiring') && // skip badge
+            !l.startsWith('₹') && // skip stipend
+            !l.startsWith('$') && // skip USD stipend
+            !l.startsWith('Unpaid') && // skip unpaid badge
+            !this.RELATIVE_TIME_REGEX.test(l) && // skip relative time
+            !l.startsWith('Job offer') && // skip job offer badge
+            !l.startsWith('Part time') && // skip part-time badge
+            !l.startsWith('International'), // skip international badge
+        );
+
+      const company = bodyLines[0] || 'Internshala Company';
+
+      // Extract location from card body (appears after company name, before stipend)
+      // Valid location lines: "Work from home", city names like "Pune (Hybrid)", "Ahmedabad"
+      // Invalid: month strings, numeric lines, skill names
+      const locationLine = bodyLines[1] || '';
+      const location =
+        locationLine.includes('Work from home') || locationLine.toLowerCase().includes('remote')
+          ? 'Remote'
+          : /^\d/.test(locationLine) || locationLine.includes('Month')
+            ? 'India'
+            : locationLine || 'India';
+
+      diagLines.push(`Company: ${company}`);
+      diagLines.push(`Location: ${location}`);
+
+      const cleanUrlLower = cleanUrl.toLowerCase();
+      if (!seenUrls.has(cleanUrlLower)) {
+        seenUrls.add(cleanUrlLower);
+        cardsSuccessfullyResolved++;
+        listings.push({
+          title: rawTitle,
+          company,
+          listingUrl: cleanUrl,
+          location,
+          source: sourceDomain,
+        });
+        resolvedLogs.push(diagLines.join('\n'));
+      } else {
+        diagLines.push(`Rejected: duplicate URL`);
+        cardsMissingDestination++;
+        unresolvedLogs.push(diagLines.join('\n'));
+      }
+    }
+
+    console.log(`
+Platform:                        ${sourceDomain}
+Cards Found:                     ${cardsFound}
+Cards Successfully Resolved:     ${cardsSuccessfullyResolved}
+Cards Missing Destination:       ${cardsMissingDestination}
+
+Resolved Cards Detail:
+--------------------------------
+${resolvedLogs.slice(0, 5).join('\n---\n') || 'None'}
+
+Unresolved Cards Detail:
+--------------------------------
+${unresolvedLogs.slice(0, 5).join('\n---\n') || 'None'}
+`);
+
+    return listings.slice(0, JobBoardExtractor['MAX_LISTINGS_PER_BOARD_PAGE']);
+  }
+}
+
+/**
+ * Domain-specific adapter for Glassdoor.co.in listing pages.
+ */
+export class GlassdoorAdapter {
+  /**
+   * Splits a Glassdoor page markdown into raw card blocks.
+   */
+  public static splitIntoCardBlocks(markdown: string, baseUrl?: string): string[] {
+    const lines = markdown.split('\n');
+    const cards: string[] = [];
+    let currentCard: string[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      const rawLine = lines[i];
+
+      // A card starts with an unindented bullet list item that starts with -
+      const isBulletStart =
+        rawLine.startsWith('- ') &&
+        (line.includes('![') || /^[A-Za-z0-9]/.test(line.slice(2).trim()));
+
+      if (isBulletStart) {
+        // Look ahead to check if there is a job-listing link in this block
+        let hasJoblistingLink = false;
+        for (let j = i; j < Math.min(lines.length, i + 8); j++) {
+          if (lines[j].includes('/job-listing/')) {
+            hasJoblistingLink = true;
+            break;
+          }
+        }
+
+        if (hasJoblistingLink) {
+          if (currentCard.length > 0) {
+            cards.push(currentCard.join('\n'));
+          }
+          currentCard = [rawLine];
+          continue;
+        }
+      }
+
+      // Stop at footer boundaries
+      if (
+        line.includes('Show more jobs') ||
+        line.includes('Create alert') ||
+        line.includes('Terms of Use') ||
+        line.includes('Copyright ©')
+      ) {
+        break;
+      }
+
+      if (currentCard.length > 0) {
+        currentCard.push(rawLine);
+      }
+    }
+
+    if (currentCard.length > 0) {
+      cards.push(currentCard.join('\n'));
+    }
+
+    return cards;
+  }
+
+  /**
+   * Extracts listings from Glassdoor page markdown.
+   */
+  public static extractListings(markdown: string, url: string): ExtractedListing[] {
+    const listings: ExtractedListing[] = [];
+    const seenUrls = new Set<string>();
+    const sourceDomain = JobBoardExtractor.getBoardIdentifier(url);
+
+    const cards = this.splitIntoCardBlocks(markdown, url);
+
+    let cardsFound = 0;
+    let cardsSuccessfullyResolved = 0;
+    let cardsMissingDestination = 0;
+
+    const resolvedLogs: string[] = [];
+    const unresolvedLogs: string[] = [];
+
+    for (const card of cards) {
+      // Parse markdown link: [Title](URL) containing /job-listing/
+      const linkMatch = card.match(/\[([^\]]+)\]\(([^)]*\/job-listing\/[^)]+)\)/);
+      if (!linkMatch) continue;
+
+      cardsFound++;
+      const rawTitle = linkMatch[1].trim();
+      let rawUrl = linkMatch[2].trim();
+
+      // Resolve relative URLs
+      if (rawUrl.startsWith('/')) {
+        try {
+          rawUrl = new URL(rawUrl, 'https://www.glassdoor.co.in').toString();
+        } catch {
+          // ignore
+        }
+      }
+
+      const cleanUrl = JobBoardExtractor.cleanUrl(rawUrl);
+      const classification = JobBoardExtractor.classifyUrl(cleanUrl);
+      const isDetail = classification === 'JOB_DETAIL';
+
+      const diagLines: string[] = [];
+      diagLines.push(`Card ${cardsFound}`);
+      diagLines.push(`Title: ${rawTitle}`);
+      diagLines.push(`URL: ${cleanUrl}`);
+
+      if (!isDetail) {
+        const reason = `Rejected: ${classification} (not a detail page)`;
+        diagLines.push(reason);
+        cardsMissingDestination++;
+        unresolvedLogs.push(diagLines.join('\n'));
+        continue;
+      }
+
+      diagLines.push(`Accepted: ${classification}`);
+
+      // Extract company name: lines preceding the link
+      const preLinkLines = card
+        .substring(0, card.indexOf(linkMatch[0]))
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(
+          (l) =>
+            l.length > 0 && !l.startsWith('![') && !l.startsWith('- ![') && !/^\d\.\d$/.test(l), // skip rating digits like 4.0
+        );
+
+      let company = 'Glassdoor Company';
+      if (preLinkLines.length > 0) {
+        // Strip bullet if present
+        const firstLine = preLinkLines[preLinkLines.length - 1];
+        company = firstLine.startsWith('- ') ? firstLine.slice(2).trim() : firstLine;
+      }
+
+      // Extract location: first non-empty line after the link that isn't Easy Apply or salary
+      const postLinkLines = card
+        .substring(card.indexOf(linkMatch[0]) + linkMatch[0].length)
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(
+          (l) =>
+            l.length > 0 &&
+            !l.startsWith('Easy Apply') &&
+            !l.startsWith('₹') &&
+            !l.startsWith('$') &&
+            !l.startsWith('['), // skip any inline links in the card
+        );
+
+      const location = postLinkLines[0] || 'India';
+
+      diagLines.push(`Company: ${company}`);
+      diagLines.push(`Location: ${location}`);
+
+      const cleanUrlLower = cleanUrl.toLowerCase();
+      if (!seenUrls.has(cleanUrlLower)) {
+        seenUrls.add(cleanUrlLower);
+        cardsSuccessfullyResolved++;
+        listings.push({
+          title: rawTitle,
+          company,
+          listingUrl: cleanUrl,
+          location,
+          source: sourceDomain,
+        });
+        resolvedLogs.push(diagLines.join('\n'));
+      } else {
+        diagLines.push(`Rejected: duplicate URL`);
+        cardsMissingDestination++;
+        unresolvedLogs.push(diagLines.join('\n'));
+      }
+    }
+
+    console.log(`
+Platform:                        ${sourceDomain}
+Cards Found:                     ${cardsFound}
+Cards Successfully Resolved:     ${cardsSuccessfullyResolved}
+Cards Missing Destination:       ${cardsMissingDestination}
+
+Resolved Cards Detail:
+--------------------------------
+${resolvedLogs.slice(0, 5).join('\n---\n') || 'None'}
+
+Unresolved Cards Detail:
+--------------------------------
+${unresolvedLogs.slice(0, 5).join('\n---\n') || 'None'}
+`);
+
+    return listings.slice(0, JobBoardExtractor['MAX_LISTINGS_PER_BOARD_PAGE']);
   }
 }
 
