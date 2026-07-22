@@ -35,22 +35,37 @@ export class JobBoardExtractor {
     },
     'unstop.com': {
       details: [
-        /\/competition\/[\w-]+/i,
-        /\/internship\/[\w-]+/i,
-        /\/job\/[\w-]+/i,
-        /\/hackathon\/[\w-]+/i,
-        /\/fellowship\/[\w-]+/i,
-        /\/opportunities\/[\w-]+/i,
+        /\/competition\/[\w-]+-\d+/i,
+        /\/internship\/[\w-]+-\d+/i,
+        /\/job\/[\w-]+-\d+/i,
+        /\/hackathon\/[\w-]+-\d+/i,
+        /\/fellowship\/[\w-]+-\d+/i,
+        /\/opportunities\/[\w-]+-\d+/i,
+        /\/o\/[\w-]+/i,
       ],
-      listings: [/^\/$/i, /^\/jobs$/i, /^\/internships$/i, /^\/opportunities$/i],
+      listings: [
+        /^\/$/i,
+        /\/jobs/i,
+        /\/internships/i,
+        /\/opportunities/i,
+        /\/student-internships/i,
+        /-internships/i,
+        /-jobs/i,
+      ],
     },
     'indeed.com': {
-      details: [/\/viewjob/i, /\/rc\/clk/i, /\/job\/[\w-]+/i],
-      listings: [/^\/$/i, /\/jobs/i, /\/q-/i, /\/l-/i],
+      details: [
+        /\/viewjob/i,
+        /\/rc\/clk/i,
+        /\/pagead\/clk/i,
+        /\/job\/[\w-]+/i,
+        /\/company\/.*\/jobs\//i,
+      ],
+      listings: [/^\/$/i, /\/jobs/i, /\/q-/i, /\/l-/i, /\/cmp/i],
     },
     'glassdoor.co': {
-      details: [/\/job-listing\/[\w-]+/i, /\/job-details\/[\w-]+/i, /\/partner\/joblisting/i],
-      listings: [/^\/$/i, /\/jobs/i, /\/job/i],
+      details: [/\/job-listing\//i, /\/job-details\//i, /\/partner\/joblisting/i],
+      listings: [/^\/$/i, /\/jobs\/?$/i, /\/Job\/.*-jobs-/i, /\/Job\/[a-z-]+-jobs-SRCH_/i],
     },
     'internshala.com': {
       details: [/\/internship\/detail\/[\w-]+/i, /\/job\/detail\/[\w-]+/i],
@@ -62,7 +77,7 @@ export class JobBoardExtractor {
     },
     'greenhouse.io': {
       details: [/\/jobs\/\d+/i, /\/requisitions\/\d+/i],
-      listings: [/^\/$/i],
+      listings: [/^\/$/i, /\/embed\/job_board/i],
     },
     'lever.co': {
       details: [/\/[^/]+\/[0-9a-f-]{36}/i, /\/[^/]+\/[a-f0-9-]{12,}/i],
@@ -73,8 +88,8 @@ export class JobBoardExtractor {
       listings: [/^\/$/i],
     },
     'wellfound.com': {
-      details: [/\/jobs\/[\w-]+/i],
-      listings: [/^\/$/i, /\/jobs$/i, /\/role/i, /\/company/i],
+      details: [/\/jobs\/\d+/i, /\/role\/l\/[\w-]+/i, /\/company\/[^/]+\/jobs\/\d+/i],
+      listings: [/^\/$/i, /\/jobs/i, /\/role/i, /\/company/i, /\/location/i],
     },
   };
 
@@ -312,14 +327,21 @@ export class JobBoardExtractor {
         return 'SEARCH_PAGE';
       }
 
-      // Check filters -> LISTING_PAGE
+      // Check filters & directory parameters -> LISTING_PAGE
       if (
         url.searchParams.has('loc') ||
         url.searchParams.has('radius') ||
         url.searchParams.has('fromage') ||
         url.searchParams.has('fromAge') ||
+        url.searchParams.has('usertype') ||
+        url.searchParams.has('domain') ||
+        url.searchParams.has('oppstatus') ||
+        url.searchParams.has('opportunity_type') ||
+        url.searchParams.has('category') ||
+        url.searchParams.has('specialization') ||
         path.includes('/filter/') ||
-        path.includes('/filters/')
+        path.includes('/filters/') ||
+        path.includes('/student-internships')
       ) {
         return 'LISTING_PAGE';
       }
@@ -360,19 +382,19 @@ export class JobBoardExtractor {
         return 'COMPANY_JOBS_PAGE';
       }
 
-      // 1. Domain-specific pattern checks
+      // 1. Domain-specific pattern checks: Check listings BEFORE details
       for (const [domainKey, patterns] of Object.entries(this.DOMAIN_PATTERNS)) {
         if (host.includes(domainKey)) {
+          // Check listing patterns first to catch search/directory pages
+          for (const rx of patterns.listings) {
+            if (rx.test(path)) {
+              return 'LISTING_PAGE';
+            }
+          }
           // Check detail patterns
           for (const rx of patterns.details) {
             if (rx.test(path) || rx.test(url.pathname + url.search)) {
               return 'JOB_DETAIL';
-            }
-          }
-          // Check listing patterns
-          for (const rx of patterns.listings) {
-            if (rx.test(path)) {
-              return 'LISTING_PAGE';
             }
           }
 
@@ -472,7 +494,7 @@ export class JobBoardExtractor {
   /**
    * Intelligent card block divider matching both multi-line cards and list-view single-line cards.
    */
-  public static splitIntoCardBlocks(markdown: string): string[] {
+  public static splitIntoCardBlocks(markdown: string, baseUrl?: string): string[] {
     const lines = markdown.split('\n');
     const blocks: string[] = [];
     let currentBlock: string[] = [];
@@ -489,12 +511,20 @@ export class JobBoardExtractor {
         continue;
       }
 
-      // Extract all links in this line
-      const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+      // Extract all links in this line (supporting relative URLs)
+      const linkRegex = /\[([^\]]+)\]\(((?:https?:\/\/|\/)[^\s)]+)\)/g;
       const lineLinks: string[] = [];
       let match;
       while ((match = linkRegex.exec(trimmed)) !== null) {
-        lineLinks.push(match[2]);
+        let href = match[2].trim();
+        if (href.startsWith('/') && baseUrl) {
+          try {
+            href = new URL(href, baseUrl).toString();
+          } catch {
+            // Keep original href
+          }
+        }
+        lineLinks.push(href);
       }
 
       // Find if there is a job detail URL on this line
@@ -538,7 +568,7 @@ export class JobBoardExtractor {
     const seenUrls = new Set<string>();
     const sourceDomain = this.getBoardIdentifier(url);
 
-    const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+    const linkRegex = /\[([^\]]+)\]\(((?:https?:\/\/|\/)[^\s)]+)\)/g;
 
     let cardsFound = 0;
     let cardsSuccessfullyResolved = 0;
@@ -563,13 +593,21 @@ export class JobBoardExtractor {
       }
     }
 
-    const cardBlocks = this.splitIntoCardBlocks(markdown);
+    const cardBlocks = this.splitIntoCardBlocks(markdown, url);
 
     for (const cardBlock of cardBlocks) {
       const pLinks: { text: string; url: string }[] = [];
       let linkMatch;
       while ((linkMatch = linkRegex.exec(cardBlock)) !== null) {
-        pLinks.push({ text: linkMatch[1].trim(), url: linkMatch[2].trim() });
+        let href = linkMatch[2].trim();
+        if (href.startsWith('/') && url) {
+          try {
+            href = new URL(href, url).toString();
+          } catch {
+            // Keep original href
+          }
+        }
+        pLinks.push({ text: linkMatch[1].trim(), url: href });
       }
 
       if (pLinks.length === 0) continue;

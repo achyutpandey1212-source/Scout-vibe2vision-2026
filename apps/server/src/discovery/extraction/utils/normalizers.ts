@@ -43,20 +43,76 @@ const CORPORATE_SUFFIXES = [
 ];
 
 /**
- * Converts empty strings to null, trims whitespace, and standardizes formats safely.
+ * Recursively cleans raw JSON extracted from LLM model output.
+ * Normalizes string literals "null", "NULL", "None", "N/A", "na", "", "undefined" to actual null.
+ */
+export function cleanRawExtractedJson(obj: any): any {
+  if (obj === null || obj === undefined) return null;
+  if (typeof obj === 'string') {
+    const trimmed = obj.trim();
+    const lower = trimmed.toLowerCase();
+    if (
+      trimmed.length === 0 ||
+      lower === 'null' ||
+      lower === 'none' ||
+      lower === 'n/a' ||
+      lower === 'na' ||
+      lower === 'undefined'
+    ) {
+      return null;
+    }
+    return trimmed;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(cleanRawExtractedJson).filter((item) => item !== null);
+  }
+  if (typeof obj === 'object') {
+    const cleaned: any = {};
+    for (const [key, val] of Object.entries(obj)) {
+      cleaned[key] = cleanRawExtractedJson(val);
+    }
+    return cleaned;
+  }
+  return obj;
+}
+
+/**
+ * Converts empty strings, "null", "N/A", "None" to null, trims whitespace, and standardizes formats safely.
  */
 export function normalizeString(val: any): string | null {
   if (val === undefined || val === null) return null;
   if (typeof val !== 'string') {
     try {
       const converted = String(val).trim();
-      return converted.length === 0 ? null : converted;
+      const lower = converted.toLowerCase();
+      if (
+        converted.length === 0 ||
+        lower === 'null' ||
+        lower === 'none' ||
+        lower === 'n/a' ||
+        lower === 'na' ||
+        lower === 'undefined'
+      ) {
+        return null;
+      }
+      return converted;
     } catch {
       return null;
     }
   }
   const trimmed = val.trim();
-  return trimmed.length === 0 ? null : trimmed;
+  const lower = trimmed.toLowerCase();
+  if (
+    trimmed.length === 0 ||
+    lower === 'null' ||
+    lower === 'none' ||
+    lower === 'n/a' ||
+    lower === 'na' ||
+    lower === 'undefined'
+  ) {
+    return null;
+  }
+  return trimmed;
 }
 
 /**
@@ -282,6 +338,9 @@ export function normalizeOpportunity(opp: any): any {
   };
 
   // Convert aliases to canonical keys if not explicitly defined on the canonical key
+  // 0. Clean raw extracted JSON to turn "null", "N/A", "None" strings into actual null values
+  opp = cleanRawExtractedJson(opp) || {};
+
   for (const aliasKey in aliasMap) {
     const canonicalKey = aliasMap[aliasKey];
     if (aliasKey in opp && opp[aliasKey] !== undefined && opp[aliasKey] !== null) {
