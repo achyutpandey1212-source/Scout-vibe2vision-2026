@@ -260,7 +260,7 @@ export class OpportunityEnrichmentPipeline {
 
   private stage4CareerValueIntelligence(opp: any, sourceRegistryEntry: any): void {
     const sourceEco = sourceRegistryEntry?.ecosystemType || 'UNIVERSITY';
-    if (!opp.organizationType) {
+    if (!opp.organizationType || opp.organizationType === 'OTHER') {
       if (sourceEco === 'STARTUP') {
         opp.organizationType = 'STARTUP';
         opp.organizationStage = 'EARLY_STARTUP';

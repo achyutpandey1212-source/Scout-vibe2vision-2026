@@ -238,12 +238,14 @@ export function normalizeOrganization(org: any, domain: string | null): string {
         .trim()
     : '';
 
-  // 1. Cross-reference source domain against known SourceRegistry domains
-  if (cleanDomain && KNOWN_ORGANIZATIONS[cleanDomain]) {
-    return KNOWN_ORGANIZATIONS[cleanDomain];
-  }
+  // Only use job board domain name as organization fallback if the parsed organization is empty or invalid
+  const hasValidOrg =
+    orgStr && orgStr.toLowerCase() !== 'unknown' && orgStr.toLowerCase() !== 'unknown organization';
 
-  if (!orgStr) {
+  if (!hasValidOrg) {
+    if (cleanDomain && KNOWN_ORGANIZATIONS[cleanDomain]) {
+      return KNOWN_ORGANIZATIONS[cleanDomain];
+    }
     return 'Unknown Organization';
   }
 
