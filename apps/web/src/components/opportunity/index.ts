@@ -5,3 +5,4 @@ export * from './OpportunityMetadata';
 export * from './OpportunityCard';
 export * from './FeaturedOpportunityCard';
 export * from './HiddenGemCard';
+export * from './OpportunityCardSkeleton';

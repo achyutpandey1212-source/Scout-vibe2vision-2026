@@ -1,98 +1,71 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+/**
+ * ==========================================
+ *        DASHBOARD SCREEN REDESIGN
+ * ==========================================
+ * Editorial Morning Briefing Layout
+ */
+
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { DashboardLayout } from '@/components/layout';
-import { Typography, Grid, Stack, UniversalLoader, PageTransition, Button } from '@/components/ui';
-import { OpportunityCard } from '@/components/opportunity';
-import {
-  TodaysMissionCard,
-  SectionHeader,
-  DashboardEmptyState,
-  RecommendationStrip,
-} from '@/components/dashboard';
-import ScoutIntelligencePanel from '@/components/dashboard/ScoutIntelligencePanel';
-import { Search, AlertCircle } from 'lucide-react';
+import { PageTransition } from '@/components/ui';
+import { OpportunityCard, OpportunityCardSkeleton } from '@/components/opportunity';
+import { TodaysMissionCard, SectionHeader, DashboardEmptyState } from '@/components/dashboard';
 import { useAuth } from '@/context/auth-context';
-import {
-  recommendationsApi,
-  opportunitiesApi,
-  bookmarksApi,
-  profileApi,
-  Opportunity,
-  Recommendation,
-} from '@/lib/api';
+import { recommendationsApi, bookmarksApi, profileApi, Opportunity } from '@/lib/api';
+import { ArrowRight, Clock, Sparkles } from 'lucide-react';
 
-const getSlotBadge = (slot: string) => {
-  switch (slot) {
-    case 'perfectMatch':
-      return { label: 'Featured Match', icon: '⭐' };
-    case 'hiddenGem':
-      return { label: 'Hidden Gem', icon: '💎' };
-    case 'stretchGoal':
-      return { label: 'Stretch Goal', icon: '📈' };
-    case 'quickWin':
-    case 'fastApply':
-      return { label: 'Fast Apply', icon: '🚀' };
-    case 'confidenceBuilder':
-    case 'resumeBuilder':
-      return { label: 'Resume Builder', icon: '🧠' };
-    default:
-      return { label: 'Curated Match', icon: '✨' };
-  }
-};
+function getTimeBasedGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good Morning';
+  if (hour < 17) return 'Good Afternoon';
+  return 'Good Evening';
+}
+
+function getRelativeTimeString(dateString?: string | Date): string {
+  if (!dateString) return 'recently';
+  const now = new Date();
+  const date = new Date(dateString);
+  const diffMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+  if (diffMinutes < 1) return 'just now';
+  if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+  return 'today';
+}
 
 export default function DashboardPage() {
   const router = useRouter();
   const { user } = useAuth();
   const [profileName, setProfileName] = useState<string>('');
   const [pageLoading, setPageLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  // Recommendation engine state
-  const [engineStatus, setEngineStatus] = useState<string>('READY');
-  const [progressPhase, setProgressPhase] = useState<string>('COMPLETED');
+  // Recommendation Engine State
   const [recommendations, setRecommendations] = useState<any[]>([]);
-
-  // Navigation tab & catalog feed state
-  const [activeTab, setActiveTab] = useState<'recommended' | 'all'>('recommended');
+  const [generatedAt, setGeneratedAt] = useState<string | Date | undefined>(undefined);
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
-  const [catalogOpportunities, setCatalogOpportunities] = useState<Opportunity[]>([]);
-  const [totalCatalogCount, setTotalCatalogCount] = useState<number>(0);
 
-  // Search & Filter state for catalog feed
-  const [feedQuery, setFeedQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('ALL');
-  const [sortBy, setSortBy] = useState<'match' | 'deadline'>('match');
+  // Automatic retry ref
+  const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = async (retryCount = 0) => {
     try {
-      setError(null);
-      const [recRes, catalogRes, bookmarkRes, profileRes] = await Promise.all([
+      const [recRes, bookmarkRes, profileRes] = await Promise.all([
         recommendationsApi.list(),
-        opportunitiesApi.list({ limit: 12 }),
         bookmarksApi.list(),
         profileApi.get(),
       ]);
 
-      if (catalogRes.data?.success) {
-        const rawOppList: Opportunity[] = catalogRes.data.data;
-        setCatalogOpportunities(rawOppList);
-        setTotalCatalogCount(catalogRes.data.meta?.total || rawOppList.length);
-      }
-
       if (recRes.data?.success) {
         const rawData = recRes.data.data;
-        const status = recRes.data.status || 'READY';
-        setEngineStatus(status);
-        if (status === 'GENERATING') {
-          if (recRes.data.progressPhase) {
-            setProgressPhase(recRes.data.progressPhase);
-          }
+        if (recRes.data.generatedAt) {
+          setGeneratedAt(recRes.data.generatedAt);
         }
 
-        if (status === 'READY' && rawData) {
+        if (rawData) {
           if (Array.isArray(rawData)) {
             setRecommendations(rawData);
           } else if (typeof rawData === 'object') {
@@ -136,40 +109,36 @@ export default function DashboardPage() {
           setProfileName(p.identity.preferredName);
         }
       }
-    } catch (err: any) {
-      console.error('Failed to load dashboard data:', err);
-      setError('We are having trouble connecting to Scout right now. Please try again.');
-    } finally {
       setPageLoading(false);
+    } catch (err: any) {
+      console.warn('Dashboard sync delay, retrying automatically...', err);
+      // Automatic silent retry without alarming the user
+      const nextDelay = Math.min(2000 * Math.pow(1.5, retryCount), 10000);
+      retryTimerRef.current = setTimeout(() => {
+        loadDashboardData(retryCount + 1);
+      }, nextDelay);
     }
   };
 
   useEffect(() => {
     loadDashboardData();
+    return () => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    };
   }, []);
 
-  // Polling during generation
+  // Restore scroll position after navigation
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (engineStatus === 'GENERATING') {
-      timer = setInterval(async () => {
-        try {
-          const res = await recommendationsApi.list();
-          if (res.data?.success) {
-            const status = res.data.status;
-            if (res.data.progressPhase) setProgressPhase(res.data.progressPhase);
-            if (status === 'READY') {
-              setEngineStatus('READY');
-              loadDashboardData();
-            }
-          }
-        } catch (err) {
-          console.error('Polling error:', err);
-        }
-      }, 2000);
+    if (!pageLoading) {
+      const savedScroll = sessionStorage.getItem('scout_dashboard_scroll');
+      if (savedScroll) {
+        setTimeout(() => {
+          window.scrollTo({ top: Number(savedScroll), behavior: 'instant' as any });
+          sessionStorage.removeItem('scout_dashboard_scroll');
+        }, 100);
+      }
     }
-    return () => clearInterval(timer);
-  }, [engineStatus]);
+  }, [pageLoading]);
 
   const handleBookmarkToggle = async (oppId: string) => {
     const isBookmarked = bookmarkedIds.has(oppId);
@@ -189,404 +158,230 @@ export default function DashboardPage() {
       }
     } catch (err) {
       console.error('Failed to toggle bookmark:', err);
-      setBookmarkedIds(bookmarkedIds); // revert on error
+      setBookmarkedIds(bookmarkedIds);
     }
   };
 
   const handleCardClick = (oppId: string) => {
+    sessionStorage.setItem('scout_dashboard_scroll', window.scrollY.toString());
     router.push(`/opportunity/${oppId}`);
   };
 
-  // Structured portfolio references
+  // Portfolio slots mapping directly from RE Pack
   const featuredRec =
     recommendations.find((r: any) => r?.slot === 'perfectMatch') || recommendations[0];
   const featuredOpp = featuredRec?.opportunity;
 
   const hiddenGemRec =
     recommendations.find((r: any) => r?.slot === 'hiddenGem') || recommendations[1];
+  const hiddenGemOpp = hiddenGemRec?.opportunity;
 
   const remainingRecs = recommendations.filter(
     (r: any) => r && r.slot !== 'perfectMatch' && r.slot !== 'hiddenGem',
   );
 
-  const categories = ['ALL', 'SCHOLARSHIP', 'INTERNSHIP', 'FELLOWSHIP', 'GRANT'];
-
-  // Stages definitions for live progress
-  const stages = [
-    { key: 'RETRIEVING', label: 'Retrieving opportunities' },
-    { key: 'FILTERING', label: 'Filtering opportunities' },
-    { key: 'SCORING', label: 'Scoring matches' },
-    { key: 'DIVERSIFYING', label: 'Diversifying recommendations' },
-    { key: 'PERSONALIZING', label: 'Generating AI insights' },
-    { key: 'BUILDING_PACK', label: 'Building recommendation pack' },
-    { key: 'COMPLETED', label: 'Workspace Ready' },
-  ];
-
-  const getStageIndex = (phase: string) => {
-    return stages.findIndex((s) => s.key === phase);
-  };
-
-  const currentStageIndex = getStageIndex(progressPhase);
-
-  const renderPreparingWorkspace = () => {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#FAF8F5] dark:bg-[#0B0C0E] px-6 select-none">
-        <div className="w-full max-w-md space-y-8 text-center">
-          <div className="space-y-3 animate-fade-in">
-            <Typography
-              variant="heading-m"
-              className="text-2xl md:text-3xl font-light tracking-tight text-foreground"
-            >
-              Preparing your Scout Workspace
-            </Typography>
-            <Typography variant="body" className="text-sm text-secondary/60 font-light block">
-              We&apos;re building recommendations tailored specifically for you.
-            </Typography>
-          </div>
-
-          <div className="bg-card border border-border/40 rounded-3xl p-6 text-left space-y-4 shadow-sm">
-            {stages.map((stage, idx) => {
-              const isCompleted = idx < currentStageIndex;
-              const isCurrent = idx === currentStageIndex;
-
-              return (
-                <div
-                  key={stage.key}
-                  className="flex items-center gap-3 transition-all duration-300"
-                >
-                  {isCompleted ? (
-                    <div className="h-5 w-5 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-scale-up" />
-                    </div>
-                  ) : isCurrent ? (
-                    <div className="h-5 w-5 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 animate-pulse">
-                      <span className="h-2.5 w-2.5 rounded-full bg-primary animate-ping" />
-                    </div>
-                  ) : (
-                    <div className="h-5 w-5 rounded-full bg-accent/20 border border-border/30 flex items-center justify-center shrink-0">
-                      <span className="h-1.5 w-1.5 rounded-full bg-secondary/30" />
-                    </div>
-                  )}
-
-                  <span
-                    className={`text-xs font-mono tracking-wide ${
-                      isCompleted
-                        ? 'text-emerald-500 font-semibold'
-                        : isCurrent
-                          ? 'text-foreground font-bold'
-                          : 'text-secondary/40 font-light'
-                    }`}
-                  >
-                    {stage.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    );
-  };
+  const userNameDisplay = profileName || user?.name || user?.displayName || 'Student';
 
   return (
     <ProtectedRoute>
-      {pageLoading ? (
-        <div className="min-h-screen flex items-center justify-center bg-[#FAF8F5] dark:bg-[#0B0C0E]">
-          <UniversalLoader
-            messages={[
-              'Accessing security credentials...',
-              'Synchronizing local workspace...',
-              'Logging in...',
-            ]}
-            intervalMs={200}
-            onComplete={() => {}}
-          />
-        </div>
-      ) : engineStatus === 'GENERATING' ? (
-        renderPreparingWorkspace()
-      ) : (
-        <DashboardLayout>
-          <PageTransition>
-            <Stack gap="xl" className="pb-16 max-w-5xl mx-auto space-y-12">
-              {error ? (
-                <div className="p-6 rounded-3xl border border-rose-200/50 bg-rose-50/30 dark:bg-rose-950/10 flex items-start gap-4">
-                  <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <Typography variant="heading-s" className="text-sm font-medium text-foreground">
-                      Unable to Sync with Scout
-                    </Typography>
-                    <Typography variant="body" className="text-xs text-secondary/80 font-light">
-                      {error}
-                    </Typography>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="mt-2"
-                      onClick={loadDashboardData}
-                    >
-                      Retry Connection
-                    </Button>
+      <DashboardLayout>
+        <PageTransition>
+          <div className="max-w-4xl mx-auto space-y-12 pb-20 select-none">
+            {/* INITIAL LOADING SKELETON (ZERO LAYOUT SHIFT) */}
+            {pageLoading ? (
+              <div className="space-y-12 animate-pulse">
+                {/* Mission Card Skeleton */}
+                <div className="h-44 rounded-3xl bg-card border border-border/60 p-6 space-y-3">
+                  <div className="h-4 w-1/3 bg-muted rounded-md" />
+                  <div className="h-6 w-2/3 bg-muted rounded-md" />
+                  <div className="h-3 w-1/2 bg-muted rounded-md pt-2" />
+                </div>
+
+                {/* Featured Skeleton */}
+                <div className="space-y-4">
+                  <div className="h-5 w-40 bg-muted rounded-md" />
+                  <OpportunityCardSkeleton variant="featured" />
+                </div>
+
+                {/* Hidden Gem Skeleton */}
+                <div className="space-y-4">
+                  <div className="h-5 w-32 bg-muted rounded-md" />
+                  <OpportunityCardSkeleton variant="default" />
+                </div>
+
+                {/* More Grid Skeleton */}
+                <div className="space-y-4">
+                  <div className="h-5 w-48 bg-muted rounded-md" />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <OpportunityCardSkeleton variant="default" />
+                    <OpportunityCardSkeleton variant="default" />
+                    <OpportunityCardSkeleton variant="default" />
                   </div>
                 </div>
-              ) : (
-                <>
-                  {/* Today's Mission Briefing Card */}
-                  <TodaysMissionCard
-                    userName={profileName || user?.name || user?.displayName || 'User'}
-                    matchCount={recommendations.length}
-                  />
+              </div>
+            ) : recommendations.length === 0 ? (
+              /* EMPTY STATE */
+              <DashboardEmptyState
+                onDiscoverClick={() => router.push('/explore')}
+                onRefreshClick={() => loadDashboardData()}
+              />
+            ) : (
+              /* COMPOSER MORNING BRIEFING CONTENT */
+              <div className="space-y-12">
+                {/* 1. TODAY'S MISSION CARD */}
+                <TodaysMissionCard userName={userNameDisplay} matchCount={recommendations.length} />
 
-                  <ScoutIntelligencePanel
-                    opportunityCount={totalCatalogCount || recommendations.length * 11}
-                    matchCount={recommendations.length}
-                    bookmarkCount={bookmarkedIds.size}
-                  />
+                {/* 2. FEATURED RECOMMENDATION (Today's Best Match) */}
+                {featuredOpp && (
+                  <section className="space-y-4">
+                    <SectionHeader
+                      title="Today's Best Match"
+                      description="The strongest opportunity Scout found for you today."
+                    />
+                    <OpportunityCard
+                      variant="featured"
+                      slot="perfectMatch"
+                      title={featuredOpp.title}
+                      organization={featuredOpp.organization}
+                      description={featuredOpp.description}
+                      deadline={featuredOpp.deadline || 'Flexible'}
+                      matchScore={featuredRec.recommendationScore}
+                      explanation={featuredRec.explanation}
+                      tags={featuredOpp.tags}
+                      isBookmarked={bookmarkedIds.has(featuredOpp._id)}
+                      isWomenOnly={
+                        featuredOpp.isWomenOnly ||
+                        featuredOpp.genderEligibility?.toLowerCase().includes('women') ||
+                        featuredOpp.genderEligibility?.toLowerCase().includes('female')
+                      }
+                      stipend={
+                        featuredOpp.stipend != null
+                          ? `₹${Number(featuredOpp.stipend).toLocaleString()}`
+                          : undefined
+                      }
+                      onBookmarkToggle={() => handleBookmarkToggle(featuredOpp._id)}
+                      onApplyClick={() => handleCardClick(featuredOpp._id)}
+                      onCardClick={() => handleCardClick(featuredOpp._id)}
+                    />
+                  </section>
+                )}
 
-                  {/* Tabs Selection Bar */}
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-border/40 pb-4 gap-4">
-                    <div className="flex gap-2 bg-accent/25 p-1 rounded-full border border-border/40">
-                      <button
-                        onClick={() => setActiveTab('recommended')}
-                        className={`px-5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-200 ${
-                          activeTab === 'recommended'
-                            ? 'bg-card text-foreground shadow-sm'
-                            : 'text-secondary/60 hover:text-foreground'
-                        }`}
-                      >
-                        Dashboard Curated
-                      </button>
-                      <button
-                        onClick={() => setActiveTab('all')}
-                        className={`px-5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-200 ${
-                          activeTab === 'all'
-                            ? 'bg-card text-foreground shadow-sm'
-                            : 'text-secondary/60 hover:text-foreground'
-                        }`}
-                      >
-                        Explore Catalog
-                      </button>
+                {/* 3. HIDDEN GEM */}
+                {hiddenGemOpp && (
+                  <section className="space-y-4">
+                    <SectionHeader
+                      title="Hidden Gem"
+                      description="An opportunity you might not have discovered on your own."
+                    />
+                    <OpportunityCard
+                      variant="default"
+                      slot="hiddenGem"
+                      title={hiddenGemOpp.title}
+                      organization={hiddenGemOpp.organization}
+                      description={hiddenGemOpp.description}
+                      deadline={hiddenGemOpp.deadline || 'Flexible'}
+                      matchScore={hiddenGemRec.recommendationScore}
+                      explanation={hiddenGemRec.explanation}
+                      tags={hiddenGemOpp.tags}
+                      isBookmarked={bookmarkedIds.has(hiddenGemOpp._id)}
+                      isWomenOnly={
+                        hiddenGemOpp.isWomenOnly ||
+                        hiddenGemOpp.genderEligibility?.toLowerCase().includes('women') ||
+                        hiddenGemOpp.genderEligibility?.toLowerCase().includes('female')
+                      }
+                      stipend={
+                        hiddenGemOpp.stipend != null
+                          ? `₹${Number(hiddenGemOpp.stipend).toLocaleString()}`
+                          : undefined
+                      }
+                      onBookmarkToggle={() => handleBookmarkToggle(hiddenGemOpp._id)}
+                      onApplyClick={() => handleCardClick(hiddenGemOpp._id)}
+                      onCardClick={() => handleCardClick(hiddenGemOpp._id)}
+                    />
+                  </section>
+                )}
+
+                {/* 4. MORE RECOMMENDATIONS */}
+                {remainingRecs.length > 0 && (
+                  <section className="space-y-4">
+                    <SectionHeader
+                      title="More Opportunities Worth Exploring"
+                      description="Different paths depending on your confidence, experience and goals."
+                    />
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {remainingRecs.map((rec) => (
+                        <OpportunityCard
+                          key={rec.opportunity._id}
+                          variant="default"
+                          slot={rec.slot}
+                          title={rec.opportunity.title}
+                          organization={rec.opportunity.organization}
+                          description={rec.opportunity.description}
+                          deadline={rec.opportunity.deadline || 'Flexible'}
+                          tags={rec.opportunity.tags}
+                          matchScore={rec.recommendationScore}
+                          explanation={rec.explanation}
+                          isBookmarked={bookmarkedIds.has(rec.opportunity._id)}
+                          isWomenOnly={
+                            rec.opportunity.isWomenOnly ||
+                            rec.opportunity.genderEligibility?.toLowerCase().includes('women') ||
+                            rec.opportunity.genderEligibility?.toLowerCase().includes('female')
+                          }
+                          stipend={
+                            rec.opportunity.stipend != null
+                              ? `₹${Number(rec.opportunity.stipend).toLocaleString()}`
+                              : undefined
+                          }
+                          onBookmarkToggle={() => handleBookmarkToggle(rec.opportunity._id)}
+                          onApplyClick={() => handleCardClick(rec.opportunity._id)}
+                          onCardClick={() => handleCardClick(rec.opportunity._id)}
+                        />
+                      ))}
                     </div>
+                  </section>
+                )}
 
-                    <span className="text-xs text-secondary/50 font-light select-none">
-                      {activeTab === 'recommended'
-                        ? '5 AI-personalized portfolio recommendations'
-                        : `Displaying ${totalCatalogCount} opportunities in catalog`}
+                {/* 5. DISCOVER CTA */}
+                <section className="p-8 border border-border/80 bg-card rounded-3xl text-center space-y-4 my-8">
+                  <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1.5 max-w-md mx-auto">
+                    <h3 className="text-lg font-display font-medium text-foreground">
+                      Looking for more?
+                    </h3>
+                    <p className="text-xs text-muted-foreground font-light leading-relaxed">
+                      Scout has hundreds of verified opportunities beyond today&apos;s personalized
+                      recommendations.
+                    </p>
+                  </div>
+                  <div className="pt-2">
+                    <button
+                      onClick={() => router.push('/explore')}
+                      className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground text-xs font-medium rounded-xl hover:opacity-90 transition-opacity shadow-sm"
+                    >
+                      <span>Discover All Opportunities</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </section>
+
+                {/* 6. RECOMMENDATION FRESHNESS FOOTER */}
+                <footer className="pt-4 border-t border-border/40 text-center text-[11px] text-muted-foreground/70 font-light space-y-1">
+                  <div className="flex items-center justify-center gap-2">
+                    <Clock className="w-3 h-3 text-muted-foreground/60" />
+                    <span>
+                      Recommendations generated today • Generated{' '}
+                      {getRelativeTimeString(generatedAt)} • Refreshes every 24 hours.
                     </span>
                   </div>
-
-                  {/* TAB 1: Dashboard Curated Portfolio */}
-                  {activeTab === 'recommended' ? (
-                    recommendations.length === 0 ? (
-                      <DashboardEmptyState />
-                    ) : (
-                      <Stack gap="xl" className="space-y-12">
-                        {/* 1. Featured Match Section */}
-                        {featuredOpp && (
-                          <div className="space-y-4">
-                            <SectionHeader
-                              title="Top Match"
-                              description="Highest compatibility recommendation today"
-                            />
-                            <OpportunityCard
-                              variant="featured"
-                              slot="perfectMatch"
-                              title={featuredOpp.title}
-                              organization={featuredOpp.organization}
-                              description={featuredOpp.description}
-                              deadline={featuredOpp.deadline || 'Flexible'}
-                              matchScore={featuredRec.recommendationScore}
-                              explanation={featuredRec.explanation}
-                              tags={featuredOpp.tags}
-                              isBookmarked={bookmarkedIds.has(featuredOpp._id)}
-                              isWomenOnly={
-                                featuredOpp.isWomenOnly ||
-                                featuredOpp.genderEligibility?.toLowerCase().includes('women') ||
-                                featuredOpp.genderEligibility?.toLowerCase().includes('female')
-                              }
-                              stipend={
-                                featuredOpp.stipend != null
-                                  ? `₹${Number(featuredOpp.stipend).toLocaleString()}`
-                                  : undefined
-                              }
-                              onBookmarkToggle={() => handleBookmarkToggle(featuredOpp._id)}
-                              onApplyClick={() => handleCardClick(featuredOpp._id)}
-                            />
-                          </div>
-                        )}
-
-                        {/* 2. Hidden Gem Section */}
-                        {hiddenGemRec?.opportunity && (
-                          <div className="space-y-4">
-                            <SectionHeader
-                              title="Hidden Gem"
-                              description="Low competition matching opportunity"
-                            />
-                            <OpportunityCard
-                              variant="default"
-                              slot="hiddenGem"
-                              title={hiddenGemRec.opportunity.title}
-                              organization={hiddenGemRec.opportunity.organization}
-                              description={hiddenGemRec.opportunity.description}
-                              deadline={hiddenGemRec.opportunity.deadline || 'Flexible'}
-                              matchScore={hiddenGemRec.recommendationScore}
-                              explanation={hiddenGemRec.explanation}
-                              isBookmarked={bookmarkedIds.has(hiddenGemRec.opportunity._id)}
-                              onBookmarkToggle={() =>
-                                handleBookmarkToggle(hiddenGemRec.opportunity._id)
-                              }
-                              onApplyClick={() => handleCardClick(hiddenGemRec.opportunity._id)}
-                            />
-                          </div>
-                        )}
-
-                        {/* 3. More Recommended Opportunities Section */}
-                        {remainingRecs.length > 0 && (
-                          <div className="space-y-4">
-                            <SectionHeader
-                              title="More Recommended Opportunities"
-                              description="Portfolio recommendations matching your career goals"
-                            />
-
-                            <Grid cols={1} colsSm={2} colsLg={3} gap="md">
-                              {remainingRecs.map((rec) => {
-                                return (
-                                  <OpportunityCard
-                                    key={rec.opportunity._id}
-                                    slot={rec.slot}
-                                    title={rec.opportunity.title}
-                                    organization={rec.opportunity.organization}
-                                    deadline={rec.opportunity.deadline || 'Flexible'}
-                                    tags={rec.opportunity.tags}
-                                    matchScore={rec.recommendationScore}
-                                    explanation={rec.explanation}
-                                    isBookmarked={bookmarkedIds.has(rec.opportunity._id)}
-                                    isWomenOnly={
-                                      rec.opportunity.isWomenOnly ||
-                                      rec.opportunity.genderEligibility
-                                        ?.toLowerCase()
-                                        .includes('women') ||
-                                      rec.opportunity.genderEligibility
-                                        ?.toLowerCase()
-                                        .includes('female')
-                                    }
-                                    stipend={
-                                      rec.opportunity.stipend != null
-                                        ? `₹${Number(rec.opportunity.stipend).toLocaleString()}`
-                                        : undefined
-                                    }
-                                    onBookmarkToggle={() =>
-                                      handleBookmarkToggle(rec.opportunity._id)
-                                    }
-                                    onApplyClick={() => handleCardClick(rec.opportunity._id)}
-                                    onCardClick={() => handleCardClick(rec.opportunity._id)}
-                                  />
-                                );
-                              })}
-                            </Grid>
-                          </div>
-                        )}
-                      </Stack>
-                    )
-                  ) : (
-                    /* TAB 2: Explore Catalog Feed */
-                    <Stack gap="md" className="space-y-6">
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-accent/10 p-4 rounded-3xl border border-border/30">
-                        <div className="flex-1 flex items-center gap-2 bg-card border border-border/40 rounded-full px-4.5 py-2">
-                          <Search className="w-4 h-4 text-secondary/50" />
-                          <input
-                            type="text"
-                            value={feedQuery}
-                            onChange={(e) => setFeedQuery(e.target.value)}
-                            placeholder="Search title, tech stack, tags..."
-                            className="w-full bg-transparent border-none text-xs text-foreground placeholder-secondary/50 focus:ring-0 outline-none p-0"
-                          />
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] text-secondary/50 font-medium uppercase tracking-wider select-none">
-                              Filter:
-                            </span>
-                            <select
-                              value={categoryFilter}
-                              onChange={(e) => setCategoryFilter(e.target.value)}
-                              className="bg-card text-xs text-foreground border border-border/40 rounded-full px-3 py-1.5 outline-none focus:ring-1 focus:ring-primary/20"
-                            >
-                              {categories.map((cat) => (
-                                <option key={cat} value={cat}>
-                                  {cat === 'ALL' ? 'All Categories' : cat}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] text-secondary/50 font-medium uppercase tracking-wider select-none">
-                              Sort:
-                            </span>
-                            <select
-                              value={sortBy}
-                              onChange={(e) => setSortBy(e.target.value as 'match' | 'deadline')}
-                              className="bg-card text-xs text-foreground border border-border/40 rounded-full px-3 py-1.5 outline-none focus:ring-1 focus:ring-primary/20"
-                            >
-                              <option value="match">Match Score</option>
-                              <option value="deadline">Deadline</option>
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-
-                      <Grid cols={1} colsSm={2} colsLg={3} gap="md">
-                        {catalogOpportunities
-                          .filter((opp) => {
-                            if (feedQuery) {
-                              const q = feedQuery.toLowerCase();
-                              const matchesTitle = opp.title.toLowerCase().includes(q);
-                              const matchesOrg = opp.organization.toLowerCase().includes(q);
-                              const matchesTags = opp.tags?.some((t) =>
-                                t.toLowerCase().includes(q),
-                              );
-                              if (!matchesTitle && !matchesOrg && !matchesTags) return false;
-                            }
-                            if (categoryFilter !== 'ALL') {
-                              if (opp.opportunityType?.toUpperCase() !== categoryFilter)
-                                return false;
-                            }
-                            return true;
-                          })
-                          .map((opp) => (
-                            <OpportunityCard
-                              key={opp._id}
-                              title={opp.title}
-                              organization={opp.organization}
-                              deadline={opp.deadline || 'Flexible'}
-                              tags={opp.tags}
-                              matchScore={(opp as any).matchScore || 75}
-                              isBookmarked={bookmarkedIds.has(opp._id)}
-                              isWomenOnly={
-                                opp.isWomenOnly ||
-                                opp.genderEligibility?.toLowerCase().includes('women') ||
-                                opp.genderEligibility?.toLowerCase().includes('female')
-                              }
-                              stipend={
-                                opp.stipend != null
-                                  ? `₹${Number(opp.stipend).toLocaleString()}`
-                                  : undefined
-                              }
-                              onBookmarkToggle={() => handleBookmarkToggle(opp._id)}
-                              onApplyClick={() => handleCardClick(opp._id)}
-                              onCardClick={() => handleCardClick(opp._id)}
-                            />
-                          ))}
-                      </Grid>
-                    </Stack>
-                  )}
-                </>
-              )}
-            </Stack>
-          </PageTransition>
-        </DashboardLayout>
-      )}
+                </footer>
+              </div>
+            )}
+          </div>
+        </PageTransition>
+      </DashboardLayout>
     </ProtectedRoute>
   );
 }

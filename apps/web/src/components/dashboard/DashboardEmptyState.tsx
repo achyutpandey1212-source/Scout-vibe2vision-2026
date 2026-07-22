@@ -12,6 +12,8 @@ export interface DashboardEmptyStateProps {
   actionLabel?: string;
   actionHref?: string;
   onActionClick?: () => void;
+  onDiscoverClick?: () => void;
+  onRefreshClick?: () => void;
 }
 
 export const DashboardEmptyState: React.FC<DashboardEmptyStateProps> = ({
@@ -20,9 +22,13 @@ export const DashboardEmptyState: React.FC<DashboardEmptyStateProps> = ({
   actionLabel = 'Discover Opportunities',
   actionHref = ROUTES.EXPLORE,
   onActionClick,
+  onDiscoverClick,
+  onRefreshClick,
 }) => {
+  const handlePrimaryClick = onDiscoverClick || onActionClick;
+
   return (
-    <Card className="text-center p-8 md:p-12 max-w-lg mx-auto bg-card border border-border/60 rounded-3xl my-8">
+    <Card className="text-center p-8 md:p-12 max-w-lg mx-auto bg-card border border-border/60 rounded-3xl my-8 select-none">
       <Stack gap="md" align="center" className="space-y-2">
         <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
           <Compass className="w-6 h-6 animate-pulse" />
@@ -43,21 +49,27 @@ export const DashboardEmptyState: React.FC<DashboardEmptyStateProps> = ({
           </Typography>
         </div>
 
-        <div className="pt-4">
-          {actionHref ? (
+        <div className="pt-4 flex items-center justify-center gap-3">
+          {handlePrimaryClick ? (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handlePrimaryClick}
+              iconRight={<Sparkles className="w-3.5 h-3.5" />}
+            >
+              {actionLabel} →
+            </Button>
+          ) : (
             <Link href={actionHref}>
               <Button variant="primary" size="sm" iconRight={<Sparkles className="w-3.5 h-3.5" />}>
                 {actionLabel} →
               </Button>
             </Link>
-          ) : (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={onActionClick}
-              iconRight={<Sparkles className="w-3.5 h-3.5" />}
-            >
-              {actionLabel} →
+          )}
+
+          {onRefreshClick && (
+            <Button variant="secondary" size="sm" onClick={onRefreshClick}>
+              Refresh
             </Button>
           )}
         </div>

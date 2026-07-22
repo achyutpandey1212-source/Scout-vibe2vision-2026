@@ -3,8 +3,7 @@
 import React from 'react';
 import { OpportunityCard } from '@/components/opportunity/OpportunityCard';
 import { TodaysMissionCard } from '@/components/dashboard/TodaysMissionCard';
-import { RecommendationBadge } from '@/components/opportunity/RecommendationBadge';
-import { Lock, Sparkles, Bookmark, ExternalLink } from 'lucide-react';
+import { Lock, Sparkles } from 'lucide-react';
 
 export const DashboardPreviewMockup: React.FC = () => {
   return (
@@ -31,8 +30,8 @@ export const DashboardPreviewMockup: React.FC = () => {
         {/* Anonymized Mission Greeting */}
         <TodaysMissionCard
           userName="Member"
-          missionTitle="Complete Software Development Applications"
-          aiSummary="Scout discovered 3 high-confidence opportunities matching your backend engineering goals today. Application deadlines are approaching for top engineering fellowships."
+          matchCount={3}
+          summary="Scout discovered 3 high-confidence opportunities matching your backend engineering goals today. Application deadlines are approaching for top engineering fellowships."
         />
 
         {/* Featured Top Match Card Preview */}
@@ -52,10 +51,8 @@ export const DashboardPreviewMockup: React.FC = () => {
             deadline="12 Days Left"
             stipend="₹85,000 / mo"
             location="Bangalore, India"
-            type="Fellowship"
-            workMode="Hybrid"
             matchScore={96}
-            recommendationReason="Directly matches your interest in distributed systems and backend engineering. Strong alignment with your current academic year."
+            explanation="Directly matches your interest in distributed systems and backend engineering. Strong alignment with your current academic year."
             whyNow="Applications opened yesterday with limited cohort seats. Early applicants receive priority review."
             tags={['Python', 'Distributed Systems', 'C++', 'Algorithms']}
             isBookmarked={true}
