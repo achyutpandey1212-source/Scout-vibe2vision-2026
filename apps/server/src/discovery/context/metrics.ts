@@ -20,10 +20,10 @@ export interface PageBudgets {
 
 export function getPageBudgets(): PageBudgets {
   return {
-    SMALL: parseInt(process.env.SMALL_PAGE_BUDGET || '3500', 10),
-    MEDIUM: parseInt(process.env.MEDIUM_PAGE_BUDGET || '5000', 10),
-    LARGE: parseInt(process.env.LARGE_PAGE_BUDGET || '7000', 10),
-    HUGE: parseInt(process.env.HUGE_PAGE_BUDGET || '9000', 10),
+    SMALL: parseInt(process.env.SMALL_PAGE_BUDGET || '5500', 10),
+    MEDIUM: parseInt(process.env.MEDIUM_PAGE_BUDGET || '7000', 10),
+    LARGE: parseInt(process.env.LARGE_PAGE_BUDGET || '9000', 10),
+    HUGE: parseInt(process.env.HUGE_PAGE_BUDGET || '12000', 10),
   };
 }
 
@@ -72,14 +72,14 @@ export interface OptimizationProfile {
 
 export const DEFAULT_OPTIMIZATION_PROFILE: OptimizationProfile = {
   maxChars: 7000, // Overridden dynamically by page size profile
-  maxChunks: 20, // Kept as a safety ceiling; per-priority limits take precedence
+  maxChunks: 25, // Kept as a safety ceiling; per-priority limits take precedence
   preserveCriticalSections: true,
   enableJina: true,
   enableCompression: true,
   enableScoring: true,
   jinaThresholdChars: parseInt(process.env.JINA_THRESHOLD_CHARS || '8000', 10),
-  maxHighChunks: parseInt(process.env.MAX_HIGH_PRIORITY_CHUNKS || '6', 10),
-  maxNormalChunks: parseInt(process.env.MAX_NORMAL_PRIORITY_CHUNKS || '3', 10),
+  maxHighChunks: parseInt(process.env.MAX_HIGH_PRIORITY_CHUNKS || '10', 10),
+  maxNormalChunks: parseInt(process.env.MAX_NORMAL_PRIORITY_CHUNKS || '8', 10),
   maxLowChunks: 0,
 };
 

@@ -27,15 +27,14 @@ const KNOWN_ORGANIZATIONS: Record<string, string> = {
   'mozilla.org': 'Mozilla Foundation',
 };
 
-// Common organization suffixes to strip out
+// Common organization suffixes to strip out.
+// NOTE: We intentionally do NOT strip Private, Limited, Pvt — these are part of
+// Indian company names like "Skillsflick Private Limited" and must be preserved.
 const CORPORATE_SUFFIXES = [
   /\bLLC\b/gi,
-  /\bLtd\b/gi,
-  /\bInc\b/gi,
-  /\bCorp\b/gi,
-  /\bCo\b/gi,
+  /\bInc\.?$/gi,
+  /\bCorp\.?$/gi,
   /\bCorporation\b/gi,
-  /\bCompany\b/gi,
   /\bCareers\b/gi,
   /\bJobs\b/gi,
   /\bRecruitment\b/gi,
@@ -238,29 +237,34 @@ export function normalizeOrganization(org: any, domain: string | null): string {
         .trim()
     : '';
 
+  if (cleanDomain && KNOWN_ORGANIZATIONS[cleanDomain]) {
+    return KNOWN_ORGANIZATIONS[cleanDomain];
+  }
+
   // Only use job board domain name as organization fallback if the parsed organization is empty or invalid
   const hasValidOrg =
     orgStr && orgStr.toLowerCase() !== 'unknown' && orgStr.toLowerCase() !== 'unknown organization';
 
   if (!hasValidOrg) {
-    if (cleanDomain && KNOWN_ORGANIZATIONS[cleanDomain]) {
-      return KNOWN_ORGANIZATIONS[cleanDomain];
-    }
     return 'Unknown Organization';
   }
 
   let cleanOrg = orgStr;
 
-  // 2. Strip common corporate suffixes
+  // 2. Strip common corporate suffixes — only when suffix is at the end and short
   for (const regex of CORPORATE_SUFFIXES) {
-    cleanOrg = cleanOrg.replace(regex, '');
+    const stripped = cleanOrg.replace(regex, '').replace(/\s+/g, ' ').trim();
+    // Only apply stripping if the result is non-trivially shorter (not empty or <3 chars)
+    if (stripped && stripped.length >= 3) {
+      cleanOrg = stripped;
+    }
   }
 
   // Standardize spacing and trim
   cleanOrg = cleanOrg.replace(/\s+/g, ' ').trim();
 
-  // 3. Fallback check on string matching if suffix removal left it empty
-  if (!cleanOrg || cleanOrg.length === 0) {
+  // 3. Fallback: if suffix removal left nothing meaningful, return original
+  if (!cleanOrg || cleanOrg.length < 2) {
     return orgStr;
   }
 

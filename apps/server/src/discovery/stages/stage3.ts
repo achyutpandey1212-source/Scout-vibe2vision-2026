@@ -391,9 +391,42 @@ export class Stage3Extraction implements IPipelineStage<CrawledPage[], Opportuni
         if (!validation.success) {
           parserStatus = 'REJECTED_SCHEMA';
           countSchemaError++;
-          // Extract specific validation keys that failed
-          const zodDetails = JSON.stringify(validation.error);
-          throw new Error(`REJECTED_SCHEMA: Zod constraints failed: ${zodDetails}`);
+
+          // Task 7: Per-field schema failure breakdown
+          const zodIssues = validation.error?.issues || [];
+          if (zodIssues.length > 0) {
+            const failureLines = zodIssues.map((issue: any) => {
+              const field = (issue.path || []).join('.');
+              const code = issue.code || 'unknown';
+              const expected = issue.expected || '';
+              const received = issue.received || '';
+              const message = issue.message || '';
+              let category = 'Unknown';
+              if (code === 'invalid_enum_value' || code === 'invalid_union_discriminator') {
+                category = 'Enum Validation';
+              } else if (code === 'too_small') {
+                category = 'Missing / Too Short';
+              } else if (code === 'invalid_type') {
+                category = 'Invalid Type';
+              } else if (code === 'invalid_string') {
+                category = 'Format Validation';
+              } else if (code === 'custom') {
+                category = 'Custom Refinement';
+              }
+              return `  • ${category} | Field: ${field || '(root)'} | ${message}${expected ? ` | Expected: ${expected}` : ''}${received ? ` | Received: ${received}` : ''}`;
+            });
+            console.error(
+              `\n================================================================================\nSCHEMA FAILURE\nURL: ${page.url}\nField Breakdown:\n${failureLines.join('\n')}\n================================================================================`,
+            );
+          } else {
+            console.error(
+              `\nSCHEMA FAILURE\nURL: ${page.url}\nRaw: ${JSON.stringify(validation.error)}`,
+            );
+          }
+
+          throw new Error(
+            `REJECTED_SCHEMA: Zod constraints failed on ${zodIssues.length} field(s): ${zodIssues.map((i: any) => (i.path || []).join('.')).join(', ')}`,
+          );
         }
 
         // If normalized mappings corrected keys, output warnings for auditing

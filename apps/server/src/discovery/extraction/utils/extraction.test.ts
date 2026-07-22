@@ -6,6 +6,7 @@ import {
   normalizeEnum,
   normalizeOpportunity,
 } from './normalizers';
+import { OpportunitySchema } from '../schemas/opportunity.schema';
 
 describe('Sprint 1 — Extraction & Cleanup Normalization tests', () => {
   describe('1. Canonical URL Normalization', () => {
@@ -107,6 +108,113 @@ describe('Sprint 1 — Extraction & Cleanup Normalization tests', () => {
       // Check normalization change logs
       expect(normalized._normalizationChanges).toBeDefined();
       expect(normalized._normalizationChanges.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('7. Professional Domains Validation', () => {
+    const createOpp = (title: string, domains: string[]) => ({
+      title,
+      description:
+        'Test description for opportunity validation. We check professional domains here.',
+      summary: 'Test summary for opportunity.',
+      organization: 'Google',
+      opportunityType: 'INTERNSHIP',
+      category: 'INTERNSHIPS',
+      country: 'India',
+      state: 'Karnataka',
+      city: 'Bengaluru',
+      remote: false,
+      applicationUrl: 'https://careers.google.com/internship',
+      officialWebsite: 'https://google.com',
+      deadline: '2026-09-30',
+      startDate: '2026-11-01',
+      endDate: null,
+      salary: null,
+      stipend: 50000,
+      currency: 'INR',
+      duration: '6 Months',
+      eligibility: 'Open to B.Tech students',
+      minimumQualification: 'B.Tech',
+      skills: ['React', 'TS'],
+      experienceLevel: 'Entry',
+      ageLimit: null,
+      genderEligibility: 'ALL',
+      documentsRequired: [],
+      selectionProcess: null,
+      benefits: 'Mentorship and stipend',
+      tags: ['internship'],
+      sourceURL: 'https://careers.google.com/internship',
+      sourceDomain: 'google.com',
+      sourceType: 'COMPANY',
+      confidence: 0.95,
+      rawPageId: 'mock_raw',
+      aiMetadata: {
+        provider: 'gemini',
+        model: 'gemini-2.5-flash',
+        latencyMs: 500,
+        extractionVersion: 'v1.0',
+      },
+      hash: 'mock_hash',
+      goldReasons: [],
+      trustScore: 50,
+      expiresAt: null,
+      audiencePersonas: ['college-student'],
+      educationEligibility: [],
+      professionalDomains: domains,
+      experienceRequired: 'NONE',
+      fundingType: 'PAID',
+      estimatedCompetition: 'MEDIUM',
+      organizationType: 'MNC',
+      applicationDifficulty: 'MEDIUM',
+      eligibleBranches: ['CSE'],
+      eligibleYears: ['3rd', '4th'],
+      womenFocused: false,
+    });
+
+    it('should validate Engineering domains: backend, frontend, ai-ml', () => {
+      const opp = createOpp('Software Engineer Intern', ['backend', 'frontend', 'ai-ml']);
+      const res = OpportunitySchema.safeParse(opp);
+      expect(res.success).toBe(true);
+    });
+
+    it('should validate Marketing domains: digital-marketing, content-marketing, social-media', () => {
+      const opp = createOpp('Marketing Intern', [
+        'digital-marketing',
+        'content-marketing',
+        'social-media',
+      ]);
+      const res = OpportunitySchema.safeParse(opp);
+      expect(res.success).toBe(true);
+    });
+
+    it('should validate Creative domains: video-editing, graphic-design, content-writing', () => {
+      const opp = createOpp('Reel Creator & Graphic Designer', [
+        'video-editing',
+        'graphic-design',
+        'content-writing',
+      ]);
+      const res = OpportunitySchema.safeParse(opp);
+      expect(res.success).toBe(true);
+    });
+
+    it('should validate Business domains: finance, sales, business-development', () => {
+      const opp = createOpp('Finance and Business Analyst', [
+        'finance',
+        'sales',
+        'business-development',
+      ]);
+      const res = OpportunitySchema.safeParse(opp);
+      expect(res.success).toBe(true);
+    });
+
+    it('should validate Operations domains: operations, customer-success, human-resources', () => {
+      const opp = createOpp('Human Resources and Operations Associate', [
+        'operations',
+        'customer-success',
+        'human-resources',
+      ]);
+      const res = OpportunitySchema.safeParse(opp);
+      expect(res.success).toBe(true);
     });
   });
 });

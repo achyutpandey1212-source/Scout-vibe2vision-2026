@@ -33,6 +33,21 @@ const HIGH_PRIORITY_PATTERNS: RegExp[] = [
   /\bcompany\s+overview\b/i,
   /\borganization\b/i,
   /\babout\s+organization\b/i,
+  // Eligibility
+  /\beligibility\b/i,
+  /\beligible\b/i,
+  /\bwho\s+can\s+apply\b/i,
+  /\bwho\s+should\s+apply\b/i,
+  /\bcriteria\b/i,
+  // Benefits & Compensation
+  /\bbenefits?\b/i,
+  /\bstipend\b/i,
+  /\bsalary\b/i,
+  /\bcompensation\b/i,
+  /\bperks?\b/i,
+  /\bremuneration\b/i,
+  /\bpackage\b/i,
+  // Application process
   /apply\s*(by|before|now)?/i,
   /application\s*(process|deadline|window|form|steps|instructions|link|portal|detail)?/i,
   /how to apply/i,

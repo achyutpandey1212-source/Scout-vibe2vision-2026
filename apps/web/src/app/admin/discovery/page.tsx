@@ -253,6 +253,24 @@ export default function AdminDiscoveryControlCenter() {
     }
   };
 
+  const handleResetAffiliates = async () => {
+    if (!confirm('Are you sure you want to reset the Affiliate Queue to zero?')) return;
+    try {
+      setWeeklyLogs((prev) => [
+        ...prev,
+        `[${new Date().toLocaleTimeString()}] Resetting affiliate queue to zero...`,
+      ]);
+      await axios.post(
+        `${apiHost}/api/v1/discovery/dashboard/reset-affiliates`,
+        {},
+        { withCredentials: true },
+      );
+      fetchState();
+    } catch (err: any) {
+      alert(err.response?.data?.error?.message || 'Failed to reset affiliates.');
+    }
+  };
+
   const handleStartRetryQueue = async () => {
     try {
       setWeeklyLogs((prev) => [
@@ -1491,6 +1509,13 @@ export default function AdminDiscoveryControlCenter() {
                     <span>
                       Evaluate Affiliate Queue ({status?.registry?.affiliateQueueDepth || 0})
                     </span>
+                  </button>
+                  <button
+                    onClick={handleResetAffiliates}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 border border-red-500/30 hover:bg-red-500/10 text-red-400 text-xs font-semibold rounded cursor-pointer transition-colors"
+                  >
+                    <AlertOctagon className="h-3.5 w-3.5 text-red-450" />
+                    <span>Reset Affiliate Queue</span>
                   </button>
                   <button
                     onClick={handleStartRetryQueue}

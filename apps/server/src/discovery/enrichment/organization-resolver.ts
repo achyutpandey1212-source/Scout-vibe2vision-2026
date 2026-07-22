@@ -58,6 +58,34 @@ export class OrganizationResolver {
     opp: { organization: string; sourceURL?: string; title?: string },
     page?: { title?: string; markdown?: string; metadata?: any },
   ): ResolvedOrganization {
+    // 0. If we already have a specific, valid LLM-extracted organization name that is NOT
+    //    a job-board domain name, use it immediately without running expensive heuristics.
+    //    This prevents Levels 1-6 (which read metadata/OG tags/title) from overwriting a
+    //    correct company name like "Skillsflick Private Limited" with e.g. "Unstop".
+    const preExtracted = opp.organization;
+    if (preExtracted && this.isValidName(preExtracted)) {
+      const preExtractedLower = preExtracted.trim().toLowerCase();
+      const isJobBoard = [
+        'unstop',
+        'linkedin',
+        'indeed',
+        'glassdoor',
+        'internshala',
+        'naukri',
+        'devfolio',
+        'wellfound',
+        'angel list',
+      ].some((board) => preExtractedLower.includes(board));
+
+      if (!isJobBoard) {
+        // Registry lookup by name for enrichment
+        const byName = this.lookupRegistryByName(preExtracted);
+        if (byName) return byName;
+        // Otherwise enrich with heuristics but preserve the name
+        return this.enrichDetails(preExtracted, opp.sourceURL);
+      }
+    }
+
     // 1. Try registry lookup by URL domain first
     if (opp.sourceURL) {
       const byDomain = this.lookupRegistryByUrl(opp.sourceURL);
@@ -154,14 +182,15 @@ export class OrganizationResolver {
       }
     }
 
-    // 2. Generic cleaning for suffixes
-    return clean
-      .replace(
-        /\b(llc|ltd|inc|corp|corporation|india|pvt|private|co|group|solutions|technologies|tech)\b/gi,
-        '',
-      )
+    // 2. Generic cleaning — only strip platform/ATS domain artifacts, not company name components.
+    // Do NOT strip: pvt, private, india, solutions, technologies, group, co (all appear in real company names)
+    const stripped = clean
+      .replace(/\b(llc|inc\.?|corp\.?|corporation|careers|jobs)\b/gi, '')
       .replace(/\s+/g, ' ')
       .trim();
+
+    // Only return stripped if result is still a valid name (>= 3 chars)
+    return stripped.length >= 3 ? stripped : clean;
   }
 
   private static lookupRegistryByUrl(urlStr: string): ResolvedOrganization | null {

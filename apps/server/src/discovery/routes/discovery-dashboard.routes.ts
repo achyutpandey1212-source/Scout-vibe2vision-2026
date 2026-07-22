@@ -206,6 +206,23 @@ router.post('/run-affiliates', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST reset-affiliates: Resets the affiliate queue by deleting its Redis key
+ */
+router.post('/reset-affiliates', async (req: Request, res: Response) => {
+  try {
+    const { redis } = await import('../../config/redis');
+    const redisClient = redis.getClient();
+    await redisClient.del('scout:affiliate:queue');
+    return res.json({
+      success: true,
+      message: 'Affiliate Queue has been reset successfully.',
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: { message: err.message } });
+  }
+});
+
+/**
  * POST run-affiliate-retries: Triggers processing of ready items in the retry queue
  */
 router.post('/run-affiliate-retries', async (req: Request, res: Response) => {

@@ -70,6 +70,7 @@ export const ApplicationDifficultySchema = z.enum([
 ]);
 
 export const EngineeringDomainSchema = z.enum([
+  // Technical / Engineering
   'ai-ml',
   'backend',
   'frontend',
@@ -86,6 +87,52 @@ export const EngineeringDomainSchema = z.enum([
   'game-dev',
   'qa-testing',
   'ui-ux',
+
+  // Marketing & Creative
+  'digital-marketing',
+  'content-marketing',
+  'social-media',
+  'video-editing',
+  'graphic-design',
+  'content-writing',
+  'copywriting',
+  'public-relations',
+  'event-management',
+  'animation',
+  'fashion',
+  'media',
+  'communications',
+
+  // Business, Sales & Consulting
+  'finance',
+  'accounting',
+  'sales',
+  'business-development',
+  'customer-success',
+  'operations',
+  'human-resources',
+  'legal',
+  'consulting',
+  'product-management',
+  'project-management',
+  'entrepreneurship',
+  'general-business',
+
+  // Other Professional Disciplines
+  'education',
+  'teaching',
+  'research',
+  'biotechnology',
+  'healthcare',
+  'pharmaceutical',
+  'supply-chain',
+  'manufacturing',
+  'electronics',
+  'mechanical',
+  'civil',
+  'chemical',
+  'architecture',
+  'hospitality',
 ]);
 
 export const OpportunitySchema = z
@@ -124,9 +171,7 @@ export const OpportunitySchema = z
     sourceType: SourceTypeSchema,
     confidence: z.number().min(0).max(1).default(0.5),
 
-    audiencePersonas: z
-      .array(AudiencePersonaSchema)
-      .min(1, 'At least one audience persona is required'),
+    audiencePersonas: z.array(AudiencePersonaSchema).default([]),
     educationEligibility: z.array(z.string()).default([]),
     professionalDomains: z.array(EngineeringDomainSchema).default([]),
     experienceRequired: ExperienceRequiredSchema.default('NONE'),
@@ -161,8 +206,8 @@ export const OpportunitySchema = z
     visaSponsored: z.boolean().default(false),
     travelFunded: z.boolean().default(false),
 
-    eligibleBranches: z.array(z.string()).min(1, 'At least one eligible branch is required'),
-    eligibleYears: z.array(z.string()).min(1, 'At least one eligible year is required'),
+    eligibleBranches: z.array(z.string()).default([]),
+    eligibleYears: z.array(z.string()).default([]),
     womenFocused: z.boolean().default(false),
 
     intelligence: z
@@ -249,6 +294,17 @@ export const OpportunitySchema = z
         'legal',
         'social media',
         'creative',
+        'digital-marketing',
+        'video-editing',
+        'content-marketing',
+        'sales',
+        'business-development',
+        'operations',
+        'finance',
+        'graphic-design',
+        'content-writing',
+        'reel creator',
+        'ambassador',
       ];
       const isExplicitNonTech = nonTechKeywords.some((kw) => lower.includes(kw));
       if (isExplicitNonTech) {
