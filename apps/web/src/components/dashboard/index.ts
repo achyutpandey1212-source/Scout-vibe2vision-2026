@@ -1,3 +1,6 @@
 export * from './DashboardHero';
+export * from './TodaysMissionCard';
+export * from './SectionHeader';
+export * from './DashboardEmptyState';
 export * from './ScoutIntelligencePanel';
 export * from './RecommendationStrip';

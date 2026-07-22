@@ -5,10 +5,14 @@ import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { DashboardLayout } from '@/components/layout';
 import { Typography, Grid, Stack, UniversalLoader, PageTransition, Button } from '@/components/ui';
-import { FeaturedOpportunityCard, HiddenGemCard, OpportunityCard } from '@/components/opportunity';
-import { RecommendationStrip } from '@/components/dashboard/RecommendationStrip';
+import { OpportunityCard } from '@/components/opportunity';
+import {
+  TodaysMissionCard,
+  SectionHeader,
+  DashboardEmptyState,
+  RecommendationStrip,
+} from '@/components/dashboard';
 import ScoutIntelligencePanel from '@/components/dashboard/ScoutIntelligencePanel';
-import DashboardHero from '@/components/dashboard/DashboardHero';
 import { Search, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import {
@@ -326,8 +330,8 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <>
-                  {/* Greeting & Brief Header */}
-                  <DashboardHero
+                  {/* Today's Mission Briefing Card */}
+                  <TodaysMissionCard
                     userName={profileName || user?.name || user?.displayName || 'User'}
                     matchCount={recommendations.length}
                   />
@@ -372,119 +376,117 @@ export default function DashboardPage() {
 
                   {/* TAB 1: Dashboard Curated Portfolio */}
                   {activeTab === 'recommended' ? (
-                    <Stack gap="xl" className="space-y-12">
-                      {/* 1. Featured Match Section */}
-                      {featuredOpp && (
-                        <Stack gap="sm" className="space-y-4">
-                          <div className="border-b border-border/40 pb-3 flex items-center justify-between">
-                            <Typography variant="heading-m" className="font-normal font-sans">
-                              Featured Match
-                            </Typography>
-                            <span className="text-xs text-secondary/60 font-light">
-                              Highest compatibility recommendation today
-                            </span>
+                    recommendations.length === 0 ? (
+                      <DashboardEmptyState />
+                    ) : (
+                      <Stack gap="xl" className="space-y-12">
+                        {/* 1. Featured Match Section */}
+                        {featuredOpp && (
+                          <div className="space-y-4">
+                            <SectionHeader
+                              title="Top Match"
+                              description="Highest compatibility recommendation today"
+                            />
+                            <OpportunityCard
+                              variant="featured"
+                              slot="perfectMatch"
+                              title={featuredOpp.title}
+                              organization={featuredOpp.organization}
+                              description={featuredOpp.description}
+                              deadline={featuredOpp.deadline || 'Flexible'}
+                              matchScore={featuredRec.recommendationScore}
+                              explanation={featuredRec.explanation}
+                              tags={featuredOpp.tags}
+                              isBookmarked={bookmarkedIds.has(featuredOpp._id)}
+                              isWomenOnly={
+                                featuredOpp.isWomenOnly ||
+                                featuredOpp.genderEligibility?.toLowerCase().includes('women') ||
+                                featuredOpp.genderEligibility?.toLowerCase().includes('female')
+                              }
+                              stipend={
+                                featuredOpp.stipend != null
+                                  ? `₹${Number(featuredOpp.stipend).toLocaleString()}`
+                                  : undefined
+                              }
+                              onBookmarkToggle={() => handleBookmarkToggle(featuredOpp._id)}
+                              onApplyClick={() => handleCardClick(featuredOpp._id)}
+                            />
                           </div>
-                          <FeaturedOpportunityCard
-                            title={featuredOpp.title}
-                            organization={featuredOpp.organization}
-                            description={featuredOpp.description}
-                            deadline={featuredOpp.deadline || 'Flexible'}
-                            matchScore={featuredRec.recommendationScore}
-                            explanation={featuredRec.explanation}
-                            tags={featuredOpp.tags}
-                            isBookmarked={bookmarkedIds.has(featuredOpp._id)}
-                            isWomenOnly={
-                              featuredOpp.isWomenOnly ||
-                              featuredOpp.genderEligibility?.toLowerCase().includes('women') ||
-                              featuredOpp.genderEligibility?.toLowerCase().includes('female')
-                            }
-                            stipend={
-                              featuredOpp.stipend != null
-                                ? `₹${Number(featuredOpp.stipend).toLocaleString()}`
-                                : undefined
-                            }
-                            onBookmarkToggle={() => handleBookmarkToggle(featuredOpp._id)}
-                            onApplyClick={() => handleCardClick(featuredOpp._id)}
-                          />
-                        </Stack>
-                      )}
+                        )}
 
-                      {/* 2. Hidden Gem Section */}
-                      {hiddenGemRec?.opportunity && (
-                        <Stack gap="sm" className="space-y-4">
-                          <div className="border-b border-border/40 pb-3 flex items-center justify-between">
-                            <Typography variant="heading-m" className="font-normal font-sans">
-                              Hidden Gem
-                            </Typography>
-                            <span className="text-xs text-secondary/60 font-light">
-                              Low competition matching opportunity
-                            </span>
+                        {/* 2. Hidden Gem Section */}
+                        {hiddenGemRec?.opportunity && (
+                          <div className="space-y-4">
+                            <SectionHeader
+                              title="Hidden Gem"
+                              description="Low competition matching opportunity"
+                            />
+                            <OpportunityCard
+                              variant="default"
+                              slot="hiddenGem"
+                              title={hiddenGemRec.opportunity.title}
+                              organization={hiddenGemRec.opportunity.organization}
+                              description={hiddenGemRec.opportunity.description}
+                              deadline={hiddenGemRec.opportunity.deadline || 'Flexible'}
+                              matchScore={hiddenGemRec.recommendationScore}
+                              explanation={hiddenGemRec.explanation}
+                              isBookmarked={bookmarkedIds.has(hiddenGemRec.opportunity._id)}
+                              onBookmarkToggle={() =>
+                                handleBookmarkToggle(hiddenGemRec.opportunity._id)
+                              }
+                              onApplyClick={() => handleCardClick(hiddenGemRec.opportunity._id)}
+                            />
                           </div>
-                          <HiddenGemCard
-                            title={hiddenGemRec.opportunity.title}
-                            organization={hiddenGemRec.opportunity.organization}
-                            matchScore={hiddenGemRec.recommendationScore}
-                            explanation={hiddenGemRec.explanation}
-                            isBookmarked={bookmarkedIds.has(hiddenGemRec.opportunity._id)}
-                            onBookmarkToggle={() =>
-                              handleBookmarkToggle(hiddenGemRec.opportunity._id)
-                            }
-                            onApplyClick={() => handleCardClick(hiddenGemRec.opportunity._id)}
-                          />
-                        </Stack>
-                      )}
+                        )}
 
-                      {/* 3. More Recommended Opportunities Section */}
-                      {remainingRecs.length > 0 && (
-                        <Stack gap="sm" className="space-y-4">
-                          <div className="border-b border-border/40 pb-3 flex items-center justify-between">
-                            <Typography variant="heading-m" className="font-normal font-sans">
-                              More Recommended Opportunities
-                            </Typography>
-                            <span className="text-xs text-secondary/60 font-light">
-                              Portfolio recommendations matching your goals
-                            </span>
+                        {/* 3. More Recommended Opportunities Section */}
+                        {remainingRecs.length > 0 && (
+                          <div className="space-y-4">
+                            <SectionHeader
+                              title="More Recommended Opportunities"
+                              description="Portfolio recommendations matching your career goals"
+                            />
+
+                            <Grid cols={1} colsSm={2} colsLg={3} gap="md">
+                              {remainingRecs.map((rec) => {
+                                return (
+                                  <OpportunityCard
+                                    key={rec.opportunity._id}
+                                    slot={rec.slot}
+                                    title={rec.opportunity.title}
+                                    organization={rec.opportunity.organization}
+                                    deadline={rec.opportunity.deadline || 'Flexible'}
+                                    tags={rec.opportunity.tags}
+                                    matchScore={rec.recommendationScore}
+                                    explanation={rec.explanation}
+                                    isBookmarked={bookmarkedIds.has(rec.opportunity._id)}
+                                    isWomenOnly={
+                                      rec.opportunity.isWomenOnly ||
+                                      rec.opportunity.genderEligibility
+                                        ?.toLowerCase()
+                                        .includes('women') ||
+                                      rec.opportunity.genderEligibility
+                                        ?.toLowerCase()
+                                        .includes('female')
+                                    }
+                                    stipend={
+                                      rec.opportunity.stipend != null
+                                        ? `₹${Number(rec.opportunity.stipend).toLocaleString()}`
+                                        : undefined
+                                    }
+                                    onBookmarkToggle={() =>
+                                      handleBookmarkToggle(rec.opportunity._id)
+                                    }
+                                    onApplyClick={() => handleCardClick(rec.opportunity._id)}
+                                    onCardClick={() => handleCardClick(rec.opportunity._id)}
+                                  />
+                                );
+                              })}
+                            </Grid>
                           </div>
-
-                          <Grid cols={1} colsSm={2} colsLg={3} gap="md">
-                            {remainingRecs.map((rec) => {
-                              const badge = getSlotBadge(rec.slot);
-                              return (
-                                <OpportunityCard
-                                  key={rec.opportunity._id}
-                                  title={rec.opportunity.title}
-                                  organization={rec.opportunity.organization}
-                                  deadline={rec.opportunity.deadline || 'Flexible'}
-                                  tags={rec.opportunity.tags}
-                                  matchScore={rec.recommendationScore}
-                                  explanation={rec.explanation}
-                                  slotLabel={badge.label}
-                                  slotIcon={badge.icon}
-                                  isBookmarked={bookmarkedIds.has(rec.opportunity._id)}
-                                  isWomenOnly={
-                                    rec.opportunity.isWomenOnly ||
-                                    rec.opportunity.genderEligibility
-                                      ?.toLowerCase()
-                                      .includes('women') ||
-                                    rec.opportunity.genderEligibility
-                                      ?.toLowerCase()
-                                      .includes('female')
-                                  }
-                                  stipend={
-                                    rec.opportunity.stipend != null
-                                      ? `₹${Number(rec.opportunity.stipend).toLocaleString()}`
-                                      : undefined
-                                  }
-                                  onBookmarkToggle={() => handleBookmarkToggle(rec.opportunity._id)}
-                                  onApplyClick={() => handleCardClick(rec.opportunity._id)}
-                                  onCardClick={() => handleCardClick(rec.opportunity._id)}
-                                />
-                              );
-                            })}
-                          </Grid>
-                        </Stack>
-                      )}
-                    </Stack>
+                        )}
+                      </Stack>
+                    )
                   ) : (
                     /* TAB 2: Explore Catalog Feed */
                     <Stack gap="md" className="space-y-6">

@@ -1,23 +1,31 @@
 'use client';
 
 import React from 'react';
-import { Bookmark, Calendar, ArrowUpRight } from 'lucide-react';
-import { Card, CardTitle, CardContent, Typography, Button, Stack } from '../ui';
+import { Bookmark, ArrowUpRight } from 'lucide-react';
+import { Card, CardTitle, CardContent, Typography, Button, Stack, Grid } from '../ui';
 import { MatchScore } from './MatchScore';
-import { OpportunityBadge } from './OpportunityBadge';
+import { RecommendationBadge, RecommendationType } from './RecommendationBadge';
+import { OpportunityMetadata } from './OpportunityMetadata';
 
 export interface OpportunityCardProps {
   title: string;
   organization: string;
-  deadline: string;
+  deadline?: string;
+  description?: string;
   tags?: string[];
   matchScore?: number;
   explanation?: string;
+  whyNow?: string;
   slotLabel?: string;
   slotIcon?: string;
+  slot?: RecommendationType | string;
   isBookmarked?: boolean;
   isWomenOnly?: boolean;
+  isRemote?: boolean;
+  opportunityType?: string;
+  location?: string;
   stipend?: string;
+  variant?: 'default' | 'featured' | 'compact';
   onBookmarkToggle?: () => void;
   onApplyClick?: () => void;
   onCardClick?: () => void;
@@ -27,29 +35,195 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
   title,
   organization,
   deadline,
+  description,
   tags = [],
   matchScore = 75,
+  explanation,
+  whyNow,
+  slotLabel,
+  slotIcon,
+  slot,
   isBookmarked = false,
   isWomenOnly = false,
+  isRemote,
+  opportunityType,
+  location,
   stipend,
+  variant = 'default',
   onBookmarkToggle,
   onApplyClick,
   onCardClick,
 }) => {
+  const recType = (slot as RecommendationType) || undefined;
+  const isFeatured = variant === 'featured';
+  const isCompact = variant === 'compact';
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (onCardClick) onCardClick();
+    else if (onApplyClick) onApplyClick();
+  };
+
+  /* ─── FEATURED VARIANT (Hero / Top Match) ───────────────────────────────── */
+  if (isFeatured) {
+    return (
+      <Card
+        className="relative overflow-hidden border border-primary/30 bg-primary/[0.02] dark:bg-primary/[0.04] transition-all duration-200 hover:border-primary/50 hover:shadow-md group cursor-pointer"
+        onClick={handleClick}
+      >
+        <Grid cols={1} colsMd={12} gap="lg" className="p-6 md:p-10 items-start">
+          {/* Left Column - Details */}
+          <div className="md:col-span-8 space-y-5">
+            <div className="space-y-2.5">
+              <Stack direction="row" align="center" gap="xs" wrap>
+                <RecommendationBadge
+                  type={recType || 'perfectMatch'}
+                  label={slotLabel}
+                  icon={slotIcon}
+                />
+                <MatchScore score={matchScore} />
+              </Stack>
+
+              <Typography
+                variant="heading-l"
+                className="font-display font-medium text-2xl md:text-3xl leading-snug group-hover:text-primary transition-colors"
+              >
+                {title}
+              </Typography>
+
+              <Typography variant="body" className="text-muted-foreground font-light">
+                {organization}
+              </Typography>
+            </div>
+
+            {description && (
+              <Typography variant="body" className="text-foreground/80 font-light leading-relaxed">
+                {description}
+              </Typography>
+            )}
+
+            {/* Why Scout Recommends This Highlight */}
+            {explanation && (
+              <div className="bg-muted/40 rounded-2xl p-4 border border-border/60 space-y-1.5">
+                <span className="text-[10px] text-primary tracking-wider uppercase font-semibold block">
+                  Why Scout Recommends This
+                </span>
+                <Typography
+                  variant="body"
+                  className="text-xs text-secondary/90 leading-relaxed font-light"
+                >
+                  {explanation}
+                </Typography>
+              </div>
+            )}
+
+            {/* Metadata Row */}
+            <OpportunityMetadata
+              opportunityType={opportunityType}
+              location={location}
+              isRemote={isRemote}
+              stipend={stipend}
+              deadline={deadline}
+            />
+          </div>
+
+          {/* Right Column - Actions */}
+          <div className="md:col-span-4 flex flex-col justify-between h-full min-h-[180px] md:pl-6 md:border-l border-border/40 gap-6">
+            <div className="flex justify-start md:justify-end">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onBookmarkToggle) onBookmarkToggle();
+                }}
+                className={`p-3 rounded-full border transition-all duration-150 outline-none ${
+                  isBookmarked
+                    ? 'bg-primary/10 border-primary/30 text-primary'
+                    : 'bg-card border-border hover:bg-muted/50 text-muted-foreground hover:text-foreground'
+                }`}
+                aria-label="Save opportunity"
+              >
+                <Bookmark className={`w-4 h-4 ${isBookmarked ? 'fill-current' : ''}`} />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <Button
+                variant="primary"
+                className="w-full justify-center text-sm py-2.5"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onApplyClick) onApplyClick();
+                  else if (onCardClick) onCardClick();
+                }}
+                iconRight={<ArrowUpRight className="w-4 h-4" />}
+              >
+                View Details
+              </Button>
+            </div>
+          </div>
+        </Grid>
+      </Card>
+    );
+  }
+
+  /* ─── COMPACT VARIANT ─────────────────────────────────────────────────── */
+  if (isCompact) {
+    return (
+      <Card
+        hoverable
+        className="p-4 border border-border/60 bg-card hover:border-primary/40 transition-all duration-150 flex items-center justify-between gap-4 cursor-pointer group"
+        onClick={handleClick}
+      >
+        <div className="space-y-1 min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <RecommendationBadge type={recType} label={slotLabel} icon={slotIcon} />
+            <span className="text-xs text-muted-foreground font-light truncate">
+              {organization}
+            </span>
+          </div>
+          <CardTitle className="text-sm font-medium leading-snug truncate group-hover:text-primary transition-colors">
+            {title}
+          </CardTitle>
+        </div>
+
+        <div className="flex items-center gap-3 shrink-0">
+          <MatchScore score={matchScore} />
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onBookmarkToggle) onBookmarkToggle();
+            }}
+            className={`p-2 rounded-full border transition-all outline-none ${
+              isBookmarked
+                ? 'bg-primary/10 border-primary/30 text-primary'
+                : 'bg-card border-border hover:bg-muted/50 text-muted-foreground'
+            }`}
+            aria-label="Save opportunity"
+          >
+            <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-current' : ''}`} />
+          </button>
+        </div>
+      </Card>
+    );
+  }
+
+  /* ─── DEFAULT GRID CARD VARIANT ───────────────────────────────────────── */
   return (
     <Card
       hoverable
-      className="relative border border-border/40 flex flex-col justify-between h-full bg-card group"
-      onClick={onCardClick}
+      className="relative border border-border/60 flex flex-col justify-between h-full bg-card group transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-sm cursor-pointer"
+      onClick={handleClick}
     >
       <div>
-        {/* Header section */}
+        {/* Card Header */}
         <div className="p-6 pb-3 flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            <Typography variant="caption" className="text-secondary/70">
+          <div className="space-y-1.5 min-w-0 flex-1">
+            {(slot || slotLabel) && (
+              <RecommendationBadge type={recType} label={slotLabel} icon={slotIcon} />
+            )}
+            <Typography variant="caption" className="text-muted-foreground block truncate">
               {organization}
             </Typography>
-            <CardTitle className="pr-8 text-base md:text-lg font-medium leading-snug group-hover:text-primary transition-colors">
+            <CardTitle className="pr-4 text-base md:text-lg font-medium leading-snug group-hover:text-primary transition-colors line-clamp-2">
               {title}
             </CardTitle>
           </div>
@@ -59,47 +233,48 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
               e.stopPropagation();
               if (onBookmarkToggle) onBookmarkToggle();
             }}
-            className={`
-              p-2 rounded-full border transition-all duration-200 outline-none shrink-0
-              ${
-                isBookmarked
-                  ? 'bg-primary/10 border-primary/20 text-primary'
-                  : 'bg-card border-border hover:bg-accent/40 text-secondary/60 hover:text-foreground'
-              }
-            `}
-            aria-label="Bookmark opportunity"
+            className={`p-2 rounded-full border transition-all duration-150 outline-none shrink-0 ${
+              isBookmarked
+                ? 'bg-primary/10 border-primary/30 text-primary'
+                : 'bg-card border-border hover:bg-muted/50 text-muted-foreground hover:text-foreground'
+            }`}
+            aria-label="Save opportunity"
           >
             <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-current' : ''}`} />
           </button>
         </div>
 
-        {/* Content section */}
-        <CardContent className="space-y-4">
-          {/* Why this matters */}
-          <Typography
-            variant="body"
-            className="text-xs text-secondary/80 font-light leading-relaxed"
-          >
-            Matches your preferred domain and matches your remote location schedule.
-          </Typography>
+        {/* Card Content / Personalized Reason */}
+        <CardContent className="space-y-4 pt-1">
+          {explanation && (
+            <Typography
+              variant="body"
+              className="text-xs text-secondary/80 font-light leading-relaxed line-clamp-2"
+            >
+              {explanation}
+            </Typography>
+          )}
 
-          <Stack direction="row" align="center" gap="xs" wrap>
-            <MatchScore score={matchScore} />
-            {isWomenOnly && <OpportunityBadge label="Women Preferred" variant="women-only" />}
-            {stipend && <OpportunityBadge label={stipend} variant="stipend" />}
-            {tags.slice(0, 2).map((tag) => (
-              <OpportunityBadge key={tag} label={tag} variant="default" />
-            ))}
-          </Stack>
+          {whyNow && (
+            <div className="text-[11px] text-muted-foreground font-light italic">
+              Why now: {whyNow}
+            </div>
+          )}
+
+          {/* Metadata chips */}
+          <OpportunityMetadata
+            opportunityType={opportunityType}
+            location={location}
+            isRemote={isRemote}
+            stipend={stipend}
+            deadline={deadline}
+          />
         </CardContent>
       </div>
 
-      {/* Footer info (whitespace driven, no border line) */}
-      <div className="p-6 pt-2 flex items-center justify-between gap-4 mt-auto">
-        <div className="flex items-center gap-1.5 text-xs text-secondary/65 font-light">
-          <Calendar className="w-3.5 h-3.5" />
-          <span>Apply by {deadline}</span>
-        </div>
+      {/* Card Footer Actions */}
+      <div className="p-6 pt-3 flex items-center justify-between gap-4 mt-auto border-t border-border/30">
+        <MatchScore score={matchScore} />
 
         <Button
           variant="ghost"
@@ -107,11 +282,12 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
           onClick={(e) => {
             e.stopPropagation();
             if (onApplyClick) onApplyClick();
+            else if (onCardClick) onCardClick();
           }}
-          className="text-xs h-auto p-0 hover:bg-transparent text-primary hover:text-primary/80"
+          className="text-xs h-auto p-0 hover:bg-transparent text-primary hover:text-primary/80 font-medium"
           iconRight={<ArrowUpRight className="w-3.5 h-3.5" />}
         >
-          View details
+          View Details
         </Button>
       </div>
     </Card>
