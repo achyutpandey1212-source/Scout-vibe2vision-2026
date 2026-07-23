@@ -16,7 +16,7 @@ import { SectionHeader } from '@/components/dashboard';
 import { SKILLS_TAXONOMY } from '@scout/shared';
 import { useAuth } from '@/context/auth-context';
 import { profileApi } from '@/lib/api';
-import { track } from '@/lib/analytics';
+import { track, setUserProperties } from '@/lib/analytics';
 import {
   Mail,
   MapPin,
@@ -89,6 +89,21 @@ export default function ProfilePage() {
           if (typeof window !== 'undefined') {
             localStorage.setItem('scout_v2_profile_name', name);
           }
+        }
+
+        if (p) {
+          setUserProperties({
+            fullName: p.fullName,
+            college: p.college,
+            degree: p.degree,
+            branch: p.branch,
+            currentYear: p.currentYear,
+            expectedGraduation: p.expectedGraduation,
+            targetRoles: p.careerGoals,
+            skillsCount: p.technicalSkills?.length || r?.skills?.length || 0,
+            hasResume: Boolean(r || p.resumeUploaded),
+            onboardingCompleted: p.onboardingCompleted ?? true,
+          });
         }
       }
     } catch (err) {

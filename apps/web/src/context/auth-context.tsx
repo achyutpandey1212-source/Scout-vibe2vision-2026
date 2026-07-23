@@ -5,6 +5,7 @@ import { User as FirebaseUser } from 'firebase/auth';
 import { authService } from '@/services/auth/auth.service';
 import { api } from '@/lib/api';
 import { DEV_USER, isDevelopmentMode } from '@/lib/mock/dev-session';
+import { identifyUser, resetAnalytics } from '@/lib/analytics';
 
 interface ScoutUser {
   firebaseUid: string;
@@ -48,10 +49,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await api.post('/api/v1/auth/sync');
       if (response.data && response.data.success) {
         const dbUser = response.data.data;
-        setUser({
+        const mappedUser = {
           ...dbUser,
-          name: dbUser.displayName || dbUser.email.split('@')[0],
+          name: dbUser.displayName || dbUser.email?.split('@')[0] || 'Student',
           picture: dbUser.photoURL || null,
+        };
+        setUser(mappedUser);
+        identifyUser(dbUser.firebaseUid || dbUser.id || dbUser.email, {
+          email: dbUser.email,
+          authProvider: dbUser.provider || 'email',
+          isGuest: dbUser.provider === 'guest' || dbUser.role === 'guest',
+          onboardingCompleted: dbUser.onboardingCompleted || false,
         });
       }
     } catch (error) {
@@ -59,6 +67,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (isDevelopmentMode) {
         console.warn('Development mode: falling back to mock user session.');
         setUser(DEV_USER);
+        identifyUser(DEV_USER.firebaseUid, {
+          email: DEV_USER.email,
+          authProvider: DEV_USER.provider,
+          isGuest: false,
+          onboardingCompleted: DEV_USER.onboardingCompleted,
+        });
       } else {
         setUser(null);
       }
@@ -69,6 +83,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // If in development mode, automatically log in with DEV_USER to bypass Firebase client setup requirements
     if (isDevelopmentMode) {
       setUser(DEV_USER);
+      identifyUser(DEV_USER.firebaseUid, {
+        email: DEV_USER.email,
+        authProvider: DEV_USER.provider,
+        isGuest: false,
+        onboardingCompleted: DEV_USER.onboardingCompleted,
+      });
       setLoading(false);
       return;
     }
@@ -146,6 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     try {
       await authService.logout();
+      resetAnalytics();
       setUser(null);
       setFirebaseUser(null);
     } catch (error) {

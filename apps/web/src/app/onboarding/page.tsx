@@ -13,7 +13,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useAuth } from '@/context/auth-context';
 import { profileApi, recommendationsApi } from '@/lib/api';
 import { SKILLS_TAXONOMY } from '@scout/shared';
-import { track } from '@/lib/analytics';
+import { track, setUserProperties } from '@/lib/analytics';
 import {
   FormLayout,
   ProgressIndicator,
@@ -296,6 +296,19 @@ export default function OnboardingPage() {
         skillsCount: formData.technicalSkills?.length || 0,
       });
 
+      setUserProperties({
+        fullName: formData.fullName,
+        college: formData.college,
+        degree: formData.degree,
+        branch: formData.branch,
+        currentYear: formData.currentYear,
+        expectedGraduation: formData.expectedGraduation,
+        targetRoles: formData.careerGoals,
+        skillsCount: formData.technicalSkills?.length || 0,
+        hasResume: Boolean(formData.resumeUploaded || uploadedFile),
+        onboardingCompleted: true,
+      });
+
       // Poll recommendations status
       const pollTimer = setInterval(async () => {
         try {
@@ -361,6 +374,13 @@ export default function OnboardingPage() {
           extractedProjects: (parsed.detectedProjects || resumeObj.projects || []).length,
           extractedExperience: (parsed.detectedExperience || resumeObj.experience || []).length,
           extractedEducation: parsed.college ? 1 : 0,
+        });
+
+        setUserProperties({
+          hasResume: true,
+          skillsCount: (parsed.technicalSkills || resumeObj.skills || []).length,
+          projectsCount: (parsed.detectedProjects || resumeObj.projects || []).length,
+          experienceCount: (parsed.detectedExperience || resumeObj.experience || []).length,
         });
 
         setParsedResumeData(data);
