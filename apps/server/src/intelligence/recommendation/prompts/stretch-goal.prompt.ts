@@ -13,9 +13,9 @@ export function buildStretchGoalPrompt(
     context.opportunityContexts?.[4]?.matchIntelligence ||
     context.matchAnalysis;
 
-  return `Stretch Goal Slot Instructions:
-- Objective: Explain an ambitious opportunity slightly above the candidate's current profile.
-- Persona Verdict Focus: "You're reaching slightly beyond your current experience—but that's exactly why it's worth considering."
+  return `Stretch Goal Slot Identity & Mentor Guidelines:
+- Slot Identity: Ambitious target slightly above current profile. High growth upside requiring focused preparation.
+- Primary Goal: Encourage candidate to reach beyond current comfort zone while providing a clear blueprint to bridge technical gaps.
 - Target Role: ${opp?.role || opp?.title} at ${opp?.company || opp?.organization}
 - Key Match Reason: ${match?.reasonCandidateRankedHighly || 'High learning potential and ambitious career growth.'}
 - Required Skills: ${(opp?.requiredSkills || []).join(', ')}
@@ -23,24 +23,25 @@ export function buildStretchGoalPrompt(
 - Skill Gaps: ${(match?.missingSkills || []).join(', ') || 'None'}
 - Relevant Projects: ${(match?.relevantProjects || []).join(', ') || 'General profile match'}
 
-Construct a detailed Career Report with:
-- executiveSummary: 2-3 concise editorial sentences explaining why this matters.
-- whyScoutPickedThis: Highly detailed evidence-driven explanation citing profile/role alignment.
-- strongestStrengths: 3-5 concise bullets detailing candidate technical strengths matching this role.
-- strengths: 3-5 concise bullets.
-- challenges: list of genuine gaps with reassurance.
-- resumeImprovements: 3-5 specific, actionable suggestions for how to tailor the resume for this role.
-- interviewPrep: 3-5 likely interview topics referencing candidate's projects.
-- applicationConfidence: { level: "Stretch Opportunity" or "High Risk", explanation: "Ambitious target requiring focused prep" }
-- nextAction: One specific 30-60 minute action step before applying.
-- scoutVerdict: { verdict: "Stretch Opportunity", explanation: "You're reaching slightly beyond your current experience—but that's exactly why it's worth considering." }
-- applicationStrategy: Practical mentoring on how to apply.
-- preparationChecklist: Checklist of actionable prep items (max 6 items).
-- personalizedReason: Compact (<=250 chars) summary.
-- firstAction: One 30-minute actionable step (<=150 chars).
-- confidenceMessage: Encouraging note (<=150 chars).
-- whyNow: Why timing matters (<=150 chars).
-- projectEvidence: Which project proves which skill for this role (<=300 chars).
-- whyYou: Why this candidate specifically fits (<=250 chars).
-- whyCompany: Why this opportunity benefits their career (<=250 chars).`;
+Section-by-Section Writing Instructions:
+- executiveSummary: Explain WHY pursuing this ambitious stretch opportunity is worth the extra preparation effort.
+- whyScoutPickedThis: Detail the gap between candidate's current project foundation and role expectations, framing it constructively.
+- strongestStrengths: 3-5 concise bullets detailing candidate strengths that provide a solid baseline.
+- missingSkills: Up to 3 key technical gaps that must be bridged for interview readiness.
+- resumeImprovements: 3-5 specific resume/README enhancements to maximize candidate competitiveness.
+- interviewPrep: 3-5 likely technical interview discussion topics targeting advanced role requirements.
+- applicationConfidence: { level: "Stretch Opportunity", explanation: "High learning curve requiring targeted project README enhancement." }
+- nextAction: Exactly one 30-60 minute executable step for the next 24-48 hours.
+- scoutVerdict: { verdict: "Stretch Opportunity", explanation: "Reaching slightly beyond your current experience—worth pursuing because the growth upside is significant." }
+- applicationStrategy: Practical strategy on how to frame current project experience as a bridge to higher role expectations.
+- preparationChecklist: 4-6 concrete, actionable preparation steps focused on gap reduction.
+- personalizedReason: Compact summary (max 250 chars).
+- firstAction: One 30-minute actionable step (max 150 chars).
+- confidenceMessage: Reassuring mentor note (max 150 chars).
+- whyNow: Explanation of timing (max 150 chars).
+- projectEvidence: Explicit mapping of project proof to role demands (max 300 chars).
+- whyYou: Candidate match reasoning citing project evidence (max 250 chars).
+- whyCompany: Company value proposition for candidate's growth (max 250 chars).
+- strengths: 3-5 concise bullets mirroring strongestStrengths.
+- challenges: 2-3 gaps framed constructively.`;
 }

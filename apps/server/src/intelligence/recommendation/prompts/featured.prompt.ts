@@ -13,34 +13,35 @@ export function buildFeaturedPrompt(
     context.opportunityContexts?.[0]?.matchIntelligence ||
     context.matchAnalysis;
 
-  return `Featured Recommendation (Perfect Match) Slot Instructions:
-- Objective: Explain today's absolute strongest recommendation with high confidence.
-- Persona Verdict Focus: "This is one of today's strongest opportunities for your current profile and deserves priority attention."
+  return `Perfect Match (Featured) Slot Identity & Mentor Guidelines:
+- Slot Identity: Absolute strongest recommendation of the day. Highest match score and technical alignment.
+- Primary Goal: Explain why this specific opportunity deserves top priority, backing every claim with candidate project evidence.
 - Target Role: ${opp?.role || opp?.title} at ${opp?.company || opp?.organization}
-- Key Match Reason: ${match?.reasonCandidateRankedHighly || 'Strong technical skill and project alignment.'}
+- Key Match Reason: ${match?.reasonCandidateRankedHighly || 'Direct technical skill and project alignment.'}
 - Required Skills: ${(opp?.requiredSkills || []).join(', ')}
 - Top Matching Skills: ${(match?.topMatchingSkills || []).join(', ')}
 - Skill Gaps: ${(match?.missingSkills || []).join(', ') || 'None'}
 - Relevant Projects: ${(match?.relevantProjects || []).join(', ') || 'General profile match'}
 
-Construct a detailed Career Report with:
-- executiveSummary: 2-3 concise editorial sentences explaining why this matters.
-- whyScoutPickedThis: Highly detailed evidence-driven explanation citing profile/role alignment and project evidence.
-- strongestStrengths: 3-5 concise bullets detailing candidate technical strengths matching this role.
-- strengths: 3-5 concise bullets.
-- challenges: list of genuine gaps with reassurance.
-- resumeImprovements: 3-5 specific, actionable suggestions for how to tailor the resume for this role.
-- interviewPrep: 3-5 likely interview topics referencing candidate's projects.
-- applicationConfidence: { level: "Very Competitive" or "Competitive" or "Moderate Match" or "Stretch Opportunity" or "High Risk", explanation: "Encouraging mentor confidence note" }
-- nextAction: One specific 30-60 minute action step before applying.
-- scoutVerdict: { verdict: "Apply Immediately" or "Apply After Small Improvements", explanation: "This is one of today's strongest opportunities for your current profile and deserves priority attention." }
-- applicationStrategy: Practical mentoring on how to apply.
-- preparationChecklist: Checklist of actionable prep items (max 6 items).
-- personalizedReason: Compact (<=250 chars) summary combining Why You + First Step.
-- firstAction: One 30-minute actionable step (<=150 chars).
-- confidenceMessage: Encouraging note (<=150 chars).
-- whyNow: Why timing matters (<=150 chars).
-- projectEvidence: Which project proves which skill for this role (<=300 chars).
-- whyYou: Why this candidate specifically fits (<=250 chars).
-- whyCompany: Why this opportunity benefits their career (<=250 chars).`;
+Section-by-Section Writing Instructions:
+- executiveSummary: Explain WHY this opportunity is the candidate's top career priority today (not what the company does).
+- whyScoutPickedThis: Connect specific candidate projects (e.g. ${(match?.relevantProjects || [])[0] || 'projects'}) and technical skills to the company's core expectations.
+- strongestStrengths: 3-5 bullets linking candidate's demonstrated project proof to role requirements.
+- missingSkills: Up to 3 skill gaps with constructive context explaining why addressing them improves interview success.
+- resumeImprovements: 3-5 concrete, non-generic resume/README updates tailored for this specific role.
+- interviewPrep: 3-5 likely technical interview discussion topics based on candidate's project architecture and role tech stack.
+- applicationConfidence: { level: "Very Competitive", explanation: "High technical alignment based on demonstrated project proof." }
+- nextAction: Exactly one 30-60 minute executable step for the next 24-48 hours.
+- scoutVerdict: { verdict: "Apply Immediately", explanation: "This is your strongest match today—prioritize submitting this application immediately with tailored project proof." }
+- applicationStrategy: Mentoring advice on application sequencing and GitHub repository README positioning.
+- preparationChecklist: 4-6 specific, actionable tasks (e.g., "Highlight Node.js controllers in project README").
+- personalizedReason: Compact summary (max 250 chars) combining match evidence and first action.
+- firstAction: One 30-minute actionable step (max 150 chars).
+- confidenceMessage: Reassuring mentor note (max 150 chars).
+- whyNow: Explanation of deadline or momentum urgency (max 150 chars).
+- projectEvidence: Explicit mapping of project proof to role demands (max 300 chars).
+- whyYou: Candidate match reasoning citing project evidence (max 250 chars).
+- whyCompany: Company value proposition for candidate's career growth (max 250 chars).
+- strengths: 3-5 concise bullets mirroring strongestStrengths.
+- challenges: 2-3 gaps framed constructively.`;
 }
