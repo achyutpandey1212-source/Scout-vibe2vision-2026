@@ -1,13 +1,35 @@
-export interface IAIPersonalizationItem {
-  personalizedReason: string;
-  projectEvidence: string;
-  whyYou?: string;
-  whyCompany?: string;
-  whyNow?: string;
+export interface ICareerReport {
+  executiveSummary: string;
+  whyScoutPickedThis: string;
+  strongestStrengths: string[];
   missingSkills: string[];
+  resumeImprovements: string[];
+  interviewPrep: string[];
+  applicationConfidence: {
+    level: string;
+    explanation: string;
+  };
+  nextAction: string;
+  scoutVerdict: {
+    verdict: string;
+    explanation: string;
+  };
+  personalizedReason: string;
+  whyNow: string;
   firstAction: string;
   confidenceMessage: string;
+  projectEvidence?: string;
+  whyYou?: string;
+  whyCompany?: string;
+
+  // New Career Report fields
+  strengths?: string[];
+  challenges?: string[];
+  applicationStrategy?: string;
+  preparationChecklist?: string[];
 }
+
+export type IAIPersonalizationItem = ICareerReport;
 
 export interface IAIPersonalizationResponse {
   todayMission: string;

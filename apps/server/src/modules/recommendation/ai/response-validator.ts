@@ -124,6 +124,19 @@ export class ResponseValidator {
         obj.applicationConfidence?.explanation || 'Solid candidate match.',
         150,
       ),
+      strengths: Array.isArray(obj.strengths)
+        ? obj.strengths.slice(0, 5).map((s: any) => this.truncate(s, 500))
+        : ['Strong background alignment'],
+      challenges: Array.isArray(obj.challenges)
+        ? obj.challenges.slice(0, 5).map((s: any) => this.truncate(s, 500))
+        : ['No major challenge identified'],
+      applicationStrategy: this.truncate(
+        obj.applicationStrategy || 'Highlight your relevant projects during application.',
+        500,
+      ),
+      preparationChecklist: Array.isArray(obj.preparationChecklist)
+        ? obj.preparationChecklist.slice(0, 6).map((s: any) => this.truncate(s, 500))
+        : ['Review core project architecture questions'],
     };
   }
 

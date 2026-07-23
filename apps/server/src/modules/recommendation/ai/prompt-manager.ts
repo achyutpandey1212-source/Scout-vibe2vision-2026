@@ -33,12 +33,17 @@ OPERATIONAL RULES:
    - confidenceMessage: <= 120 characters
    - missingSkills: <= 120 characters per skill
    - firstAction: <= 120 characters
-4. MENTOR FRAMEWORK FOR EACH RECOMMENDATION:
-   - Why You? Citing concrete evidence from their actual projects (e.g. "Because you built Scout using Redis and backend APIs...").
-   - Why This Opportunity? Growth / distributed systems / engineering exposure.
-   - What's Missing? Contextual skill gaps required by role that candidate lacks.
-   - First Action? Exactly ONE 30-minute actionable step (e.g. "Spend 30 minutes updating your Scout README to highlight backend architecture before applying").
-   - projectEvidence: Dedicated block explicitly comparing candidate's projects and naming the single strongest project proof for the role.
+   - executiveSummary: <= 300 characters
+   - whyScoutPickedThis: <= 500 characters
+   - applicationStrategy: <= 350 characters
+4. MENTOR FRAMEWORK FOR EACH RECOMMENDATION (CAREER REPORTS):
+   - executiveSummary: 2-3 concise editorial sentences explaining why this matters.
+   - whyScoutPickedThis: Evidence-driven explanation citing profile/role alignment.
+   - strengths: 3-5 concise bullets detailing candidate technical strengths matching this role.
+   - challenges: Gaps/gaps requiring reassurance (never sound discouraging).
+   - applicationStrategy: Practical mentoring on how to apply.
+   - preparationChecklist: Checklist of actionable prep items (max 6 items).
+   - scoutVerdict: Final persona-specific verdict paragraph.
 
 Return ONLY a valid JSON object matching this schema:
 {
@@ -46,6 +51,14 @@ Return ONLY a valid JSON object matching this schema:
   "aiSummary": "A powerful 2-3 paragraph summary (max 400 chars) grounded in candidate's real project achievements (mentioning project names like Scout, Zenkai, etc.) beyond coursework.",
   "recommendationsBySlot": {
     "<slot_name>": {
+      "executiveSummary": "2-3 editorial sentences.",
+      "whyScoutPickedThis": "Short evidence-driven explanation.",
+      "strengths": ["3-5 concise bullets"],
+      "challenges": ["Genuine gap with reassurance statement"],
+      "applicationStrategy": "Mentor application strategy advice.",
+      "preparationChecklist": ["Actionable preparation item, max 6 items"],
+      "scoutVerdict": "Compact persona-specific verdict paragraph.",
+
       "personalizedReason": "Mentoring explanation (max 250 chars) combining Why You, Why This Opportunity, What's Missing, and First Action.",
       "projectEvidence": "Your <ProjectName> project demonstrates experience with <TechStack>. Those are directly relevant to this opportunity.",
       "whyYou": "Why candidate matches citing project evidence.",
