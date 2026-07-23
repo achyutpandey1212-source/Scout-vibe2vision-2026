@@ -2,14 +2,35 @@ import mongoose, { Schema } from 'mongoose';
 import { IRecommendationPack } from '../types/recommendation.types';
 
 const RecommendationItemSchema = new Schema({
+  // ── Core matching fields ──────────────────────────────────────────────────
   opportunityId: { type: Schema.Types.ObjectId, ref: 'Opportunity' },
   score: { type: Number },
   confidence: { type: Number },
+  scoreBreakdown: { type: Schema.Types.Mixed, default: {} },
+
+  // ── Legacy snippet fields (kept for backward compatibility) ───────────────
   personalizedReason: { type: String },
   whyNow: { type: String },
   missingSkills: { type: [String], default: [] },
   firstAction: { type: String },
-  scoreBreakdown: { type: Schema.Types.Mixed, default: {} },
+  confidenceMessage: { type: String },
+
+  // ── Full Career Report fields ─────────────────────────────────────────────
+  executiveSummary: { type: String },
+  whyScoutPickedThis: { type: String },
+  strongestStrengths: { type: [String], default: [] },
+  resumeImprovements: { type: [String], default: [] },
+  interviewPrep: { type: [String], default: [] },
+  applicationConfidence: { type: Schema.Types.Mixed, default: {} },
+  nextAction: { type: String },
+  scoutVerdict: { type: Schema.Types.Mixed, default: {} },
+  projectEvidence: { type: String },
+  whyYou: { type: String },
+  whyCompany: { type: String },
+  strengths: { type: [String], default: [] },
+  challenges: { type: [String], default: [] },
+  applicationStrategy: { type: String },
+  preparationChecklist: { type: [String], default: [] },
 });
 
 const RecommendationPackSchema = new Schema<IRecommendationPack>(

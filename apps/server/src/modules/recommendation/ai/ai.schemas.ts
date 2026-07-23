@@ -35,6 +35,6 @@ export const AIPersonalizationItemSchema = SingleCareerReportSchema;
 
 export const AIPersonalizationResponseSchema = z.object({
   todayMission: z.string().max(120),
-  aiSummary: z.string().max(500),
+  aiSummary: z.string().max(600),
   recommendationsBySlot: z.record(z.string(), AIPersonalizationItemSchema),
 });

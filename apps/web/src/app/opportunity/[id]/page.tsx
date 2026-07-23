@@ -217,6 +217,13 @@ export default function OpportunityDetailsPage() {
   const hasInterviewPrep = Boolean(
     recommendationItem?.interviewPrep && recommendationItem.interviewPrep.length > 0,
   );
+  const hasApplicationStrategy = Boolean(recommendationItem?.applicationStrategy);
+  const hasPreparationChecklist = Boolean(
+    recommendationItem?.preparationChecklist && recommendationItem.preparationChecklist.length > 0,
+  );
+  const hasScoutVerdict = Boolean(recommendationItem?.scoutVerdict?.explanation);
+  const hasApplicationConfidence = Boolean(recommendationItem?.applicationConfidence?.level);
+  const hasNextAction = Boolean(recommendationItem?.nextAction);
 
   return (
     <ProtectedRoute>
@@ -484,6 +491,101 @@ export default function OpportunityDetailsPage() {
                             </div>
                           ))}
                         </div>
+                      </div>
+                    )}
+
+                    {/* Section 7: Application Strategy */}
+                    {hasApplicationStrategy && (
+                      <div className="space-y-1 pt-2 border-t border-border/40 text-xs">
+                        <span className="text-[10px] font-semibold tracking-widest uppercase text-primary block">
+                          Application Strategy
+                        </span>
+                        <p className="text-muted-foreground font-light leading-relaxed">
+                          {cleanTruncatedText(recommendationItem.applicationStrategy)}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Section 8: Preparation Checklist */}
+                    {hasPreparationChecklist && (
+                      <div className="space-y-1.5 pt-2 border-t border-border/40 text-xs">
+                        <span className="text-[10px] font-semibold tracking-widest uppercase text-primary block">
+                          Preparation Checklist
+                        </span>
+                        <div className="space-y-1 text-muted-foreground font-light">
+                          {recommendationItem.preparationChecklist.map(
+                            (item: string, idx: number) => (
+                              <div key={idx} className="flex items-start gap-2">
+                                <CheckSquare className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                                <span className="leading-relaxed">{cleanTruncatedText(item)}</span>
+                              </div>
+                            ),
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Section 9: Application Confidence */}
+                    {hasApplicationConfidence && (
+                      <div className="pt-2 border-t border-border/40 text-xs">
+                        <span className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground block mb-1.5">
+                          Application Confidence
+                        </span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                              recommendationItem.applicationConfidence.level === 'Very Competitive'
+                                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                                : recommendationItem.applicationConfidence.level === 'Competitive'
+                                  ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
+                                  : recommendationItem.applicationConfidence.level ===
+                                      'Moderate Match'
+                                    ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                                    : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
+                            }`}
+                          >
+                            {recommendationItem.applicationConfidence.level}
+                          </span>
+                        </div>
+                        {recommendationItem.applicationConfidence.explanation && (
+                          <p className="text-muted-foreground font-light leading-relaxed mt-1.5">
+                            {cleanTruncatedText(
+                              recommendationItem.applicationConfidence.explanation,
+                            )}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Section 10: Next Action */}
+                    {hasNextAction && (
+                      <div className="pt-2 border-t border-border/40 text-xs">
+                        <span className="text-[10px] font-semibold tracking-widest uppercase text-amber-600 dark:text-amber-400 block mb-1.5">
+                          Your Next Step
+                        </span>
+                        <p className="text-foreground/90 font-medium leading-relaxed bg-amber-500/[0.06] border border-amber-500/20 rounded-xl px-3 py-2">
+                          {cleanTruncatedText(recommendationItem.nextAction)}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Section 11: Scout Verdict */}
+                    {hasScoutVerdict && (
+                      <div className="pt-2 border-t border-border/40 text-xs">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
+                          <span className="text-[10px] font-semibold tracking-widest uppercase text-primary">
+                            Scout Verdict
+                          </span>
+                          {recommendationItem.scoutVerdict?.verdict && (
+                            <span className="ml-auto inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary/10 text-primary">
+                              {recommendationItem.scoutVerdict.verdict}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-muted-foreground font-light leading-relaxed">
+                          {cleanTruncatedText(recommendationItem.scoutVerdict.explanation)}
+                        </p>
                       </div>
                     )}
 

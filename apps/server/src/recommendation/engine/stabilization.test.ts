@@ -179,7 +179,7 @@ describe('Recommendation Engine V2: Stabilization & Production Readiness Verific
     expect(() => ResponseValidator.validate(overLengthJson)).not.toThrow();
     const validated = ResponseValidator.validate(overLengthJson);
     expect(validated.todayMission.length).toBeLessThanOrEqual(120);
-    expect(validated.aiSummary.length).toBeLessThanOrEqual(400);
+    expect(validated.aiSummary.length).toBeLessThanOrEqual(600);
     expect(
       validated.recommendationsBySlot['perfectMatch'].personalizedReason.length,
     ).toBeLessThanOrEqual(250);

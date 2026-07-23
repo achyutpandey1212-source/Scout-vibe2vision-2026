@@ -15,14 +15,35 @@ export type RecommendationGenerationReason =
   | 'ADMIN_DRY_RUN';
 
 export interface IRecommendationItem {
+  // ── Core matching ──────────────────────────────────────────────────────────
   opportunityId?: mongoose.Types.ObjectId;
   score?: number;
   confidence?: number;
+  scoreBreakdown?: Record<string, number>;
+
+  // ── Legacy snippet fields (kept for backward compatibility) ────────────────
   personalizedReason?: string;
   whyNow?: string;
   missingSkills?: string[];
   firstAction?: string;
-  scoreBreakdown?: Record<string, number>;
+  confidenceMessage?: string;
+
+  // ── Full Career Report fields ──────────────────────────────────────────────
+  executiveSummary?: string;
+  whyScoutPickedThis?: string;
+  strongestStrengths?: string[];
+  resumeImprovements?: string[];
+  interviewPrep?: string[];
+  applicationConfidence?: { level: string; explanation: string };
+  nextAction?: string;
+  scoutVerdict?: { verdict: string; explanation: string };
+  projectEvidence?: string;
+  whyYou?: string;
+  whyCompany?: string;
+  strengths?: string[];
+  challenges?: string[];
+  applicationStrategy?: string;
+  preparationChecklist?: string[];
 }
 
 export interface IRecommendationMetadata {

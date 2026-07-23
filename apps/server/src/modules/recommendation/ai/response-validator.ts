@@ -167,7 +167,7 @@ export class ResponseValidator {
       parsedObj.todayMission = this.truncate(parsedObj.todayMission, 120);
     }
     if (parsedObj.aiSummary) {
-      parsedObj.aiSummary = this.truncate(parsedObj.aiSummary, 400);
+      parsedObj.aiSummary = this.truncate(parsedObj.aiSummary, 600);
     }
 
     if (parsedObj.recommendationsBySlot) {

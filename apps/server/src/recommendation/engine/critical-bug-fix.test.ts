@@ -177,7 +177,7 @@ describe('Recommendation Engine V2: Critical Bug Fix Sprint Verification', () =>
     expect(() => ResponseValidator.validate(rawOverlengthJson)).not.toThrow();
     const result = ResponseValidator.validate(rawOverlengthJson);
     expect(result.todayMission.length).toBeLessThanOrEqual(120);
-    expect(result.aiSummary.length).toBeLessThanOrEqual(400);
+    expect(result.aiSummary.length).toBeLessThanOrEqual(600);
     expect(
       result.recommendationsBySlot['perfectMatch'].personalizedReason.length,
     ).toBeLessThanOrEqual(250);
