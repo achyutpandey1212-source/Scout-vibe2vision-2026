@@ -75,18 +75,19 @@ export class RecommendationController {
         });
       }
 
-      // Record a VIEWED conversion event
-      if (result.pack) {
-        RecommendationAnalyticsService.recordEvent(
-          'VIEWED',
-          userId,
-          result.pack._id ? result.pack._id.toString() : 'UNKNOWN',
-        ).catch(() => {});
+      // Record a VIEWED conversion event using the active packId
+      const activePackId =
+        result.pack?.packId ||
+        result.pack?.id ||
+        (result.pack?._id ? result.pack._id.toString() : '');
+      if (activePackId) {
+        RecommendationAnalyticsService.recordEvent('VIEWED', userId, activePackId).catch(() => {});
       }
 
       return res.status(200).json({
         success: true,
         status: 'READY',
+        packId: activePackId,
         data: result.pack,
       });
     } catch (error: any) {

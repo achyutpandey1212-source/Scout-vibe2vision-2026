@@ -112,9 +112,15 @@ export default function DashboardPage() {
               }
             });
             setRecommendations(mapped);
+            const fetchedPackId = recRes.data.packId || rawData?.packId || rawData?.id || '';
+            if (fetchedPackId && typeof window !== 'undefined') {
+              localStorage.setItem('scout_v2_active_pack_id', fetchedPackId);
+            }
+
             // Track impressions per slot
             mapped.forEach((rec) => {
               track('recommendation_card_impression', {
+                packId: fetchedPackId,
                 slot: rec.slot,
                 opportunityId: rec.opportunity?._id || rec.opportunity?.id,
                 matchScore: rec.recommendationScore || 80,

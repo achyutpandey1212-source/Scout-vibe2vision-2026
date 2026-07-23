@@ -115,7 +115,15 @@ export default function OpportunityDetailsPage() {
       }
 
       if (oppRes.data?.success) {
+        const activePackId =
+          (typeof window !== 'undefined' ? localStorage.getItem('scout_v2_active_pack_id') : '') ||
+          recRes.data?.packId ||
+          recRes.data?.data?.packId ||
+          recRes.data?.data?.id ||
+          '';
+
         track('opportunity_opened', {
+          packId: activePackId,
           opportunityId: oppId,
           category: oppRes.data.data.category || '',
           source: 'opportunity_details',

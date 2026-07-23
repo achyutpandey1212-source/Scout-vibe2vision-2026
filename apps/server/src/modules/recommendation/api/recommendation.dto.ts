@@ -3,7 +3,7 @@ import { IRecommendationPack } from '../types/recommendation.types';
 export class RecommendationDto {
   /**
    * Serializes a RecommendationPack into a clean, frontend-safe DTO.
-   * Strips debugging prompt configuration, hashes, provider specs, and score breakdowns.
+   * Ensures id and packId are explicitly populated for analytics event propagation.
    */
   static toDto(pack: IRecommendationPack): any {
     const mapItem = (item: any) => {
@@ -15,12 +15,25 @@ export class RecommendationDto {
         whyNow: item.whyNow || '',
         missingSkills: item.missingSkills || [],
         firstAction: item.firstAction || '',
+        executiveSummary: item.executiveSummary || '',
+        whyScoutPickedThis: item.whyScoutPickedThis || '',
+        strongestStrengths: item.strongestStrengths || [],
+        resumeImprovements: item.resumeImprovements || [],
+        interviewPrep: item.interviewPrep || [],
+        applicationConfidence: item.applicationConfidence || null,
+        nextAction: item.nextAction || '',
+        scoutVerdict: item.scoutVerdict || null,
+        applicationStrategy: item.applicationStrategy || '',
+        preparationChecklist: item.preparationChecklist || [],
       };
     };
 
+    const packIdStr = pack._id ? pack._id.toString() : '';
+
     return {
-      id: pack._id.toString(),
-      userId: pack.userId.toString(),
+      id: packIdStr,
+      packId: packIdStr,
+      userId: pack.userId ? pack.userId.toString() : '',
       generatedAt: pack.generatedAt,
       expiresAt: pack.expiresAt,
       todayMission: pack.todayMission || '',

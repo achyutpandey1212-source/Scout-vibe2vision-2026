@@ -4,7 +4,8 @@ import { IAIPersonalizationResponse } from './ai.types';
 
 export class RepairService {
   /**
-   * Attempts to fix validation errors by requesting Gemini to correct the schema.
+   * Attempts to fix validation errors by requesting AI to correct the schema.
+   * Keeps repair prompt lightweight without inflating token usage.
    */
   static async repair(
     originalPrompt: string,
@@ -12,18 +13,19 @@ export class RepairService {
     validationError: string,
     systemInstruction: string,
   ): Promise<{ response: IAIPersonalizationResponse; rawText: string }> {
-    const repairPrompt = `Your previous response failed validation with the following error:
-${validationError}
+    const errorSnippet = (validationError || '').slice(0, 300);
+    const textSnippet = (invalidText || '').slice(0, 400);
 
-Original Prompt:
+    const repairPrompt = `Validation Error in previous JSON generation:
+${errorSnippet}
+
+Response Snippet:
+${textSnippet}...
+
+Original Context & Prompt:
 ${originalPrompt}
 
-Invalid JSON Response you returned:
-${invalidText}
-
-Please correct the schema violations and return ONLY valid JSON.
-Do not change meanings.
-Fix schema violations only.`;
+Please correct the schema violations and return ONLY valid JSON matching the schema.`;
 
     const gatewayRes = await RecommendationAI.personalizeRecommendations(
       repairPrompt,

@@ -187,23 +187,34 @@ ${opportunityBlocks}
 
 Provide recommendationsBySlot matching the slots specified above: perfectMatch, hiddenGem, quickWin, confidenceBuilder, stretchGoal.`;
 
-    // 5. Prompt Size Measurement Diagnostics (Requirement 9)
+    // 5. Prompt Size Measurement Diagnostics
     const promptChars = prompt.length;
     const promptTokens = Math.round(promptChars / 4);
-    const baselineChars = 15440;
+    const baselineChars = 20837; // Raw baseline uncompressed prompt length
+    const baselineTokens = Math.round(baselineChars / 4);
     const reductionPct = Math.max(0, ((baselineChars - promptChars) / baselineChars) * 100).toFixed(
       1,
     );
     const compressionPct = Math.max(0, (1 - promptChars / baselineChars) * 100).toFixed(1);
 
+    const candidateSize = candidateSection.length;
+    const portfolioSize = portfolioSection.length;
+    const oppBlocksSize = opportunityBlocks.length;
+    const avgOppSize = Math.round(oppBlocksSize / Math.max(1, context.opportunityContexts.length));
+
     console.log(`
 ========================================
 Prompt Context Engineering Diagnostics
 ========================================
-Raw Baseline Prompt Length:   ~${baselineChars} chars (~3,860 tokens)
-Curated Context Prompt:       ${promptChars} chars (~${promptTokens} tokens)
-Prompt Size Reduction:        ${reductionPct}%
-Context Compression Ratio:    ${compressionPct}%
+Raw Baseline Prompt:   ~${baselineChars} chars (~${baselineTokens} tokens)
+Curated Context Prompt: ${promptChars} chars (~${promptTokens} tokens)
+Prompt Size Reduction:  ${reductionPct}%
+Context Compression:    ${compressionPct}%
+Estimated Tokens:       ~${promptTokens} tokens
+Candidate Brief Size:   ${candidateSize} chars
+Portfolio Summary Size: ${portfolioSize} chars
+Avg Opportunity Size:   ${avgOppSize} chars
+Largest Section:        ${candidateSize > oppBlocksSize ? 'Candidate Brief' : 'Opportunity Contexts'} (${Math.max(candidateSize, oppBlocksSize)} chars)
 ========================================`);
 
     return prompt;

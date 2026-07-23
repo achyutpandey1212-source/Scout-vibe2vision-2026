@@ -95,6 +95,30 @@ export class BackgroundGenerationService {
   }
 
   /**
+   * Executes a dry-run diagnostic run without mutating database state.
+   */
+  static async runDryRun(
+    userId: string,
+    stage: string = 'STAGE1_DETERMINISTIC',
+    weights?: any,
+  ): Promise<any> {
+    const userObjId = new mongoose.Types.ObjectId(userId);
+    const profile = await ProfileModel.findOne({ userId: userObjId }).exec();
+    const resume = await ResumeModel.findOne({ userId: userObjId }).exec();
+    if (!profile) {
+      throw new Error(`Profile not found for user ${userId}`);
+    }
+    const retrieved = await CandidateRetrievalService.retrieveCandidates(profile, resume);
+    return {
+      userId,
+      stage,
+      retrievedCount: retrieved.length,
+      sampleOpportunity: retrieved[0]?.title || 'None',
+      status: 'DRY_RUN_SUCCESS',
+    };
+  }
+
+  /**
    * Worker thread processing the multi-stage recommendation pipeline.
    */
   private static async runWorker(
