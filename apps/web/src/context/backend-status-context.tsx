@@ -8,6 +8,7 @@ interface BackendStatusContextType {
   elapsedSeconds: number;
   showReadyToast: boolean;
   lastChecked: Date | null;
+  dismissReadyToast: () => void;
 }
 
 const BackendStatusContext = createContext<BackendStatusContextType>({
@@ -16,9 +17,12 @@ const BackendStatusContext = createContext<BackendStatusContextType>({
   elapsedSeconds: 0,
   showReadyToast: false,
   lastChecked: null,
+  dismissReadyToast: () => {},
 });
 
 const BACKOFF_SCHEDULE = [0, 2000, 3000, 5000, 5000]; // Exponential backoff intervals in ms
+const READY_CACHE_TTL_MS = 5 * 60 * 1000; // Cache backend readiness for 5 minutes in sessionStorage
+const SESSION_STORAGE_KEY = 'scout_backend_ready_at';
 
 export function BackendStatusProvider({ children }: { children: React.ReactNode }) {
   const [isReady, setIsReady] = useState(false);
@@ -34,8 +38,26 @@ export function BackendStatusProvider({ children }: { children: React.ReactNode 
   const retryCountRef = useRef(0);
   const startTimeRef = useRef<number>(Date.now());
 
+  const dismissReadyToast = () => {
+    setShowReadyToast(false);
+  };
+
   useEffect(() => {
     isMountedRef.current = true;
+
+    // Check if backend readiness was cached within the last 5 minutes
+    if (typeof window !== 'undefined') {
+      const cachedTimeStr = sessionStorage.getItem(SESSION_STORAGE_KEY);
+      if (cachedTimeStr) {
+        const cachedTime = parseInt(cachedTimeStr, 10);
+        if (!isNaN(cachedTime) && Date.now() - cachedTime < READY_CACHE_TTL_MS) {
+          setIsReady(true);
+          setIsChecking(false);
+          setLastChecked(new Date(cachedTime));
+          return; // Skip polling entirely if backend was recently verified awake!
+        }
+      }
+    }
 
     // Timer tracking total elapsed seconds
     intervalIdRef.current = setInterval(() => {
@@ -64,6 +86,11 @@ export function BackendStatusProvider({ children }: { children: React.ReactNode 
           setLastChecked(new Date());
           setIsReady(true);
           setIsChecking(false);
+
+          // Cache readiness timestamp in sessionStorage for 5 minutes
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem(SESSION_STORAGE_KEY, Date.now().toString());
+          }
 
           // If it was previously unready, trigger temporary ready toast
           if (wasUnreadyRef.current) {
@@ -112,6 +139,7 @@ export function BackendStatusProvider({ children }: { children: React.ReactNode 
         elapsedSeconds,
         showReadyToast,
         lastChecked,
+        dismissReadyToast,
       }}
     >
       {children}

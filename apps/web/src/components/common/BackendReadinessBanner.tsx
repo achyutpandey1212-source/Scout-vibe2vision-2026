@@ -2,12 +2,12 @@
 
 import React from 'react';
 import { useBackendStatus } from '@/context/backend-status-context';
-import { CheckCircle2, Loader2 } from 'lucide-react';
+import { CheckCircle2, Loader2, X } from 'lucide-react';
 
 export const BackendReadinessBanner: React.FC = () => {
-  const { isReady, elapsedSeconds, showReadyToast } = useBackendStatus();
+  const { isReady, elapsedSeconds, showReadyToast, dismissReadyToast } = useBackendStatus();
 
-  // If backend is ready and showReadyToast has expired, render nothing
+  // If backend is ready and showReadyToast has expired or been dismissed, render nothing
   if (isReady && !showReadyToast) {
     return null;
   }
@@ -24,9 +24,16 @@ export const BackendReadinessBanner: React.FC = () => {
               <span className="text-secondary/70 ml-2">Authentication is now available.</span>
             </div>
           </div>
-          <span className="text-[10px] font-mono opacity-80 shrink-0 hidden sm:inline">
-            Connected
-          </span>
+          <div className="flex items-center gap-3 shrink-0">
+            <span className="text-[10px] font-mono opacity-80 hidden sm:inline">Connected</span>
+            <button
+              onClick={dismissReadyToast}
+              aria-label="Dismiss message"
+              className="p-1 text-emerald-600/70 hover:text-emerald-600 dark:text-emerald-400/70 dark:hover:text-emerald-300 rounded-md hover:bg-emerald-500/10 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -51,7 +58,7 @@ export const BackendReadinessBanner: React.FC = () => {
             <p className="text-secondary/80 text-[11px] leading-relaxed font-light">
               {isOver60s
                 ? "We're running on free infrastructure while building Scout. Thank you for your patience."
-                : "We're starting our backend services on free infrastructure. Authentication and personalized recommendations will be available in a few moments. While you wait, feel free to explore Scout."}
+                : "We're starting our backend services on free infrastructure. Authentication and personalized recommendations will be available shortly. While you wait, feel free to explore Scout."}
             </p>
           </div>
         </div>
