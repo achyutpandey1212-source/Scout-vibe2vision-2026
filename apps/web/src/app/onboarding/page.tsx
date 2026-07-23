@@ -14,7 +14,10 @@ import { useAuth } from '@/context/auth-context';
 import { profileApi, recommendationsApi } from '@/lib/api';
 import { SKILLS_TAXONOMY } from '@scout/shared';
 import { track, setUserProperties } from '@/lib/analytics';
-import { RecommendationGenerationExperience } from '@/components/dashboard';
+import {
+  RecommendationGenerationExperience,
+  AICapacityExhaustedScreen,
+} from '@/components/dashboard';
 import {
   FormLayout,
   ProgressIndicator,
@@ -64,6 +67,7 @@ export default function OnboardingPage() {
   // Recommendation Generation & Polling State
   const [isGeneratingRecs, setIsGeneratingRecs] = useState(false);
   const [isRecsReady, setIsRecsReady] = useState(false);
+  const [isCapacityExhausted, setIsCapacityExhausted] = useState(false);
   const [msgIndex, setMsgIndex] = useState(0);
 
   // Resume upload state
@@ -315,6 +319,15 @@ export default function OnboardingPage() {
         try {
           const res = await recommendationsApi.list();
           const status = res.data?.status || 'READY';
+          if (status === 'AI_CAPACITY_EXHAUSTED') {
+            clearInterval(pollTimer);
+            setIsCapacityExhausted(true);
+            track('recommendation_capacity_exhausted', {
+              providerPool: 'recommendation',
+              availableProviders: 0,
+            });
+            return;
+          }
           if (status === 'READY' || res.data?.data) {
             clearInterval(pollTimer);
             setIsRecsReady(true);
@@ -325,7 +338,6 @@ export default function OnboardingPage() {
           }
         } catch (err) {
           console.error('Status poll error:', err);
-          // Graceful fallback ready state if offline/error
           clearInterval(pollTimer);
           setIsRecsReady(true);
         }
@@ -490,6 +502,24 @@ export default function OnboardingPage() {
   }
 
   // ── RECOMMENDATION GENERATION EXPERIENCE & SUCCESS CONFIRMATION ──
+  if (isCapacityExhausted) {
+    return (
+      <AICapacityExhaustedScreen
+        onRetry={async () => {
+          try {
+            const res = await recommendationsApi.list();
+            if (res.data?.status === 'READY') {
+              setIsCapacityExhausted(false);
+              setIsRecsReady(true);
+            }
+          } catch (e) {
+            console.error('Retry failed:', e);
+          }
+        }}
+      />
+    );
+  }
+
   if (isGeneratingRecs) {
     return (
       <RecommendationGenerationExperience

@@ -13,7 +13,12 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { DashboardLayout } from '@/components/layout';
 import { PageTransition } from '@/components/ui';
 import { OpportunityCard, OpportunityCardSkeleton } from '@/components/opportunity';
-import { TodaysMissionCard, SectionHeader, DashboardEmptyState } from '@/components/dashboard';
+import {
+  TodaysMissionCard,
+  SectionHeader,
+  DashboardEmptyState,
+  AICapacityExhaustedScreen,
+} from '@/components/dashboard';
 import { useAuth } from '@/context/auth-context';
 import { recommendationsApi, bookmarksApi, profileApi, Opportunity } from '@/lib/api';
 import { track } from '@/lib/analytics';
@@ -57,6 +62,7 @@ export default function DashboardPage() {
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [generatedAt, setGeneratedAt] = useState<string | Date | undefined>(undefined);
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
+  const [isCapacityExhausted, setIsCapacityExhausted] = useState(false);
 
   // Automatic retry ref
   const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -75,6 +81,12 @@ export default function DashboardPage() {
         if (typeof window !== 'undefined') {
           localStorage.setItem('scout_v2_profile_name', name);
         }
+      }
+
+      if (recRes.data?.status === 'AI_CAPACITY_EXHAUSTED') {
+        setIsCapacityExhausted(true);
+        setPageLoading(false);
+        return;
       }
 
       if (recRes.data?.success) {
@@ -263,6 +275,8 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
+            ) : isCapacityExhausted ? (
+              <AICapacityExhaustedScreen onRetry={() => loadDashboardData()} />
             ) : recommendations.length === 0 ? (
               /* EMPTY STATE */
               <DashboardEmptyState
