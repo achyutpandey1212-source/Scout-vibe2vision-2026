@@ -185,7 +185,7 @@ describe('Recommendation Engine V2: Stabilization & Production Readiness Verific
     ).toBeLessThanOrEqual(250);
   });
 
-  it('6. should configure provider timeout to 20 seconds (20000ms)', () => {
-    expect(AI_TIMEOUT_MS).toBe(20000);
+  it('6. should configure provider timeout to 60 seconds (60000ms)', () => {
+    expect(AI_TIMEOUT_MS).toBe(60000);
   });
 });

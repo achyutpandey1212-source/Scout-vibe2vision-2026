@@ -4,3 +4,4 @@ export * from './SectionHeader';
 export * from './DashboardEmptyState';
 export * from './ScoutIntelligencePanel';
 export * from './RecommendationStrip';
+export * from './RecommendationGenerationExperience';

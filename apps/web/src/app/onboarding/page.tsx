@@ -14,6 +14,7 @@ import { useAuth } from '@/context/auth-context';
 import { profileApi, recommendationsApi } from '@/lib/api';
 import { SKILLS_TAXONOMY } from '@scout/shared';
 import { track, setUserProperties } from '@/lib/analytics';
+import { RecommendationGenerationExperience } from '@/components/dashboard';
 import {
   FormLayout,
   ProgressIndicator,
@@ -321,19 +322,12 @@ export default function OnboardingPage() {
               recommendationCount: Array.isArray(res.data?.data) ? res.data.data.length : 5,
               generationTimeMs: 2000,
             });
-            // 1.8 second satisfying success confirmation pause
-            setTimeout(() => {
-              router.replace('/dashboard');
-            }, 1800);
           }
         } catch (err) {
           console.error('Status poll error:', err);
-          // Graceful fallback navigation if offline/error
+          // Graceful fallback ready state if offline/error
           clearInterval(pollTimer);
           setIsRecsReady(true);
-          setTimeout(() => {
-            router.replace('/dashboard');
-          }, 1800);
         }
       }, 2000);
     } catch (err) {
@@ -498,72 +492,10 @@ export default function OnboardingPage() {
   // ── RECOMMENDATION GENERATION EXPERIENCE & SUCCESS CONFIRMATION ──
   if (isGeneratingRecs) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6 text-center select-none space-y-8">
-        {isRecsReady ? (
-          /* SUCCESS CONFIRMATION SCREEN (1.8s Pause) */
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3 }}
-            className="space-y-6 max-w-sm"
-          >
-            <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto shadow-sm">
-              <CheckCircle2 className="w-8 h-8 text-primary" />
-            </div>
-
-            <div className="space-y-2">
-              <h1 className="text-2xl font-display font-medium text-foreground">
-                ✓ Today&apos;s recommendations are ready.
-              </h1>
-              <p className="text-xs text-muted-foreground font-light leading-relaxed">
-                We found five opportunities worth your attention based on your profile.
-              </p>
-            </div>
-
-            <p className="text-xs font-mono text-primary animate-pulse">
-              Opening your dashboard...
-            </p>
-          </motion.div>
-        ) : (
-          /* BACKEND-DRIVEN GENERATION SCREEN */
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="space-y-6 max-w-sm"
-          >
-            <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
-              <Sparkles className="w-6 h-6 animate-pulse" />
-            </div>
-
-            <div className="space-y-2">
-              <h1 className="text-2xl font-display font-medium text-foreground">
-                Preparing today&apos;s recommendations
-              </h1>
-              <p className="text-xs text-muted-foreground font-light leading-relaxed">
-                Scout is matching your profile against today&apos;s opportunity database.
-              </p>
-            </div>
-
-            <div className="p-5 border border-border/80 bg-card rounded-2xl space-y-3 text-left shadow-sm text-xs font-light">
-              <div className="flex items-center gap-2 text-primary font-medium">
-                <Check className="w-4 h-4 text-primary shrink-0" />
-                <span>Profile saved</span>
-              </div>
-
-              <div className="pt-2 border-t border-border/40 space-y-1.5">
-                <div className="flex items-center gap-2 text-foreground font-medium">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-primary shrink-0" />
-                  <span>{INFORMATIONAL_MESSAGES[msgIndex]}</span>
-                </div>
-                <p className="text-[11px] text-muted-foreground/60 leading-relaxed">
-                  This usually takes around 20–40 seconds depending on AI response time.
-                </p>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </div>
+      <RecommendationGenerationExperience
+        isReady={isRecsReady}
+        onViewRecommendations={() => router.replace('/dashboard')}
+      />
     );
   }
 
