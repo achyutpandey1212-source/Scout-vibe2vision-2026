@@ -27,17 +27,6 @@ export const DashboardHero: React.FC<DashboardHeroProps> = ({
 
   return (
     <div className="relative w-full py-8 md:py-12 select-none">
-      {/* Watermark-like crane in the corner (extremely low opacity) */}
-      <div className="absolute right-0 top-1/2 -translate-y-1/2 opacity-[0.05] dark:opacity-[0.03] pointer-events-none select-none">
-        <OrigamiDecoration
-          name="crane"
-          size={140}
-          floating
-          floatingOffset={4}
-          floatingDuration={8}
-        />
-      </div>
-
       <Stack gap="sm" className="max-w-2xl relative z-10">
         <h1 className="text-4xl md:text-6xl font-light tracking-tight text-foreground leading-tight">
           {getGreeting()},

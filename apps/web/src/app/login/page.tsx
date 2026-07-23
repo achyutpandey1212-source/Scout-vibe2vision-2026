@@ -94,11 +94,6 @@ export default function LoginPage() {
         size="sm"
         className="min-h-[85vh] flex flex-col justify-center items-center py-12 relative"
       >
-        {/* Crane background decoration */}
-        <div className="absolute right-0 top-1/4 opacity-[0.04] dark:opacity-[0.02] pointer-events-none select-none">
-          <OrigamiDecoration name="crane" size={240} floating />
-        </div>
-
         <div className="w-full">
           <PageTransition>
             <Card className="border border-border/50 max-w-md w-full mx-auto bg-card/60 backdrop-blur-md rounded-3xl overflow-hidden shadow-xl">

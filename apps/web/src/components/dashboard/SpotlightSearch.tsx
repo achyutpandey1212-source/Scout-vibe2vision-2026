@@ -2,8 +2,8 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Compass, X } from 'lucide-react';
-import { OrigamiDecoration, Typography } from '../ui';
+import { Search, Compass, X, Sparkles } from 'lucide-react';
+import { Typography } from '../ui';
 import { useRouter } from 'next/navigation';
 import { ROUTES } from '@/lib/constants/routes';
 import { opportunitiesApi, Opportunity } from '@/lib/api';
@@ -164,13 +164,7 @@ export const SpotlightSearch: React.FC<SpotlightSearchProps> = ({ isOpen, onClos
                 // Encouraging search empty state
                 <div className="py-8 text-center flex flex-col items-center justify-center space-y-4">
                   <div className="text-secondary/30 shrink-0">
-                    <OrigamiDecoration
-                      name="butterfly"
-                      size={48}
-                      floating
-                      floatingOffset={3}
-                      floatingDuration={4}
-                    />
+                    <Sparkles className="w-10 h-10 text-primary/40" />
                   </div>
                   <div className="space-y-1">
                     <Typography variant="heading-s" className="text-xs font-medium text-foreground">

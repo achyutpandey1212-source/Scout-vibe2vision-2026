@@ -133,11 +133,6 @@ export default function VerifyEmailPage() {
         size="sm"
         className="min-h-[85vh] flex flex-col justify-center items-center py-12 relative select-none"
       >
-        {/* Envelope background decoration */}
-        <div className="absolute right-4 top-1/4 opacity-[0.04] dark:opacity-[0.02] pointer-events-none select-none">
-          <OrigamiDecoration name="envelope" size={240} floating />
-        </div>
-
         <div className="w-full">
           <PageTransition>
             <Card className="border border-border/50 max-w-md w-full mx-auto bg-card/60 backdrop-blur-md rounded-3xl overflow-hidden shadow-xl">

@@ -74,11 +74,6 @@ export default function SignupPage() {
         size="sm"
         className="min-h-[85vh] flex flex-col justify-center items-center py-12 relative"
       >
-        {/* Butterfly background decoration */}
-        <div className="absolute left-0 top-1/4 opacity-[0.04] dark:opacity-[0.02] pointer-events-none select-none">
-          <OrigamiDecoration name="butterfly" size={200} floating />
-        </div>
-
         <div className="w-full">
           <PageTransition>
             <Card className="border border-border/50 max-w-md w-full mx-auto bg-card/60 backdrop-blur-md rounded-3xl overflow-hidden shadow-xl">
