@@ -164,6 +164,17 @@ export default function VerifyEmailPage() {
                       </strong>
                       . Please verify your email before continuing to Scout.
                     </p>
+
+                    <div className="p-3.5 rounded-2xl bg-secondary/5 border border-border/40 text-left max-w-xs mx-auto space-y-1.5 text-[11px] text-secondary/80 font-light leading-relaxed">
+                      <span className="font-medium text-foreground text-xs block">
+                        Can&apos;t find it?
+                      </span>
+                      <ul className="list-disc list-inside space-y-1 text-secondary/70">
+                        <li>Check your Spam or Promotions folder.</li>
+                        <li>It may take up to a minute to arrive.</li>
+                        <li>You can resend it after the countdown finishes.</li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
 
