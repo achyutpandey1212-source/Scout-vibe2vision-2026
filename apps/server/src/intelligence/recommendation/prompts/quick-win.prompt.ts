@@ -1,37 +1,42 @@
-import { IRecommendationContext } from '../context/context.types';
+import { IRecommendationContext, ISlotOpportunityContext } from '../context/context.types';
 
-export function buildQuickWinPrompt(context: IRecommendationContext): string {
+export function buildQuickWinPrompt(
+  context: IRecommendationContext,
+  slotCtx?: ISlotOpportunityContext,
+): string {
+  const opp =
+    slotCtx?.opportunityBrief ||
+    context.opportunityContexts?.[2]?.opportunityBrief ||
+    context.opportunity;
+  const match =
+    slotCtx?.matchIntelligence ||
+    context.opportunityContexts?.[2]?.matchIntelligence ||
+    context.matchAnalysis;
+
   return `Quick Win Slot Instructions:
-- Objective: Explain an opportunity with exceptionally high application confidence. Reduces decision fatigue.
-- Tone/Style: Calm, reassuring, practical, low-friction. Avoid overselling or guaranteeing placement.
-- Key Focus: Direct compatibility, fast apply, high chance of resume shortlisting, and minimal barriers to entry.
-- Verdict Style: "This is a practical opportunity where your existing strengths already match the expectations well."
-- Slot Context:
-  * Title: ${context.opportunity.title}
-  * Company: ${context.opportunity.organization}
-  * Type: ${context.opportunity.opportunityType}
-  * Location: ${context.opportunity.location} (Work Mode: ${context.opportunity.workMode})
-  * Overall Match Score: ${context.matchAnalysis.overallMatch}%
-  * Matching Technical Skills: ${context.matchAnalysis.topMatchingSkills.join(', ') || 'None'}
-  * Missing Skills/Gaps: ${context.matchAnalysis.missingSkills.join(', ') || 'None'}
-  * Match Insights: ${context.humanReadableSummary}
-  * Application Urgency: ${context.insights.applicationUrgency}
-  * Resume Fit Level: ${context.insights.resumeFit}
+- Objective: Explain an opportunity with exceptionally high application confidence and direct fit.
+- Persona Verdict Focus: "This is a practical opportunity where your existing strengths already match the expectations well."
+- Target Role: ${opp?.role || opp?.title} at ${opp?.company || opp?.organization}
+- Key Match Reason: ${match?.reasonCandidateRankedHighly || 'High compatibility and fast shortlist potential.'}
+- Required Skills: ${(opp?.requiredSkills || []).join(', ')}
+- Top Matching Skills: ${(match?.topMatchingSkills || []).join(', ')}
+- Skill Gaps: ${(match?.missingSkills || []).join(', ') || 'None'}
+- Relevant Projects: ${(match?.relevantProjects || []).join(', ') || 'General profile match'}
 
-Please construct a comprehensive Career Report return format:
+Construct a detailed Career Report with:
 - executiveSummary: 2-3 concise editorial sentences explaining why this matters.
 - whyScoutPickedThis: Highly detailed evidence-driven explanation citing profile/role alignment.
 - strongestStrengths: 3-5 concise bullets detailing candidate technical strengths matching this role.
-- strengths: 3-5 concise bullets (can duplicate strongestStrengths).
-- challenges: list of genuine gaps with reassurance (e.g. "While Kubernetes experience is preferred, your backend foundation makes this a reasonable gap to bridge").
+- strengths: 3-5 concise bullets.
+- challenges: list of genuine gaps with reassurance.
 - resumeImprovements: 3-5 specific, actionable suggestions for how to tailor the resume for this role.
-- interviewPrep: 3-5 likely interview topics. Reference the specific role and the candidate's background.
-- applicationConfidence: { level: "Very Competitive" or "Competitive" or "Moderate Match" or "Stretch Opportunity" or "High Risk", explanation: "Encouraging mentor confidence note explaining why" }
+- interviewPrep: 3-5 likely interview topics referencing candidate's projects.
+- applicationConfidence: { level: "Very Competitive" or "Competitive", explanation: "High chance of shortlisting" }
 - nextAction: One specific 30-60 minute action step before applying.
-- scoutVerdict: { verdict: "Apply Immediately" or "Apply After Small Improvements" or "Stretch Opportunity" or "Probably Skip" or "Monitor Later", explanation: "This is a practical opportunity where your existing strengths already match the expectations well." }
-- applicationStrategy: Practical mentoring on how to apply (emphasize relevant projects, tailor resume sections, highlight Git repositories).
+- scoutVerdict: { verdict: "Apply Immediately", explanation: "This is a practical opportunity where your existing strengths already match the expectations well." }
+- applicationStrategy: Practical mentoring on how to apply.
 - preparationChecklist: Checklist of actionable prep items (max 6 items).
-- personalizedReason: Compact (<=250 chars) summary combining Why You + First Step.
+- personalizedReason: Compact (<=250 chars) summary.
 - firstAction: One 30-minute actionable step (<=150 chars).
 - confidenceMessage: Encouraging note (<=150 chars).
 - whyNow: Why timing matters (<=150 chars).

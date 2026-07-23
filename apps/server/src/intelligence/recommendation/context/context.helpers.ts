@@ -3,6 +3,10 @@ import {
   IExperienceSummary,
   IRecommendationInsights,
   IOpportunitySummary,
+  ICandidateBrief,
+  IOpportunityBrief,
+  IMatchIntelligence,
+  IPortfolioSummary,
 } from './context.types';
 
 /**
@@ -187,7 +191,6 @@ export function categorizeExperience(experience: any[]): IExperienceSummary {
     const role = (exp.role || exp.title || '').toLowerCase();
     const company = (exp.company || '').toLowerCase();
     const desc = (exp.description || '').toLowerCase();
-    const fullText = `${role} ${company} ${desc}`;
 
     const formattedEntry = `${exp.role || 'Member'} at ${exp.company || 'Organization'}`;
 
@@ -233,7 +236,6 @@ export function categorizeExperience(experience: any[]): IExperienceSummary {
     ) {
       summary.openSource.push(formattedEntry);
     } else {
-      // Default to internships if it feels like work, else general achievements
       if (role.length > 0) {
         summary.internships.push(formattedEntry);
       }
@@ -285,41 +287,37 @@ export function determineInsights(
   opportunity: any,
   snapshot: any,
 ): IRecommendationInsights {
-  const careerStage = snapshot.education.currentYear
+  const careerStage = snapshot.education?.currentYear
     ? `${snapshot.education.currentYear}th year student`
     : 'Entry Level';
 
   const score = totalScore;
 
-  // Competitiveness based on match score
   let estimatedCompetitiveness: 'High' | 'Medium' | 'Low' = 'Medium';
-  if (score >= 85)
-    estimatedCompetitiveness = 'Low'; // high match means easier/better fit
+  if (score >= 85) estimatedCompetitiveness = 'Low';
   else if (score < 60) estimatedCompetitiveness = 'High';
 
-  // Application Urgency
   let applicationUrgency: 'High' | 'Medium' | 'Low' = 'Medium';
   if (opportunity.deadline) {
     const diff = new Date(opportunity.deadline).getTime() - Date.now();
     if (diff < 3 * 24 * 60 * 60 * 1000 && diff > 0) {
-      applicationUrgency = 'High'; // less than 3 days
+      applicationUrgency = 'High';
     } else if (diff < 0) {
       applicationUrgency = 'Low';
     }
   }
 
-  // Growth, learning potential & resume fit
   let growthPotential: 'High' | 'Medium' | 'Low' = 'Medium';
-  if (breakdown.careerGoal > 15) growthPotential = 'High';
-  else if (breakdown.careerGoal < 8) growthPotential = 'Low';
+  if (breakdown?.careerGoal > 15) growthPotential = 'High';
+  else if (breakdown?.careerGoal < 8) growthPotential = 'Low';
 
   let learningPotential: 'High' | 'Medium' | 'Low' = 'Medium';
-  if (breakdown.projectMatch > 15) learningPotential = 'High';
-  else if (breakdown.projectMatch < 8) learningPotential = 'Low';
+  if (breakdown?.projectMatch > 15) learningPotential = 'High';
+  else if (breakdown?.projectMatch < 8) learningPotential = 'Low';
 
   let resumeFit: 'High' | 'Medium' | 'Low' = 'Medium';
-  if (breakdown.skillMatch > 20) resumeFit = 'High';
-  else if (breakdown.skillMatch < 10) resumeFit = 'Low';
+  if (breakdown?.skillMatch > 20) resumeFit = 'High';
+  else if (breakdown?.skillMatch < 10) resumeFit = 'Low';
 
   const confidenceScore = Math.round(score * 0.95);
   const priorityScore = Math.round(score + (applicationUrgency === 'High' ? 10 : 0));
@@ -373,4 +371,83 @@ export function generateHumanReadableSummary(
   }
 
   return summary;
+}
+
+/**
+ * Generates deterministic strengths for CandidateBrief.
+ */
+export function generateDeterministicStrengths(skills: string[], snapshot: any): string[] {
+  const lowerSkills = (skills || []).map((s) => s.toLowerCase());
+  const strengths: string[] = [];
+
+  if (
+    lowerSkills.some(
+      (s) =>
+        s.includes('node') || s.includes('express') || s.includes('django') || s.includes('nest'),
+    )
+  ) {
+    strengths.push('Strong backend foundation');
+  }
+  if (
+    lowerSkills.some(
+      (s) =>
+        s.includes('ai') ||
+        s.includes('ml') ||
+        s.includes('llm') ||
+        s.includes('gemini') ||
+        s.includes('pytorch') ||
+        s.includes('langchain') ||
+        s.includes('langgraph'),
+    )
+  ) {
+    strengths.push('Good AI workflow exposure');
+  }
+  if (snapshot?.projects && snapshot.projects.length > 0) {
+    strengths.push('Practical project portfolio');
+  }
+  if (
+    lowerSkills.some(
+      (s) =>
+        s.includes('javascript') ||
+        s.includes('typescript') ||
+        s.includes('react') ||
+        s.includes('node'),
+    )
+  ) {
+    strengths.push('Strong JavaScript ecosystem');
+  }
+  if (lowerSkills.some((s) => s.includes('sql') || s.includes('mongo') || s.includes('postgres'))) {
+    strengths.push('Database design and query optimization');
+  }
+  if (strengths.length === 0) {
+    strengths.push('Hands-on software development capability');
+  }
+  return strengths;
+}
+
+/**
+ * Generates deterministic growth areas for CandidateBrief.
+ */
+export function generateDeterministicGrowthAreas(skills: string[]): string[] {
+  const lowerSkills = (skills || []).map((s) => s.toLowerCase());
+  const growthAreas: string[] = [];
+
+  if (
+    !lowerSkills.some((s) => s.includes('docker') || s.includes('k8s') || s.includes('kubernetes'))
+  ) {
+    growthAreas.push('Docker & containerization');
+  }
+  if (!lowerSkills.some((s) => s.includes('fastapi') || s.includes('grpc'))) {
+    growthAreas.push('FastAPI & microservices');
+  }
+  if (!lowerSkills.some((s) => s.includes('test') || s.includes('jest') || s.includes('vitest'))) {
+    growthAreas.push('Automated testing & CI/CD');
+  }
+  if (!lowerSkills.some((s) => s.includes('aws') || s.includes('gcp') || s.includes('azure'))) {
+    growthAreas.push('Cloud deployment & serverless');
+  }
+  if (growthAreas.length === 0) {
+    growthAreas.push('Advanced system design & performance tuning');
+  }
+  return growthAreas;
 }

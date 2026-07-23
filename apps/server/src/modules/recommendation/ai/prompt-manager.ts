@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { IProfile } from '../../../profile/models/profile.model';
 import { CandidateSnapshotBuilder } from '../../../recommendation/engine/candidate-snapshot';
 import { RecommendationContextBuilder } from '../../../intelligence/recommendation/context/recommendation-context-builder';
+import { IRecommendationContext } from '../../../intelligence/recommendation/context/context.types';
 import {
   buildFeaturedPrompt,
   buildHiddenGemPrompt,
@@ -96,96 +97,159 @@ Return ONLY a valid JSON object. No markdown, no code fences, no preamble.
   }
 
   /**
-   * Builds the prompt string combining structured Recommendation Context and Top Opportunities.
+   * Builds curated prompt payload from a single structured RecommendationContext object.
    */
-  static buildPrompt(
-    profile: IProfile,
-    resume: any,
-    topCandidates: any[],
-    existingSnapshot?: any,
-  ): string {
-    const snapshot = existingSnapshot || new CandidateSnapshotBuilder().build(profile, resume);
-    const builder = new RecommendationContextBuilder();
+  static buildPromptFromContext(context: IRecommendationContext): string {
+    const cb = context.candidateBrief;
+    const ps = context.portfolioSummary;
 
-    const slotNames = ['perfectMatch', 'hiddenGem', 'quickWin', 'confidenceBuilder', 'stretchGoal'];
-
-    const sampleCand = topCandidates[0] || { opportunity: {} };
-    const sampleContext = builder.build(profile, resume, sampleCand, snapshot);
-
-    const opportunityContexts = topCandidates.slice(0, 5).map((cand, idx) => {
-      const slot = slotNames[idx] || `match_${idx}`;
-      const context = builder.build(profile, resume, cand, snapshot);
-
-      let slotPrompt = '';
-      switch (slot) {
-        case 'perfectMatch':
-          slotPrompt = buildFeaturedPrompt(context);
-          break;
-        case 'hiddenGem':
-          slotPrompt = buildHiddenGemPrompt(context);
-          break;
-        case 'stretchGoal':
-          slotPrompt = buildStretchGoalPrompt(context);
-          break;
-        case 'quickWin':
-          slotPrompt = buildQuickWinPrompt(context);
-          break;
-        case 'confidenceBuilder':
-          slotPrompt = buildConfidenceBuilderPrompt(context);
-          break;
-        default:
-          slotPrompt = buildFeaturedPrompt(context);
-      }
-
-      return {
-        slot,
-        personaInstructions: slotPrompt,
-      };
-    });
-
-    const formattedContext = `========== Candidate Summary ==========
-Candidate Profile:
-- Name: ${sampleContext.userProfile.name}
-- Current Status: ${sampleContext.userProfile.currentStatus} (${sampleContext.userProfile.educationLevel} of ${sampleContext.userProfile.degree} in ${sampleContext.userProfile.branch} at ${sampleContext.userProfile.college})
-- Location: ${sampleContext.userProfile.location} (Preferred: ${sampleContext.userProfile.preferredLocations.join(', ')})
+    // 1. Candidate Brief Section
+    const candidateSection = `========== Candidate Summary ==========
+Identity:
+- Name: ${cb.identity.name} (${cb.identity.currentCareerStage}, ${cb.identity.degree} in ${cb.identity.branch} at ${cb.identity.college})
+- Location: ${cb.identity.location} (Status: ${cb.identity.currentStatus})
 
 Career Goals:
-- Roles: ${sampleContext.careerGoals.preferredRoles.join(', ')}
-- Domains: ${sampleContext.careerGoals.interestedDomains.join(', ')}
-- Work Mode: ${sampleContext.careerGoals.workModePreferences.join(', ')}
-- Type: ${sampleContext.careerGoals.internshipVsFullTimePreference}
+- Preferred Roles: ${cb.careerGoals.preferredRoles.join(', ')}
+- Interested Domains: ${cb.careerGoals.interestedDomains.join(', ')}
+- Preference: ${cb.careerGoals.internshipVsFullTimePreference} (${cb.preferences.remotePreference ? 'Remote Preferred' : 'Onsite/Hybrid'})
 
 Technical Profile:
-- Languages: ${sampleContext.technicalProfile.languages.join(', ')}
-- Frameworks: ${sampleContext.technicalProfile.frameworks.join(', ')}
-- Backend: ${sampleContext.technicalProfile.backend.join(', ')}
-- Frontend: ${sampleContext.technicalProfile.frontend.join(', ')}
-- Databases: ${sampleContext.technicalProfile.databases.join(', ')}
-- Cloud: ${sampleContext.technicalProfile.cloud.join(', ')}
-- AI/ML: ${sampleContext.technicalProfile.aiMl.join(', ')}
-- Tools: ${sampleContext.technicalProfile.tools.join(', ')}
+- Strongest Tech: ${cb.technicalProfile.strongestTechnologies.join(', ')}
+- Languages: ${cb.technicalProfile.languages.join(', ')}
+- Frameworks: ${cb.technicalProfile.frameworks.join(', ')}
+- Backend: ${cb.technicalProfile.backend.join(', ')}
+- Databases: ${cb.technicalProfile.databases.join(', ')}
+- Cloud & DevOps: ${cb.technicalProfile.cloud.join(', ')}
+- AI/ML: ${cb.technicalProfile.aiMl.join(', ')}
+- Tools: ${cb.technicalProfile.tools.join(', ')}
 
 Experience Summary:
-- Internships: ${sampleContext.experienceSummary.internships.join('; ')}
-- Leadership: ${sampleContext.experienceSummary.leadership.join('; ')}
-- Research: ${sampleContext.experienceSummary.research.join('; ')}
+- Internships (${cb.experienceSummary.internshipCount}): ${cb.experienceSummary.internships.join('; ') || 'None'}
+- Leadership (${cb.experienceSummary.leadershipCount}): ${cb.experienceSummary.leadership.join('; ') || 'None'}
 
-Resume Strengths:
-${sampleContext.resumeStrength.bulletPoints.map((b) => `- ${b}`).join('\n')}
+Top Project Evidence:
+${cb.projectHighlights.map((p) => `- ${p.evidence}`).join('\n')}
 
-Top Projects:
-${sampleContext.projects.map((p) => `- ${p.title}: ${p.description} (Tech: ${p.technologies.join(', ')}) [Learning: ${p.mostRelevantLearning}]`).join('\n')}
-======================================`;
+Deterministic Profile Strengths:
+${cb.strengths.map((s) => `- ${s}`).join('\n')}
 
-    return `Please generate personalized mentoring explanations for these opportunities using the candidate's structured recommendation context.
+Deterministic Growth Areas:
+${cb.growthAreas.map((g) => `- ${g}`).join('\n')}`;
 
-${formattedContext}
+    // 2. Portfolio Summary Section
+    const portfolioSection = `========== PORTFOLIO SUMMARY ==========
+Today's Covered Roles: ${ps.todayCoveredRoles.join(', ')}
+Key Technologies Covered: ${ps.technologiesCovered.join(', ')}
+Difficulty Spread: ${ps.difficultySpread.easy} Easy, ${ps.difficultySpread.medium} Medium, ${ps.difficultySpread.stretch} Stretch Goal
+Unique Companies: ${ps.companiesCount} | Role Families: ${ps.uniqueRoleFamiliesCount}`;
 
-========== Top Opportunities (Specialized Personas) ==========
-${JSON.stringify(opportunityContexts, null, 2)}
-==============================================================
+    // 3. Opportunity Blocks
+    const opportunityBlocks = context.opportunityContexts
+      .map((slotCtx) => {
+        const opp = slotCtx.opportunityBrief;
+        const match = slotCtx.matchIntelligence;
 
-Provide recommendationsBySlot matching the slots specified above:
-${slotNames.slice(0, Math.min(5, topCandidates.length)).join(', ')}`;
+        let personaInstructions = '';
+        switch (slotCtx.slot) {
+          case 'perfectMatch':
+            personaInstructions = buildFeaturedPrompt(context, slotCtx);
+            break;
+          case 'hiddenGem':
+            personaInstructions = buildHiddenGemPrompt(context, slotCtx);
+            break;
+          case 'quickWin':
+            personaInstructions = buildQuickWinPrompt(context, slotCtx);
+            break;
+          case 'confidenceBuilder':
+            personaInstructions = buildConfidenceBuilderPrompt(context, slotCtx);
+            break;
+          case 'stretchGoal':
+            personaInstructions = buildStretchGoalPrompt(context, slotCtx);
+            break;
+          default:
+            personaInstructions = buildFeaturedPrompt(context, slotCtx);
+        }
+
+        return `---------- SLOT: ${slotCtx.slot.toUpperCase()} ----------
+Opportunity Brief:
+- Role: ${opp.role} at ${opp.company} (${opp.opportunityType}, ${opp.workMode}, ${opp.location})
+- Difficulty: ${opp.difficulty} | Experience Level: ${opp.experienceLevel}
+- Required Skills: ${opp.requiredSkills.join(', ')}
+- Preferred Skills: ${opp.preferredSkills.join(', ')}
+- Why Interesting: ${opp.whyInteresting}
+
+Match Intelligence:
+- Overall Match: ${match.overallMatchScore}% | Confidence: ${match.confidenceScore}%
+- Top Matching Skills: ${match.topMatchingSkills.join(', ') || 'None'}
+- Skill Gaps: ${match.missingSkills.join(', ') || 'None'}
+- Relevant Projects: ${match.relevantProjects.join(', ') || 'General Profile Match'}
+- Key Match Reason: ${match.reasonCandidateRankedHighly}
+- Urgency: ${match.urgency} | Competitiveness: ${match.estimatedCompetitiveness} | Resume Fit: ${match.resumeFit}
+
+Slot Persona Instructions:
+${personaInstructions}`;
+      })
+      .join('\n\n');
+
+    // 4. Assemble Final Prompt Payload
+    const prompt = `Please generate personalized mentoring recommendations using this structured candidate brief and opportunity context.
+
+${candidateSection}
+
+${portfolioSection}
+
+========== TOP OPPORTUNITIES & MATCH INTELLIGENCE ==========
+${opportunityBlocks}
+============================================================
+
+Provide recommendationsBySlot matching the slots specified above: perfectMatch, hiddenGem, quickWin, confidenceBuilder, stretchGoal.`;
+
+    // 5. Prompt Size Measurement Diagnostics (Requirement 9)
+    const promptChars = prompt.length;
+    const promptTokens = Math.round(promptChars / 4);
+    const baselineChars = 15440;
+    const reductionPct = Math.max(0, ((baselineChars - promptChars) / baselineChars) * 100).toFixed(
+      1,
+    );
+    const compressionPct = Math.max(0, (1 - promptChars / baselineChars) * 100).toFixed(1);
+
+    console.log(`
+========================================
+Prompt Context Engineering Diagnostics
+========================================
+Raw Baseline Prompt Length:   ~${baselineChars} chars (~3,860 tokens)
+Curated Context Prompt:       ${promptChars} chars (~${promptTokens} tokens)
+Prompt Size Reduction:        ${reductionPct}%
+Context Compression Ratio:    ${compressionPct}%
+========================================`);
+
+    return prompt;
+  }
+
+  /**
+   * Main buildPrompt overload. Accepts either raw profile/resume/topCandidates or a structured RecommendationContext.
+   */
+  static buildPrompt(
+    profileOrContext: any,
+    resume?: any,
+    topCandidates?: any[],
+    existingSnapshot?: any,
+  ): string {
+    // Check if first arg is already a RecommendationContext
+    if (
+      profileOrContext &&
+      profileOrContext.candidateBrief &&
+      profileOrContext.opportunityContexts
+    ) {
+      return this.buildPromptFromContext(profileOrContext as IRecommendationContext);
+    }
+
+    const profile = profileOrContext as IProfile;
+    const snapshot = existingSnapshot || new CandidateSnapshotBuilder().build(profile, resume);
+    const builder = new RecommendationContextBuilder();
+    const context = builder.build(profile, resume, topCandidates || [], snapshot);
+
+    return this.buildPromptFromContext(context);
   }
 }

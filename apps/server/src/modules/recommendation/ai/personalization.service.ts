@@ -23,10 +23,9 @@ export class PersonalizationService {
     const startTime = Date.now();
     const snapshot = existingSnapshot || new CandidateSnapshotBuilder().build(profile, resume);
     const builder = new RecommendationContextBuilder();
-    const sampleCand = top5[0] || { opportunity: {} };
-    const sampleContext = builder.build(profile, resume, sampleCand, snapshot);
+    const recContext = builder.build(profile, resume, top5, snapshot);
 
-    const prompt = PromptManager.buildPrompt(profile, resume, top5, snapshot);
+    const prompt = PromptManager.buildPrompt(recContext);
     const promptHash = PromptManager.hashPrompt(prompt);
     const systemInstruction = PromptManager.getSystemInstructions();
 
@@ -143,10 +142,10 @@ preparationChecklist:  ${fieldStatus('preparationChecklist')}
 Recommendation Personalization Report
 ========================================
 
-Candidate Summary Size:      ${sampleContext.humanReadableSummary.length} chars
-Projects Referenced:         ${sampleContext.projects.length}
-Experience Referenced:       ${sampleContext.experienceSummary.internships.length + sampleContext.experienceSummary.leadership.length}
-Strongest Technologies:      ${sampleContext.technicalProfile.languages.concat(sampleContext.technicalProfile.frameworks).slice(0, 5).join(', ')}
+Candidate Summary Size:      ${recContext.humanReadableSummary?.length || 0} chars
+Projects Referenced:         ${recContext.candidateBrief.projectHighlights.length}
+Experience Referenced:       ${recContext.candidateBrief.experienceSummary.internshipCount + recContext.candidateBrief.experienceSummary.leadershipCount}
+Strongest Technologies:      ${recContext.candidateBrief.technicalProfile.strongestTechnologies.slice(0, 5).join(', ')}
 
 Prompt Length:               ${prompt.length} chars
 Response Length:             ${responseText.length} chars
