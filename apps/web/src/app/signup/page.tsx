@@ -17,10 +17,13 @@ import {
 import { AppLayout } from '@/components/layout/AppLayout';
 import { track } from '@/lib/analytics';
 import { ROUTES } from '@/lib/constants/routes';
+import { useBackendStatus } from '@/context/backend-status-context';
+import { BackendReadinessBanner } from '@/components/common/BackendReadinessBanner';
 import { Mail, Lock, ShieldAlert, ArrowRight, UserCheck, KeyRound } from 'lucide-react';
 
 export default function SignupPage() {
   const { signUpWithEmail, loading: authLoading } = useAuth();
+  const { isReady } = useBackendStatus();
   const router = useRouter();
 
   // Form states
@@ -62,10 +65,11 @@ export default function SignupPage() {
     }
   };
 
-  const isAnyLoading = authLoading || submitting;
+  const isAnyLoading = authLoading || submitting || !isReady;
 
   return (
     <AppLayout showAccents={true}>
+      <BackendReadinessBanner />
       <Container
         size="sm"
         className="min-h-[85vh] flex flex-col justify-center items-center py-12 relative"
@@ -110,8 +114,9 @@ export default function SignupPage() {
                 {/* Form Input fields */}
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <TextInput
-                    label="Preferred Name"
-                    placeholder="Maya Sharma"
+                    label="Full Name"
+                    type="text"
+                    placeholder="Alex Morgan"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     icon={<UserCheck className="w-4 h-4" />}
@@ -129,7 +134,7 @@ export default function SignupPage() {
                   <TextInput
                     label="Password"
                     type="password"
-                    placeholder="Choose password"
+                    placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     icon={<Lock className="w-4 h-4" />}
@@ -138,7 +143,7 @@ export default function SignupPage() {
                   <TextInput
                     label="Confirm Password"
                     type="password"
-                    placeholder="Confirm password"
+                    placeholder="••••••••"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     icon={<KeyRound className="w-4 h-4" />}
@@ -153,7 +158,7 @@ export default function SignupPage() {
                     disabled={isAnyLoading}
                     iconRight={<ArrowRight className="w-4 h-4" />}
                   >
-                    Create Account
+                    {!isReady ? 'Starting...' : 'Create Account'}
                   </Button>
                 </form>
 

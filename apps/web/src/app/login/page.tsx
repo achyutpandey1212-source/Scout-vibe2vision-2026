@@ -17,10 +17,13 @@ import {
 import { AppLayout } from '@/components/layout/AppLayout';
 import { track } from '@/lib/analytics';
 import { ROUTES } from '@/lib/constants/routes';
+import { useBackendStatus } from '@/context/backend-status-context';
+import { BackendReadinessBanner } from '@/components/common/BackendReadinessBanner';
 import { Mail, Lock, ShieldAlert, ArrowRight, UserPlus } from 'lucide-react';
 
 export default function LoginPage() {
   const { signInWithGoogle, signInWithEmail, signInAsGuest, loading: authLoading } = useAuth();
+  const { isReady } = useBackendStatus();
   const router = useRouter();
 
   // Form states
@@ -82,10 +85,11 @@ export default function LoginPage() {
     }
   };
 
-  const isAnyLoading = authLoading || submitting || guestLoading || googleLoading;
+  const isAnyLoading = authLoading || submitting || guestLoading || googleLoading || !isReady;
 
   return (
     <AppLayout showAccents={true}>
+      <BackendReadinessBanner />
       <Container
         size="sm"
         className="min-h-[85vh] flex flex-col justify-center items-center py-12 relative"
@@ -156,7 +160,7 @@ export default function LoginPage() {
                     disabled={isAnyLoading}
                     iconRight={<ArrowRight className="w-4 h-4" />}
                   >
-                    Continue with Email
+                    {!isReady ? 'Starting...' : 'Continue with Email'}
                   </Button>
                 </form>
 

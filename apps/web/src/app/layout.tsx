@@ -88,6 +88,8 @@ export const viewport = {
   initialScale: 1,
 };
 
+import { BackendStatusProvider } from '@/context/backend-status-context';
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -103,7 +105,9 @@ export default function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
-            <AuthProvider>{children}</AuthProvider>
+            <BackendStatusProvider>
+              <AuthProvider>{children}</AuthProvider>
+            </BackendStatusProvider>
           </ThemeProvider>
         </PostHogProvider>
       </body>

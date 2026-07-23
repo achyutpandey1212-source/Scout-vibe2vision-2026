@@ -15,10 +15,13 @@ import { track } from '@/lib/analytics';
 import { useScrollDepth } from '@/hooks/useScrollDepth';
 import { ROUTES } from '@/lib/constants/routes';
 import { opportunitiesApi, sourcesApi } from '@/lib/api';
+import { useBackendStatus } from '@/context/backend-status-context';
+import { BackendReadinessBanner } from '@/components/common/BackendReadinessBanner';
 import { ArrowRight, Compass, Sparkles, ShieldCheck } from 'lucide-react';
 
 export default function Home() {
   const { user, loading } = useAuth();
+  const { isReady } = useBackendStatus();
   const router = useRouter();
   const [showSplash, setShowSplash] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -87,6 +90,7 @@ export default function Home() {
   };
 
   const handleCTA = () => {
+    if (!isReady && !user) return; // Prevent clicks while starting
     track('cta_clicked', {
       cta: user ? 'Go to Dashboard' : 'Get Started',
       location: 'Hero',
@@ -125,6 +129,9 @@ export default function Home() {
 
   return (
     <AppLayout showAccents={false}>
+      {/* ── 0. BACKEND READINESS BANNER ── */}
+      <BackendReadinessBanner />
+
       {/* ── 1. NAVBAR ── */}
       <header
         className={`sticky top-0 w-full z-50 transition-all duration-200 border-b select-none ${
@@ -143,13 +150,20 @@ export default function Home() {
                 variant="ghost"
                 size="sm"
                 onClick={() => router.push(ROUTES.LOGIN)}
+                disabled={!isReady}
                 className="hidden sm:inline-flex text-xs"
               >
-                Sign In
+                {!isReady ? 'Starting...' : 'Sign In'}
               </Button>
             )}
-            <Button variant="primary" size="sm" onClick={handleCTA} loading={loading}>
-              {user ? 'Go to Dashboard' : 'Get Started'}
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleCTA}
+              loading={loading}
+              disabled={!isReady && !user}
+            >
+              {user ? 'Go to Dashboard' : !isReady ? 'Starting...' : 'Get Started'}
             </Button>
           </div>
         </Container>
@@ -189,10 +203,11 @@ export default function Home() {
                 size="lg"
                 onClick={handleCTA}
                 loading={loading}
+                disabled={!isReady && !user}
                 iconRight={<ArrowRight className="w-4 h-4" />}
                 className="px-8 text-base"
               >
-                Get Started
+                {user ? 'Go to Dashboard' : !isReady ? 'Starting...' : 'Get Started'}
               </Button>
               <Button
                 variant="ghost"
@@ -439,10 +454,11 @@ export default function Home() {
               size="lg"
               onClick={handleCTA}
               loading={loading}
+              disabled={!isReady && !user}
               iconRight={<ArrowRight className="w-4 h-4" />}
               className="px-8 text-base"
             >
-              Get Started
+              {user ? 'Go to Dashboard' : !isReady ? 'Starting...' : 'Get Started'}
             </Button>
           </div>
         </Container>
