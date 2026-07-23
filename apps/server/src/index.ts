@@ -19,9 +19,16 @@ const allowedOrigins = ['http://localhost:3000', env.CLIENT_URL, env.FRONTEND_UR
   (origin): origin is string => Boolean(origin),
 );
 
+const isAllowedOrigin = (origin: string): boolean => {
+  if (allowedOrigins.includes(origin)) return true;
+  // Allow all Vercel production & preview deployments (*.vercel.app)
+  if (origin.endsWith('.vercel.app') || origin.includes('vercel.app')) return true;
+  return false;
+};
+
 const corsOptions: CorsOptions = {
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || isAllowedOrigin(origin)) {
       callback(null, true);
       return;
     }
@@ -41,6 +48,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Lightweight Backend Readiness Endpoint (Cold Start Detection)
 app.get(['/health', '/api/health'], (_req: Request, res: Response) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.status(200).json({
     status: 'ok',
     service: 'Scout Backend',
