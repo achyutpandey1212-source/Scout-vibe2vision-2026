@@ -5,6 +5,8 @@ import { AppLayout } from './AppLayout';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { MobileNav } from './MobileNav';
+import { Footer } from './Footer';
+import { FounderCard } from '../engagement/FounderCard';
 import { Container } from '../ui/layout';
 
 interface DashboardLayoutProps {
@@ -36,18 +38,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, titl
             <Container size="wide">{children}</Container>
           </main>
 
-          {/* Editorial Footer */}
-          <footer className="w-full border-t border-border/60 py-6 bg-card/30 text-center text-xs text-muted-foreground relative z-10 hidden md:block">
-            <Container
-              size="wide"
-              className="flex flex-col sm:flex-row items-center justify-between gap-4"
-            >
-              <span>© {new Date().getFullYear()} Scout. All rights reserved.</span>
-              <span className="tracking-widest uppercase text-[10px] text-muted-foreground/60 font-sans">
-                Scout Opportunity Intelligence
-              </span>
-            </Container>
-          </footer>
+          {/* Universal Editorial Footer */}
+          <Footer />
         </div>
 
         {/* Mobile Dedicated Bottom Navigation */}

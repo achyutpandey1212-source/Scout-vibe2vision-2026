@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Compass, Bookmark } from 'lucide-react';
 import { ThemeToggle } from '../theme-toggle';
-import { BrandLogo } from '../branding';
+import { Brand } from '../common/Brand';
 import { useAuth } from '@/context/auth-context';
 import { profileApi } from '@/lib/api';
 import { ROUTES } from '@/lib/constants/routes';
@@ -66,12 +66,7 @@ export const Sidebar: React.FC = () => {
     >
       {/* ── Brand Logo Header ── */}
       <div className="h-20 px-6 flex items-center border-b border-border/40">
-        <Link
-          href={ROUTES.DASHBOARD}
-          className="flex items-center outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-xl p-1.5 transition-opacity hover:opacity-90"
-        >
-          <BrandLogo size="md" showWordmark={true} />
-        </Link>
+        <Brand size="md" href={ROUTES.DASHBOARD} />
       </div>
 
       {/* ── Primary Navigation (Middle) ── */}

@@ -4,10 +4,13 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { motion } from 'framer-motion';
-import { Container, Section, Button, Grid, ScoutOpeningSequence } from '@/components/ui';
+import { Container, Section, Button, Grid } from '@/components/ui';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { SourceMarquee, DashboardPreviewMockup } from '@/components/landing';
+import { Brand } from '@/components/common/Brand';
+import { Footer } from '@/components/layout/Footer';
+import { FounderCard } from '@/components/engagement/FounderCard';
 import { ROUTES } from '@/lib/constants/routes';
 import { opportunitiesApi, sourcesApi } from '@/lib/api';
 import { ArrowRight, Compass, Sparkles, ShieldCheck } from 'lucide-react';
@@ -15,7 +18,7 @@ import { ArrowRight, Compass, Sparkles, ShieldCheck } from 'lucide-react';
 export default function Home() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [showSplash, setShowSplash] = useState(true);
+  const [showSplash, setShowSplash] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [liveOpportunityCount, setLiveOpportunityCount] = useState<number | null>(null);
   const [liveSourceCount, setLiveSourceCount] = useState<number | null>(null);
@@ -85,10 +88,6 @@ export default function Home() {
     }
   };
 
-  if (showSplash) {
-    return <ScoutOpeningSequence onComplete={handleSplashComplete} />;
-  }
-
   // Fade up animation variants
   const fadeUp = {
     hidden: { opacity: 0, y: 12 },
@@ -118,23 +117,7 @@ export default function Home() {
         }`}
       >
         <Container size="xl" className="h-16 flex items-center justify-between">
-          <div
-            className="flex items-center gap-2.5 cursor-pointer"
-            onClick={() => router.push('/')}
-          >
-            <svg
-              className="w-6.5 h-6.5 text-primary"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            >
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-            </svg>
-            <span className="text-lg font-medium tracking-tight font-sans text-foreground">
-              Scout
-            </span>
-          </div>
+          <Brand size="lg" href="/" />
 
           <div className="flex items-center gap-4">
             <ThemeToggle />
@@ -449,51 +432,10 @@ export default function Home() {
       </Section>
 
       {/* ── 8. EDITORIAL FOOTER ── */}
-      <footer className="w-full border-t border-border/80 py-12 bg-card text-xs text-muted-foreground select-none">
-        <Container
-          size="xl"
-          className="flex flex-col md:flex-row items-center justify-between gap-6"
-        >
-          <div className="flex items-center gap-2">
-            <svg
-              className="w-5 h-5 text-primary"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            >
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-            </svg>
-            <span className="text-sm font-semibold tracking-tight text-foreground font-sans">
-              Scout
-            </span>
-          </div>
+      <Footer />
 
-          <div className="flex flex-wrap items-center justify-center gap-6 text-xs text-muted-foreground">
-            <a href="/" className="hover:text-foreground transition-colors">
-              Home
-            </a>
-            <a href="/explore" className="hover:text-foreground transition-colors">
-              Discover
-            </a>
-            <a href="/bookmarks" className="hover:text-foreground transition-colors">
-              Saved
-            </a>
-            <a
-              href="https://github.com"
-              target="_blank"
-              rel="noreferrer"
-              className="hover:text-foreground transition-colors"
-            >
-              GitHub
-            </a>
-          </div>
-
-          <span className="text-[11px] text-muted-foreground/60">
-            © {new Date().getFullYear()} Scout. All rights reserved.
-          </span>
-        </Container>
-      </footer>
+      {/* ── 9. FOUNDER CARD (LANDING EXCLUSIVE) ── */}
+      <FounderCard />
     </AppLayout>
   );
 }

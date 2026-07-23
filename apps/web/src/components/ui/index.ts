@@ -9,7 +9,6 @@ export * from './decorations';
 export * from './nav';
 export * from './motion';
 export * from './UniversalLoader';
-export * from './ScoutOpeningSequence';
 export * from './PageTransition';
 export * from './FormLayout';
 export * from './MultiSelect';
