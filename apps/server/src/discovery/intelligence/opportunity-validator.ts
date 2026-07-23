@@ -1,7 +1,7 @@
 import { Opportunity } from '../extraction/types/opportunity.types';
 import { EligibilityFilter } from '../query-engine/eligibility-filter';
 import { FreshnessFilter } from '../query-engine/freshness-filter';
-import { OpportunityScorer, OpportunityScore } from './opportunity-score';
+import { OpportunityScorer } from './opportunity-score';
 import { GoldOpportunityDetector } from './gold-opportunity-detector';
 
 export interface ValidationResult {

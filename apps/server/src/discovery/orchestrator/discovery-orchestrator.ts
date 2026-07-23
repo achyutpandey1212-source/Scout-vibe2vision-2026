@@ -1,116 +1,12 @@
+import crypto from 'crypto';
 import { DiscoveryRunModel } from '../persistence/discovery-run.model';
 import { RawPageModel } from '../firecrawl/raw-page.model';
+import { CandidateURL } from '../stages/stage1';
+import { CrawledPage } from '../stages/stage2';
 import { DiscoveryContext } from '../types/query.types';
 import { DiscoveryOptions, DiscoveryOrchestratorResponse, PipelineMetrics } from './pipeline.types';
-import { TRUSTED_SOURCES } from '../sources/registry';
-import { Stage1Discovery, CandidateURL } from '../stages/stage1';
-import { Stage2Crawling, CrawledPage } from '../stages/stage2';
-import { Stage3Extraction } from '../stages/stage3';
-import { Stage4QualityAcceptance } from '../stages/stage4';
-import { Stage5Persistence } from '../stages/stage5';
-import { JobBoardExtractor } from '../query-engine/job-board-extractor';
 import { parseDiscoveryInput } from '../utils/input-parser';
-import crypto from 'crypto';
-
-function extractDomain(urlStr: string): string | null {
-  try {
-    const parsed = new URL(urlStr);
-    let host = parsed.hostname.toLowerCase();
-    if (host.startsWith('www.')) host = host.slice(4);
-    return host;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Immediately updates crawl metadata (markCrawled / markFailed) for each candidate domain.
- * Runs in a try/finally block so registry state updates immediately even if execution is interrupted.
- */
-async function updateDomainCrawlStates(
-  candidates: CandidateURL[],
-  crawledPages: CrawledPage[],
-  evaluatedOpps: any[],
-): Promise<void> {
-  const domainMap = new Map<string, { pages: CrawledPage[]; oppsCount: number }>();
-
-  // 1. Map candidates by domain
-  for (const c of candidates) {
-    const dom = c.domain || extractDomain(c.url);
-    if (!dom) continue;
-    const cleanDom = dom.toLowerCase().trim();
-    if (!domainMap.has(cleanDom)) {
-      domainMap.set(cleanDom, { pages: [], oppsCount: 0 });
-    }
-  }
-
-  // 2. Map crawled pages to domain
-  for (const page of crawledPages) {
-    const dom = extractDomain(page.url);
-    if (!dom) continue;
-    const cleanDom = dom.toLowerCase().trim();
-    if (domainMap.has(cleanDom)) {
-      domainMap.get(cleanDom)!.pages.push(page);
-    } else {
-      domainMap.set(cleanDom, { pages: [page], oppsCount: 0 });
-    }
-  }
-
-  // 3. Map evaluated opportunities to domain
-  for (const opp of evaluatedOpps) {
-    const dom = extractDomain(opp.opportunityUrl || opp.sourceUrl || '');
-    if (!dom) continue;
-    const cleanDom = dom.toLowerCase().trim();
-    if (domainMap.has(cleanDom)) {
-      domainMap.get(cleanDom)!.oppsCount++;
-    }
-  }
-
-  // 4. Update each domain in SourceRegistry immediately
-  for (const [dom, data] of domainMap.entries()) {
-    const hasSuccessfulPage = data.pages.some((p) => p.crawlStatus === 'SUCCESS');
-    if (hasSuccessfulPage || data.pages.length > 0) {
-      await sourceRegistryService.markCrawled(dom, {
-        pagesCrawled: data.pages.length,
-        opportunitiesFound: data.oppsCount,
-      });
-    } else {
-      const firstFailure = data.pages[0]?.failureReason || 'SOURCE_FAILURE';
-      await sourceRegistryService.markFailed(dom, firstFailure);
-    }
-  }
-}
-
-/**
- * Persists raw crawled pages to MongoDB to maintain E2E database audits
- */
-async function persistRawPagesCompatibility(crawledPages: CrawledPage[]): Promise<void> {
-  for (const page of crawledPages) {
-    if (page.crawlStatus === 'SUCCESS') {
-      try {
-        const hash = crypto.createHash('sha256').update(page.markdown).digest('hex');
-        await RawPageModel.findOneAndUpdate(
-          { url: page.url },
-          {
-            url: page.url,
-            title: page.title,
-            markdown: page.markdown,
-            metadata: page.metadata,
-            crawledAt: new Date(),
-            hash,
-          },
-          { upsert: true, new: true },
-        );
-      } catch (dbErr: any) {
-        console.error(
-          `[DB Error] Failed to persist legacy RawPage for ${page.url}:`,
-          dbErr.message,
-        );
-      }
-    }
-  }
-}
-
+import { JobBoardExtractor } from '../query-engine/job-board-extractor';
 import { DashboardStateInstance } from '../utils/dashboard-state';
 import { sourceRegistryService } from '../sources/source-registry.service';
 import { DiscoveryBatchProcessor, BatchMetrics } from './discovery-batch-processor';

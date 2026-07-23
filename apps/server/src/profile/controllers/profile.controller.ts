@@ -89,14 +89,7 @@ export class ProfileController {
         });
       }
 
-      console.log(
-        `[AUTH] Onboarding Completed | User ID: ${userId} | Timestamp: ${new Date().toISOString()}`,
-      );
-
       // Trigger Recommendation Generation ONCE now that onboarding is complete!
-      console.log(
-        `[Recommendation] Onboarding completed. Enqueuing background task (Reason: ONBOARDING_COMPLETE).`,
-      );
       const { BackgroundGenerationService } =
         await import('../../modules/recommendation/generation/background-generation.service');
       BackgroundGenerationService.trigger(userId, undefined, 'ONBOARDING_COMPLETE' as any);

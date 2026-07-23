@@ -28,9 +28,7 @@ import {
   classifyPageSize,
   getPageBudgets,
 } from './metrics';
-import { IContentProvider } from './providers/base-provider';
 import { JinaProvider } from './providers/jina-provider';
-import { FirecrawlProvider } from './providers/firecrawl-provider';
 import { loadDocument } from './langchain/loader';
 import { cleanDocument } from './langchain/cleaner';
 import { chunkDocument } from './langchain/chunker';

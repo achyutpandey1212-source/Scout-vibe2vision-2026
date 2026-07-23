@@ -1,4 +1,4 @@
-import { GOLD_COMPANY_REGISTRY, GoldCompanyProfile } from './gold-company-registry';
+import { GOLD_COMPANY_REGISTRY } from './gold-company-registry';
 
 export interface GoldDetectionResult {
   isGold: boolean;

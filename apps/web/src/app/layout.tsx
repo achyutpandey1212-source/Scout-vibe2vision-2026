@@ -18,6 +18,7 @@ const geist = localFont({
     },
   ],
   variable: '--font-sans',
+  display: 'swap',
 });
 
 const newsreader = localFont({
@@ -32,6 +33,7 @@ const newsreader = localFont({
     },
   ],
   variable: '--font-display',
+  display: 'swap',
 });
 
 export const metadata: Metadata = {

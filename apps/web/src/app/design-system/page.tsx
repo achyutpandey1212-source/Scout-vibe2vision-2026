@@ -48,7 +48,7 @@ import {
 import { DashboardHero, ScoutIntelligencePanel, RecommendationStrip } from '@/components/dashboard';
 
 import { ProfileCard } from '@/components/profile';
-import { Info, Sparkles, Send, Trash2, ArrowRight } from 'lucide-react';
+import { Info, Send, Trash2, ArrowRight } from 'lucide-react';
 import { tokens } from '@/lib/design-tokens';
 
 export default function DesignSystemPlayground() {

@@ -11,7 +11,6 @@
   "dependencies": {
     "@scout/shared": "*",
     "axios": "^1.18.1",
-    "clsx": "^2.1.1",
     "firebase": "^12.16.0",
     "framer-motion": "^11.3.2",
     "lucide-react": "^0.407.0",
@@ -20,7 +19,6 @@
     "posthog-js": "^1.407.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "tailwind-merge": "^2.4.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {

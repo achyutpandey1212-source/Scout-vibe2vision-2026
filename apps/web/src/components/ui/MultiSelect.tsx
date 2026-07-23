@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useId } from 'react';
-import { X, Search, Check, ChevronDown } from 'lucide-react';
+import { X, Search, ChevronDown } from 'lucide-react';
 import { FormLabel, HelperText, ValidationMessage } from './input';
 
 export interface MultiSelectOption {

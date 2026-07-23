@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Database, AlertTriangle } from 'lucide-react';
+import { Database } from 'lucide-react';
 
 export default function AdminDatabase() {
   const [counts, setCounts] = useState<any>(null);

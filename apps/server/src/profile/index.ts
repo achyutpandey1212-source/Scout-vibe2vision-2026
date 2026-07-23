@@ -7,6 +7,4 @@ export { profileRouter } from './routes/profile.routes';
 export { ProfileModel } from './models/profile.model';
 export type { IProfile } from './models/profile.model';
 export { ResumeModel } from './models/resume.model';
-export type { IResume } from './models/resume.model';
-export { migrateUserIntelligenceToProfile } from './migrations/migrate-user-intelligence';
 export { profileV2Router } from './routes/profile.v2.routes';

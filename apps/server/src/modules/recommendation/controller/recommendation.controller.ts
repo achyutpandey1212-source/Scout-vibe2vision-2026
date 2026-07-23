@@ -94,7 +94,10 @@ export class RecommendationController {
       console.error('[Recommendation] Failed to get recommendations:', error);
       return res.status(500).json({
         success: false,
-        error: { code: 'INTERNAL_SERVER_ERROR', message: error.message },
+        error: {
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'An unexpected error occurred. Please try again later.',
+        },
       });
     }
   }
@@ -125,7 +128,10 @@ export class RecommendationController {
       console.error('[Recommendation] Failed to trigger refresh:', error);
       return res.status(500).json({
         success: false,
-        error: { code: 'INTERNAL_SERVER_ERROR', message: error.message },
+        error: {
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'An unexpected error occurred. Please try again later.',
+        },
       });
     }
   }
@@ -145,7 +151,13 @@ export class RecommendationController {
         data: health,
       });
     } catch (error: any) {
-      return res.status(500).json({ success: false, error: { message: error.message } });
+      console.error('[Recommendation] Failed to get health:', error);
+      return res
+        .status(500)
+        .json({
+          success: false,
+          error: { message: 'An unexpected error occurred. Please try again later.' },
+        });
     }
   }
 
@@ -164,7 +176,13 @@ export class RecommendationController {
         },
       });
     } catch (error: any) {
-      return res.status(500).json({ success: false, error: { message: error.message } });
+      console.error('[Recommendation] Failed to get config:', error);
+      return res
+        .status(500)
+        .json({
+          success: false,
+          error: { message: 'An unexpected error occurred. Please try again later.' },
+        });
     }
   }
 
@@ -188,7 +206,13 @@ export class RecommendationController {
         message: 'Recommendation configuration updated successfully.',
       });
     } catch (error: any) {
-      return res.status(500).json({ success: false, error: { message: error.message } });
+      console.error('[Recommendation] Error:', error);
+      return res
+        .status(500)
+        .json({
+          success: false,
+          error: { message: 'An unexpected error occurred. Please try again later.' },
+        });
     }
   }
 
@@ -202,7 +226,13 @@ export class RecommendationController {
         data: RecommendationConfig.getMode(),
       });
     } catch (error: any) {
-      return res.status(500).json({ success: false, error: { message: error.message } });
+      console.error('[Recommendation] Error:', error);
+      return res
+        .status(500)
+        .json({
+          success: false,
+          error: { message: 'An unexpected error occurred. Please try again later.' },
+        });
     }
   }
 
@@ -221,7 +251,13 @@ export class RecommendationController {
         data: RecommendationConfig.getMode(),
       });
     } catch (error: any) {
-      return res.status(500).json({ success: false, error: { message: error.message } });
+      console.error('[Recommendation] Error:', error);
+      return res
+        .status(500)
+        .json({
+          success: false,
+          error: { message: 'An unexpected error occurred. Please try again later.' },
+        });
     }
   }
 
@@ -271,7 +307,13 @@ export class RecommendationController {
         data: explanation,
       });
     } catch (error: any) {
-      return res.status(500).json({ success: false, error: { message: error.message } });
+      console.error('[Recommendation] Error:', error);
+      return res
+        .status(500)
+        .json({
+          success: false,
+          error: { message: 'An unexpected error occurred. Please try again later.' },
+        });
     }
   }
 
@@ -318,7 +360,13 @@ export class RecommendationController {
         message: 'Generation task enqueued successfully.',
       });
     } catch (error: any) {
-      return res.status(500).json({ success: false, error: { message: error.message } });
+      console.error('[Recommendation] Error:', error);
+      return res
+        .status(500)
+        .json({
+          success: false,
+          error: { message: 'An unexpected error occurred. Please try again later.' },
+        });
     }
   }
 
@@ -333,7 +381,13 @@ export class RecommendationController {
         data: logs,
       });
     } catch (error: any) {
-      return res.status(500).json({ success: false, error: { message: error.message } });
+      console.error('[Recommendation] Error:', error);
+      return res
+        .status(500)
+        .json({
+          success: false,
+          error: { message: 'An unexpected error occurred. Please try again later.' },
+        });
     }
   }
 }

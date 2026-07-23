@@ -1,4 +1,4 @@
-import { ORGANIZATION_REGISTRY, RegistryOrgEntry } from './organization-registry';
+import { ORGANIZATION_REGISTRY } from './organization-registry';
 import { OrganizationType, OrganizationStage } from '../extraction/types/opportunity.types';
 
 export interface ResolvedOrganization {

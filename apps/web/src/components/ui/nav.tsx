@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Menu, X, Bell, User, Search } from 'lucide-react';
+import { Menu, Bell, Search } from 'lucide-react';
 import { ThemeToggle } from '../theme-toggle';
 import { Button } from './button';
 import { Drawer } from './modal';

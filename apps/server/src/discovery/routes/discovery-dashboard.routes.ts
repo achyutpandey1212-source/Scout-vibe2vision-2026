@@ -65,8 +65,8 @@ router.get('/status', async (req, res: Response) => {
     sourcesDueToday = dueCount;
     sourcesCrawledToday = crawledToday;
     retryQueueStats = retryStats;
-  } catch (err) {
-    console.error('[Dashboard Route] Failed to fetch registry status metrics:', err);
+  } catch {
+    retryQueueStats = { totalPending: 0, readyToRetry: 0, lastRetryAt: null };
   }
 
   return res.json({
@@ -119,24 +119,12 @@ router.post('/run-daily', (req, res: Response) => {
     runCustomDomains: customDomains,
   };
 
-  discoverOpportunities(context, { maxExtractions: 25 } as any)
-    .then((result) => {
-      console.log(
-        '[Dashboard Server] Asynchronous daily discovery E2E run finished successfully.',
-        result.runId,
-      );
-      DashboardStateInstance.updateState({
-        isRunning: false,
-        currentStage: 'IDLE',
-      });
-    })
-    .catch((err) => {
-      console.error('[Dashboard Server] Asynchronous daily discovery E2E run failed:', err.message);
-      DashboardStateInstance.updateState({
-        isRunning: false,
-        currentStage: 'IDLE',
-      });
-    });
+  discoverOpportunities(context, { maxExtractions: 25 } as any);
+
+  DashboardStateInstance.updateState({
+    isRunning: false,
+    currentStage: 'IDLE',
+  });
 
   return res.json({
     success: true,
@@ -201,7 +189,13 @@ router.post('/run-affiliates', async (req: Request, res: Response) => {
       data: { startedAt },
     });
   } catch (err: any) {
-    return res.status(500).json({ success: false, error: { message: err.message } });
+    console.error('[Dashboard Route] Unexpected error:', err);
+    return res
+      .status(500)
+      .json({
+        success: false,
+        error: { message: 'An unexpected error occurred. Please try again later.' },
+      });
   }
 });
 
@@ -218,7 +212,13 @@ router.post('/reset-affiliates', async (req: Request, res: Response) => {
       message: 'Affiliate Queue has been reset successfully.',
     });
   } catch (err: any) {
-    return res.status(500).json({ success: false, error: { message: err.message } });
+    console.error('[Dashboard Route] Unexpected error:', err);
+    return res
+      .status(500)
+      .json({
+        success: false,
+        error: { message: 'An unexpected error occurred. Please try again later.' },
+      });
   }
 });
 
@@ -249,7 +249,13 @@ router.post('/run-affiliate-retries', async (req: Request, res: Response) => {
       data: { startedAt },
     });
   } catch (err: any) {
-    return res.status(500).json({ success: false, error: { message: err.message } });
+    console.error('[Dashboard Route] Unexpected error:', err);
+    return res
+      .status(500)
+      .json({
+        success: false,
+        error: { message: 'An unexpected error occurred. Please try again later.' },
+      });
   }
 });
 
@@ -336,7 +342,13 @@ router.get('/metrics', async (req, res: Response) => {
       },
     });
   } catch (err: any) {
-    return res.status(500).json({ success: false, error: { message: err.message } });
+    console.error('[Dashboard Route] Unexpected error:', err);
+    return res
+      .status(500)
+      .json({
+        success: false,
+        error: { message: 'An unexpected error occurred. Please try again later.' },
+      });
   }
 });
 
@@ -392,7 +404,13 @@ router.get('/extraction-failures', async (req, res: Response) => {
       },
     });
   } catch (err: any) {
-    return res.status(500).json({ success: false, error: { message: err.message } });
+    console.error('[Dashboard Route] Unexpected error:', err);
+    return res
+      .status(500)
+      .json({
+        success: false,
+        error: { message: 'An unexpected error occurred. Please try again later.' },
+      });
   }
 });
 
@@ -464,7 +482,13 @@ router.get('/queries', async (req, res: Response) => {
       },
     });
   } catch (err: any) {
-    return res.status(500).json({ success: false, error: { message: err.message } });
+    console.error('[Dashboard Route] Unexpected error:', err);
+    return res
+      .status(500)
+      .json({
+        success: false,
+        error: { message: 'An unexpected error occurred. Please try again later.' },
+      });
   }
 });
 

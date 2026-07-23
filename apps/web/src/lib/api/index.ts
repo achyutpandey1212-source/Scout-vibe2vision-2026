@@ -1,7 +1,6 @@
 import axios from 'axios';
 import { auth } from '@/lib/firebase/client';
 import { env } from '@/config/env';
-import { Opportunity, Recommendation, ScoutUser } from './types';
 
 export * from './types';
 

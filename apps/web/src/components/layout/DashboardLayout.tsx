@@ -6,7 +6,6 @@ import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { MobileNav } from './MobileNav';
 import { Footer } from './Footer';
-import { FounderCard } from '../engagement/FounderCard';
 import { Container } from '../ui/layout';
 
 interface DashboardLayoutProps {

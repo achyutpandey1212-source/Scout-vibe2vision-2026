@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import { Upload, FileText, CheckCircle2, X, RefreshCw, AlertCircle } from 'lucide-react';
+import { Upload, CheckCircle2, X, RefreshCw } from 'lucide-react';
 import { FormLabel, HelperText, ValidationMessage } from './input';
 import { Button } from './button';
 

@@ -9,7 +9,6 @@
 
 import React from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { useAuth } from '@/context/auth-context';
 import { DashboardLayout } from '@/components/layout';
 import { BrandLogo } from '@/components/branding';

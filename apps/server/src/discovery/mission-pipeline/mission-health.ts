@@ -1,4 +1,4 @@
-import { HopNode, MissionHealth, MissionPipelineInput, MissionPipelineResult } from './hop.types';
+import { HopNode, MissionHealth, MissionPipelineResult } from './hop.types';
 import { getMissionPipeline } from './hop-registry';
 
 export class MissionHealthReporter {

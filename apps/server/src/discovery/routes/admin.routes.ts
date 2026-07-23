@@ -46,19 +46,19 @@ export const verifyAdminSession = (req: any, res: Response, next: any) => {
  */
 router.post('/login', (req, res: Response) => {
   const { password } = req.body;
-  if (password === ADMIN_PASSWORD) {
-    const signature = getSessionSignature();
-    res.cookie('scout_admin_session', signature, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 3600000 * 24, // 24 hours
-      path: '/',
-    });
-    return res.json({ success: true });
+  if (!ADMIN_PASSWORD || password !== ADMIN_PASSWORD) {
+    return res
+      .status(401)
+      .json({ success: false, error: { message: 'Incorrect secure operations password.' } });
   }
-  return res
-    .status(401)
-    .json({ success: false, error: { message: 'Incorrect secure operations password.' } });
+  const signature = getSessionSignature();
+  res.cookie('scout_admin_session', signature, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 3600000 * 24,
+    path: '/',
+  });
+  return res.json({ success: true });
 });
 
 /**
@@ -133,7 +133,6 @@ router.get('/status', verifyAdminSession, async (req, res: Response) => {
  */
 router.post('/jobs/trigger', verifyAdminSession, (req, res: Response) => {
   const { jobName } = req.body;
-  console.log(`[Admin Operations] Triggered manual job: ${jobName}`);
 
   if (jobName === 'discovery') {
     const context = {
@@ -141,9 +140,7 @@ router.post('/jobs/trigger', verifyAdminSession, (req, res: Response) => {
       categories: ACTIVE_SOURCE_CATEGORIES,
       country: 'India',
     };
-    discoverOpportunities(context, { maxExtractions: 10 } as any)
-      .then((r) => console.log(`[Admin Operations] Manual job execution completed: ${r.runId}`))
-      .catch((err) => console.error(`[Admin Operations] Manual job failed:`, err.message));
+    discoverOpportunities(context, { maxExtractions: 10 } as any);
   }
 
   return res.json({
