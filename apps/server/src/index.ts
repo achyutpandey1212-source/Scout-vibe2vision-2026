@@ -1,5 +1,5 @@
 import './discovery/utils/logger-capture';
-import express, { Response } from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import cors, { CorsOptions } from 'cors';
 import { env, db, redis, firebase } from '@/config';
 import { authRouter } from './auth';
@@ -12,6 +12,9 @@ import { sourceRegistryService } from './discovery/sources/source-registry.servi
 const app = express();
 const port = env.PORT;
 
+// Avoid advertising the framework in response headers.
+app.disable('x-powered-by');
+
 const allowedOrigins = ['http://localhost:3000', env.CLIENT_URL, env.FRONTEND_URL].filter(
   (origin): origin is string => Boolean(origin),
 );
@@ -23,7 +26,7 @@ const corsOptions: CorsOptions = {
       return;
     }
 
-    callback(new Error(`CORS blocked for origin: ${origin}`));
+    callback(new Error('CORS request rejected'));
   },
   credentials: true,
 };
@@ -92,6 +95,19 @@ app.use('/api/v1/admin', adminRouter);
 
 // Register Bookmarks Router
 app.use('/api/v1/bookmarks', bookmarkRouter);
+
+// Keep internal exceptions, driver errors, and framework stacks out of API responses.
+app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  console.error('[API] Unhandled request error.');
+  if (res.headersSent) return;
+  res.status(500).json({
+    success: false,
+    error: {
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'An unexpected error occurred. Please try again later.',
+    },
+  });
+});
 
 // Bootstrapping the services
 async function bootstrap() {

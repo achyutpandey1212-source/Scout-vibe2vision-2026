@@ -30,8 +30,7 @@ export class AuthController {
         },
       });
     } catch (error: unknown) {
-      const errMsg = error instanceof Error ? error.message : String(error);
-      console.error('[AUTH] Get current user error:', errMsg);
+      console.error('[AUTH] Unable to retrieve current user.');
       return res.status(500).json({
         success: false,
         error: {
@@ -66,8 +65,7 @@ export class AuthController {
         },
       });
     } catch (error: unknown) {
-      const errMsg = error instanceof Error ? error.message : String(error);
-      console.error('[AUTH] Sync error:', errMsg);
+      console.error('[AUTH] Unable to sync authenticated user.');
       return res.status(500).json({
         success: false,
         error: {
@@ -79,10 +77,6 @@ export class AuthController {
   }
 
   static async logout(req: AuthenticatedRequest, res: Response) {
-    const uid = req.auth?.uid;
-    console.log(
-      `[AUTH] User Logged Out | UID: ${uid || 'anonymous'} | Timestamp: ${new Date().toISOString()}`,
-    );
     return res.json({
       success: true,
       message: 'Logged out successfully',

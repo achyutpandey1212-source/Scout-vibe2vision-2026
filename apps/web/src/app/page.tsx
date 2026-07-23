@@ -63,8 +63,8 @@ export default function Home() {
         } else if (Array.isArray(oppRes.data?.data)) {
           setLiveOpportunityCount(oppRes.data.data.length);
         }
-      } catch (err) {
-        console.log('Live opportunities count skipped');
+      } catch {
+        // Live totals are progressive enhancement; the landing page remains useful without them.
       }
 
       try {
@@ -74,8 +74,8 @@ export default function Home() {
         } else if (Array.isArray(sourceRes.data)) {
           setLiveSourceCount(sourceRes.data.length);
         }
-      } catch (err) {
-        console.log('Live sources count skipped');
+      } catch {
+        // Live totals are progressive enhancement; the landing page remains useful without them.
       }
     };
     fetchLiveStats();
