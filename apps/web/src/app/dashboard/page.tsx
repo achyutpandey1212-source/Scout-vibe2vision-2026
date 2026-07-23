@@ -17,6 +17,7 @@ import { TodaysMissionCard, SectionHeader, DashboardEmptyState } from '@/compone
 import { useAuth } from '@/context/auth-context';
 import { recommendationsApi, bookmarksApi, profileApi, Opportunity } from '@/lib/api';
 import { track } from '@/lib/analytics';
+import { useScrollDepth } from '@/hooks/useScrollDepth';
 import { ArrowRight, Clock, Sparkles } from 'lucide-react';
 
 function getTimeBasedGreeting(): string {
@@ -111,6 +112,15 @@ export default function DashboardPage() {
               }
             });
             setRecommendations(mapped);
+            // Track impressions per slot
+            mapped.forEach((rec) => {
+              track('recommendation_card_impression', {
+                slot: rec.slot,
+                opportunityId: rec.opportunity?._id || rec.opportunity?.id,
+                matchScore: rec.recommendationScore || 80,
+                category: rec.opportunity?.category || '',
+              });
+            });
           }
         }
       }
@@ -134,10 +144,22 @@ export default function DashboardPage() {
     }
   };
 
+  useScrollDepth('Dashboard');
+
+  const mountTimeRef = useRef<number>(Date.now());
+  const cardsClickedRef = useRef<number>(0);
+
   useEffect(() => {
     loadDashboardData();
+    mountTimeRef.current = Date.now();
     return () => {
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      const timeSpentSeconds = Math.round((Date.now() - mountTimeRef.current) / 1000);
+      track('dashboard_session', {
+        timeSpentSeconds,
+        recommendationsViewed: recommendations.length || 5,
+        cardsClicked: cardsClickedRef.current,
+      });
     };
   }, []);
 

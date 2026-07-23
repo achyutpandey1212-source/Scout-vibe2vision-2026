@@ -7,7 +7,7 @@
  * Editorial Details View & AI Career Report
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { DashboardLayout } from '@/components/layout';
@@ -29,6 +29,7 @@ import {
 import { ROUTES } from '@/lib/constants/routes';
 import { opportunitiesApi, recommendationsApi, bookmarksApi, Opportunity } from '@/lib/api';
 import { track } from '@/lib/analytics';
+import { useScrollDepth } from '@/hooks/useScrollDepth';
 
 const cleanTruncatedText = (str: string): string => {
   if (!str || typeof str !== 'string') return str;
@@ -151,9 +152,44 @@ export default function OpportunityDetailsPage() {
     }
   };
 
+  useScrollDepth('Opportunity Details');
+
+  const mountTimeRef = useRef<number>(Date.now());
+  const completedFiredRef = useRef<boolean>(false);
+
   useEffect(() => {
     if (oppId) {
       fetchData();
+      mountTimeRef.current = Date.now();
+      completedFiredRef.current = false;
+
+      track('opportunity_read_started', {
+        opportunityId: oppId,
+        source: 'opportunity_details',
+        category: opportunity?.category || '',
+      });
+
+      const timer = setInterval(() => {
+        const elapsed = Math.round((Date.now() - mountTimeRef.current) / 1000);
+        if (elapsed >= 45 && !completedFiredRef.current) {
+          completedFiredRef.current = true;
+          track('opportunity_read_completed', {
+            opportunityId: oppId,
+            timeSpentSeconds: elapsed,
+            scrollDepth: 45,
+          });
+        }
+      }, 5000);
+
+      return () => {
+        clearInterval(timer);
+        const timeSpentSeconds = Math.round((Date.now() - mountTimeRef.current) / 1000);
+        track('opportunity_exit', {
+          opportunityId: oppId,
+          timeSpentSeconds,
+          scrollDepth: 50,
+        });
+      };
     }
   }, [oppId]);
 

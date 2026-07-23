@@ -16,6 +16,8 @@ import { OpportunityCard, OpportunityCardSkeleton } from '@/components/opportuni
 import { SectionHeader } from '@/components/dashboard';
 import { ROUTES } from '@/lib/constants/routes';
 import { opportunitiesApi, bookmarksApi, Opportunity } from '@/lib/api';
+import { track } from '@/lib/analytics';
+import { useScrollDepth } from '@/hooks/useScrollDepth';
 import { Search, SlidersHorizontal, Loader2, Compass, X } from 'lucide-react';
 
 const PAGE_SIZE = 24;
@@ -110,6 +112,19 @@ export default function ExplorePage() {
           setTotalCount(res.data.pagination?.total ?? 0);
           setHasNext(res.data.pagination?.hasNext ?? false);
           setPage(pageNum);
+
+          if (debouncedQuery) {
+            track('discover_search', {
+              queryLength: debouncedQuery.length,
+              resultsReturned: newItems.length,
+            });
+          }
+          if (newItems.length === 0) {
+            track('empty_state_viewed', {
+              page: 'explore',
+              reason: 'no_search_results',
+            });
+          }
         }
       } catch (err) {
         console.error('Explore fetch error:', err);
@@ -120,6 +135,8 @@ export default function ExplorePage() {
     },
     [category, debouncedQuery, sortBy],
   );
+
+  useScrollDepth('Discover');
 
   // IntersectionObserver for infinite scroll
   useEffect(() => {

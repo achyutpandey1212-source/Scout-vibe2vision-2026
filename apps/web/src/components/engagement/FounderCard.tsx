@@ -8,20 +8,30 @@
  * Appears exclusively on the Landing Page after 15s with a 6-hour cooldown.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/context/auth-context';
+import { track } from '@/lib/analytics';
 import { X, Linkedin, MessageCircle, Heart } from 'lucide-react';
 
 const COOLDOWN_KEY = 'scout_founder_card_last_interaction';
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 
 export const FounderCard: React.FC = () => {
+  const { user } = useAuth();
   const pathname = usePathname();
   const [visible, setVisible] = useState(false);
+  const shownTimeRef = useRef<number>(0);
 
   const dismissCard = useCallback(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem(COOLDOWN_KEY, Date.now().toString());
+    }
+    if (shownTimeRef.current > 0) {
+      track('founder_card_closed', {
+        page: '/',
+        time_visible_ms: Date.now() - shownTimeRef.current,
+      });
     }
     setVisible(false);
   }, []);
@@ -47,13 +57,20 @@ export const FounderCard: React.FC = () => {
     // 3. Trigger: 15-Second Time Threshold on Landing Page
     const timer = setTimeout(() => {
       setVisible(true);
+      shownTimeRef.current = Date.now();
+      track('founder_card_shown', {
+        trigger: 'timer',
+        page: '/',
+        authenticated: Boolean(user),
+        session_age_seconds: 15,
+      });
     }, 15000);
 
     // Cleanup on route change or unmount
     return () => {
       clearTimeout(timer);
     };
-  }, [pathname]);
+  }, [pathname, user]);
 
   // Esc key dismiss listener
   useEffect(() => {
@@ -115,7 +132,10 @@ export const FounderCard: React.FC = () => {
               href="https://www.linkedin.com/in/achyut-pandey-6593b4256"
               target="_blank"
               rel="noopener noreferrer"
-              onClick={dismissCard}
+              onClick={() => {
+                track('founder_card_connect_clicked', { destination: 'linkedin' });
+                dismissCard();
+              }}
               className="flex-1 py-2 px-3 bg-primary text-primary-foreground text-xs font-medium rounded-xl hover:opacity-90 transition-opacity shadow-xs flex items-center justify-center gap-1.5"
             >
               <Linkedin className="w-3.5 h-3.5" />
@@ -125,7 +145,10 @@ export const FounderCard: React.FC = () => {
               href="https://chat.whatsapp.com/G3E6G6X2B9y3X3"
               target="_blank"
               rel="noopener noreferrer"
-              onClick={dismissCard}
+              onClick={() => {
+                track('founder_card_connect_clicked', { destination: 'whatsapp' });
+                dismissCard();
+              }}
               className="flex-1 py-2 px-3 bg-card border border-border/80 text-foreground text-xs font-medium rounded-xl hover:bg-muted/50 transition-colors flex items-center justify-center gap-1.5"
             >
               <MessageCircle className="w-3.5 h-3.5 text-emerald-500" />
@@ -138,10 +161,13 @@ export const FounderCard: React.FC = () => {
               href="https://github.com/achyutpandey1212"
               target="_blank"
               rel="noopener noreferrer"
-              onClick={dismissCard}
+              onClick={() => {
+                track('founder_card_volunteer_clicked', { page: '/' });
+                dismissCard();
+              }}
               className="text-[11px] text-primary hover:underline font-medium inline-flex items-center gap-1"
             >
-              <Heart className="w-3 h-3 text-rose-500 fill-rose-500" />
+              <Heart className="text-rose-500 fill-rose-500 w-3 h-3" />
               <span>Contribute</span>
             </a>
             <button

@@ -115,12 +115,15 @@ export default function ProfilePage() {
 
   useEffect(() => {
     fetchProfile();
+    track('feature_vote_viewed', { feature_name: 'companion_preferences' });
   }, []);
 
   const handleVoteClick = () => {
+    track('feature_vote_clicked', { feature_name: 'companion_preferences' });
     localStorage.setItem('scout_companion_voted', 'true');
     setHasVoted(true);
     setVoteCount((prev) => prev + 1);
+    track('feature_vote_completed', { feature_name: 'companion_preferences' });
   };
 
   // Open inline modal for updating resume
@@ -130,6 +133,9 @@ export default function ProfilePage() {
     setExtractionResult(null);
     setUploading(false);
     setIsModalOpen(true);
+    track('resume_replace_started', {
+      previousResumeExists: Boolean(resumeData || profileData?.resumeUploaded),
+    });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -166,6 +172,12 @@ export default function ProfilePage() {
           projectsCount,
           experienceCount,
           educationCount,
+        });
+
+        track('resume_replace_completed', {
+          skillsExtracted: skillsCount,
+          projectsExtracted: projectsCount,
+          experienceExtracted: experienceCount,
         });
 
         track('profile_updated', {
