@@ -7,8 +7,18 @@ import {
   createUserWithEmailAndPassword as fbCreateUserWithEmail,
   signInAnonymously as fbSignInAnonymously,
   updateProfile,
+  sendEmailVerification as fbSendEmailVerification,
 } from 'firebase/auth';
 import { auth, googleProvider } from '@/lib/firebase/client';
+
+/**
+ * NOTE ON FIREBASE EMAIL TEMPLATE CUSTOMIZATION:
+ * Firebase Authentication uses built-in email templates.
+ * To customize the email subject, sender name, or template body:
+ * 1. Open Google Firebase Console (https://console.firebase.google.com/).
+ * 2. Navigate to Authentication > Templates.
+ * 3. Edit "Email address verification" template.
+ */
 
 export class AuthService {
   async loginWithGoogle(): Promise<User> {
@@ -48,11 +58,28 @@ export class AuthService {
       await updateProfile(result.user, {
         displayName: name,
       });
+
+      // Immediately send Firebase built-in email verification
+      await fbSendEmailVerification(result.user);
       return result.user;
     } catch (error) {
       console.error('Error during Email Sign Up:', error);
       throw error;
     }
+  }
+
+  async sendVerificationEmail(userToVerify?: User): Promise<void> {
+    const currentUser = userToVerify || auth?.currentUser;
+    if (!currentUser) {
+      throw new Error('No authenticated user available to send verification email.');
+    }
+    await fbSendEmailVerification(currentUser);
+  }
+
+  async reloadUser(): Promise<User | null> {
+    if (!auth?.currentUser) return null;
+    await auth.currentUser.reload();
+    return auth.currentUser;
   }
 
   async signInAsGuest(): Promise<User> {

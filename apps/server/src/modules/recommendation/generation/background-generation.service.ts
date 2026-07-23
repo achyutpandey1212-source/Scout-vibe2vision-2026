@@ -21,7 +21,7 @@ export class BackgroundGenerationService {
   static trigger(
     userId: string,
     profileHash?: string,
-    reason: RecommendationGenerationReason = RecommendationGenerationReason.DAILY_SCHEDULE,
+    reason: RecommendationGenerationReason = 'DAILY_SCHEDULE',
   ): Promise<{ packId: string; status: string }> {
     return this.triggerGeneration(userId, reason);
   }
@@ -32,7 +32,7 @@ export class BackgroundGenerationService {
    */
   static async triggerGeneration(
     userId: string,
-    reason: RecommendationGenerationReason = RecommendationGenerationReason.DAILY_SCHEDULE,
+    reason: RecommendationGenerationReason = 'DAILY_SCHEDULE',
   ): Promise<{ packId: string; status: string }> {
     // 0. Onboarding Gating Guard: Exit cleanly if onboarding is incomplete
     const isCompleted = await OnboardingGuard.isOnboardingCompleted(userId);
@@ -108,7 +108,7 @@ export class BackgroundGenerationService {
     if (!profile) {
       throw new Error(`Profile not found for user ${userId}`);
     }
-    const retrieved = await CandidateRetrievalService.retrieveCandidates(profile, resume);
+    const retrieved = await CandidateRetrievalService.fetchActiveCandidates();
     return {
       userId,
       stage,
@@ -207,7 +207,6 @@ export class BackgroundGenerationService {
         scoredList = filterResult.eligible.map((opp) => ({
           opportunity: opp,
           totalScore: 50,
-          score: 50,
           scoreBreakdown: {
             skillMatch: 25,
             projectMatch: 25,
@@ -215,9 +214,18 @@ export class BackgroundGenerationService {
             titleRelevance: 0,
             recencyScore: 0,
             softPenalties: 0,
-          },
+            careerGoal: 0,
+            opportunityType: 0,
+            careerStage: 0,
+            location: 0,
+            womenPreference: 0,
+            freshness: 0,
+            deadline: 0,
+            hiddenGem: 0,
+          } as any,
           matchedSkills: [],
           matchedProjects: [],
+          matchedGoals: [],
           reasons: ['Eligible candidate posting'],
           recommendationStrength: 'good' as const,
         }));
@@ -227,7 +235,7 @@ export class BackgroundGenerationService {
       const top40Candidates = scoredList.slice(0, 40);
 
       // Print Recommendation Filtering Report
-      const scores = scoredList.map((s) => s.totalScore || s.score || 50);
+      const scores = scoredList.map((s) => s.totalScore || 50);
       const avgScore =
         scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
       const highestScore = scores.length > 0 ? Math.max(...scores) : 0;
@@ -273,10 +281,11 @@ ${topCandidate?.opportunity?.organization || topCandidate?.opportunity?.company 
       // Exactly 5 candidates passed downstream to LLM Personalization
       const top5Candidates = portfolio.selectedCandidates.map((sc) => ({
         opportunity: sc.opportunity || sc,
-        score: sc.totalScore || sc.score || 75,
+        totalScore: sc.totalScore || 75,
         scoreBreakdown: sc.scoreBreakdown || {},
         matchedSkills: sc.matchedSkills || [],
         matchedProjects: sc.matchedProjects || [],
+        matchedGoals: sc.matchedGoals || [],
         reasons: sc.reasons || [],
         recommendationStrength: sc.recommendationStrength || 'strong',
       }));
@@ -376,7 +385,7 @@ Portfolio Diversity Score: ${portfolio.portfolioDiversityScore}/100
 
       // 7. Quality evaluation
       currentStage = 'QUALITY_EVALUATION';
-      const qualityScore = RecommendationQualityService.evaluatePack(top5Candidates);
+      const qualityScore = RecommendationQualityService.evaluatePack(top5Candidates as any[]);
 
       // Print Comprehensive Recommendation Quality Report
       console.log(`

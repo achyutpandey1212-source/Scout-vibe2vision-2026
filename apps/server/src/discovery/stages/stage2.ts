@@ -403,7 +403,7 @@ export class Stage2Crawling implements IPipelineStage<CandidateURL[], CrawledPag
           }
         }
 
-        if (!cachedContent && plan.decision === 'USE_SNIPPET') {
+        if (!cachedContent && plan.decision === 'USE_SNIPPET_FALLBACK') {
           duration = Date.now() - startTime;
           rawMarkdown = candidate.snippet || '';
           cleanMetadata = { domain: new URL(candidate.url).hostname };

@@ -23,7 +23,7 @@ const QueryYieldSchema = new Schema<IQueryYieldDocument>(
   },
 );
 
-QueryYieldSchema.pre('save', function (next) {
+QueryYieldSchema.pre('save', function (this: any, next: any) {
   this.yieldRate = this.runs > 0 ? this.opportunitiesAccepted / this.runs : 0;
   next();
 });

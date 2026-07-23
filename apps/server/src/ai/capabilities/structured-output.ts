@@ -60,9 +60,6 @@ function isResponseJsonComplete(text: string): boolean {
     if (inEscape) {
       DiscoveryProviderManager.getInstance().metrics.parserRecoveries++;
       continue;
-      console.warn(
-        `[Structured Output] Unable to record parser recovery metric: ${(metricErr as Error).message}`,
-      );
     }
     if (cleaned[i] === '\\') {
       inEscape = true;

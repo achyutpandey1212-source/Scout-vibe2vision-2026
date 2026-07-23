@@ -12,7 +12,8 @@ export type RecommendationGenerationReason =
   | 'CACHE_EXPIRED'
   | 'ADMIN_FORCE'
   | 'ADMIN_REGENERATE'
-  | 'ADMIN_DRY_RUN';
+  | 'ADMIN_DRY_RUN'
+  | 'DAILY_SCHEDULE';
 
 export interface IRecommendationItem {
   // ── Core matching ──────────────────────────────────────────────────────────

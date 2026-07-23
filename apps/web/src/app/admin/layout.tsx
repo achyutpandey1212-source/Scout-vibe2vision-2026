@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import axios from 'axios';
 import {
   LayoutDashboard,
+  Users,
   Cpu,
   Layers,
   HardDrive,
@@ -18,6 +19,7 @@ import {
 
 const MENU_ITEMS = [
   { label: 'Overview', path: '/admin/overview', icon: LayoutDashboard },
+  { label: 'Users', path: '/admin/users', icon: Users },
   { label: 'Discovery Engine', path: '/admin/discovery', icon: Cpu },
   { label: 'Recommendation Engine', path: '/admin/recommendation', icon: Layers },
   { label: 'Providers', path: '/admin/providers', icon: Boxes },

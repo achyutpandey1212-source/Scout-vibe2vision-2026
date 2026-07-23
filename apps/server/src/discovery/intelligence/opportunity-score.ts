@@ -44,9 +44,7 @@ export class OpportunityScorer {
     // 3. Freshness (Max 15)
     // Starts high; decays slightly based on date age if available
     let freshness = 15;
-    const discovered = opp.aiMetadata?.timestamp
-      ? new Date(opp.aiMetadata.timestamp).getTime()
-      : Date.now();
+    const discovered = Date.now();
     const ageDays = (Date.now() - discovered) / (1000 * 60 * 60 * 24);
     if (ageDays > 7) freshness -= 5;
     if (ageDays > 30) freshness -= 5;
@@ -54,7 +52,7 @@ export class OpportunityScorer {
     // 4. Application Quality (Max 15)
     // Easy difficulty or high extraction confidence adds to score
     let application = 10;
-    if (opp.applicationDifficulty === 'EASY') application += 5;
+    if (opp.applicationDifficulty === 'LOW') application += 5;
     if (opp.confidence > 80) application += 2;
 
     // 5. Company Reputation / Tiering (Max 10)

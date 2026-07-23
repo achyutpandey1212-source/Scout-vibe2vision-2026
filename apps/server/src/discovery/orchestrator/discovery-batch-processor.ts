@@ -114,8 +114,8 @@ export class DiscoveryBatchProcessor {
         REVIEW_THRESHOLD: 80,
       });
 
-      savedCount = (runResult.insertedCount || 0) + (runResult.updatedCount || 0);
-      duplicateCount = runResult.archivedCount || 0;
+      savedCount = (runResult.inserted || 0) + (runResult.updated || 0);
+      duplicateCount = runResult.archived || 0;
     } finally {
       // Immediate Registry Updates per batch (markCrawled / markFailed)
       await this.updateDomainCrawlStates(

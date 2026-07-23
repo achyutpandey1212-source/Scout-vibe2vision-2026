@@ -304,7 +304,7 @@ export default function ExplorePage() {
                       description={opp.description}
                       deadline={opp.deadline || 'Flexible'}
                       tags={opp.tags || []}
-                      matchScore={opp.matchScore ?? (opp as any).score}
+                      matchScore={(opp as any).matchScore ?? (opp as any).score}
                       isBookmarked={bookmarkedIds.has(opp._id)}
                       isWomenOnly={
                         opp.isWomenOnly ||

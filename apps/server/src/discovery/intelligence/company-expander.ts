@@ -31,7 +31,7 @@ export class CompanyExpander {
             trustScore: 75,
             priority: 'medium',
             isActive: true,
-            discoveredBy: `company-graph-expansion:${companyName}`,
+            discoveredBy: `company-graph-expansion:${companyName}` as any,
           });
           enqueued.push(peer);
           console.log(

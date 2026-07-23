@@ -111,16 +111,10 @@ async function persistRawPagesCompatibility(crawledPages: CrawledPage[]): Promis
   }
 }
 
-import { DiscoveryRunModel } from '../persistence/discovery-run.model';
-import { RawPageModel } from '../firecrawl/raw-page.model';
-import { DiscoveryContext } from '../types/query.types';
-import { DiscoveryOptions, DiscoveryOrchestratorResponse, PipelineMetrics } from './pipeline.types';
-import { TRUSTED_SOURCES } from '../sources/registry';
 import { DashboardStateInstance } from '../utils/dashboard-state';
 import { sourceRegistryService } from '../sources/source-registry.service';
 import { DiscoveryBatchProcessor, BatchMetrics } from './discovery-batch-processor';
 import { CANONICAL_TARGET_AUDIENCE, VERSION_CONSTANTS } from '@scout/shared';
-import crypto from 'crypto';
 
 /**
  * Discovery Orchestrator coordinating Streaming Batch Pipeline (Phase 3)

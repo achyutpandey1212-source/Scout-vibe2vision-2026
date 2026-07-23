@@ -159,7 +159,7 @@ Title: ${opp.title}
 Organization: ${opp.organization || '(null)'}
 Application URL: ${opp.applicationUrl || '(null)'}
 Source URL: ${opp.sourceURL || '(null)'}
-ID: ${opp.id || (opp as any)._id || 'new'}
+      ID: ${(opp as any)._id || (opp as any).id || 'new'}
 `);
         let bestMatch: any = null;
         let highestConfidence = 0;

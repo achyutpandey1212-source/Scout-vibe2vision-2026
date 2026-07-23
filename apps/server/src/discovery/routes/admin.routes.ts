@@ -152,5 +152,14 @@ router.post('/jobs/trigger', verifyAdminSession, (req, res: Response) => {
   });
 });
 
+/**
+ * Admin User Management Routes
+ */
+import { AdminUserController } from '../../modules/admin/controllers/admin-user.controller';
+
+router.get('/users', verifyAdminSession, AdminUserController.listUsers);
+router.get('/users/:id', verifyAdminSession, AdminUserController.getUserDetails);
+router.delete('/users/:id', verifyAdminSession, AdminUserController.deleteUser);
+
 export const adminRouter = router;
 export default adminRouter;

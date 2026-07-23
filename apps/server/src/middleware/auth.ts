@@ -52,6 +52,18 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
       });
     }
 
+    // Require email verification for Email/Password provider accounts
+    const isPasswordProvider = claims.provider === 'password';
+    if (isPasswordProvider && !claims.emailVerified && !isSyncRoute) {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: 'EMAIL_NOT_VERIFIED',
+          message: 'Email verification is required before accessing Scout resources.',
+        },
+      });
+    }
+
     next();
   } catch (error) {
     console.error('❌ Firebase auth verification failed:', error);

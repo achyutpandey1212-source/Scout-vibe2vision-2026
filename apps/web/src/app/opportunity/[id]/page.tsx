@@ -664,12 +664,12 @@ export default function OpportunityDetailsPage() {
                           Help Shape Scout
                         </h4>
                         <p className="text-muted-foreground font-light leading-relaxed">
-                          If you've found Scout useful—or even have ideas on how it could
-                          improve—we'd genuinely love to hear from you.
+                          If you&apos;ve found Scout useful—or even have ideas on how it could
+                          improve—we&apos;d genuinely love to hear from you.
                         </p>
                         <p className="text-muted-foreground font-light leading-relaxed">
-                          Whether it's feedback, bug reports, feature ideas, or simply saying hello,
-                          every conversation helps make Scout better.
+                          Whether it&apos;s feedback, bug reports, feature ideas, or simply saying
+                          hello, every conversation helps make Scout better.
                         </p>
                       </div>
 
