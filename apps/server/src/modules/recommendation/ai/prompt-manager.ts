@@ -2,6 +2,13 @@ import crypto from 'crypto';
 import { IProfile } from '../../../profile/models/profile.model';
 import { CandidateSnapshotBuilder } from '../../../recommendation/engine/candidate-snapshot';
 import { RecommendationContextBuilder } from '../../../intelligence/recommendation/context/recommendation-context-builder';
+import {
+  buildFeaturedPrompt,
+  buildHiddenGemPrompt,
+  buildStretchGoalPrompt,
+  buildQuickWinPrompt,
+  buildConfidenceBuilderPrompt,
+} from '../../../intelligence/recommendation/prompts';
 
 export class PromptManager {
   /**
@@ -72,12 +79,31 @@ Return ONLY a valid JSON object matching this schema:
     const opportunityContexts = topCandidates.slice(0, 5).map((cand, idx) => {
       const slot = slotNames[idx] || `match_${idx}`;
       const context = builder.build(profile, resume, cand, snapshot);
+
+      let slotPrompt = '';
+      switch (slot) {
+        case 'perfectMatch':
+          slotPrompt = buildFeaturedPrompt(context);
+          break;
+        case 'hiddenGem':
+          slotPrompt = buildHiddenGemPrompt(context);
+          break;
+        case 'stretchGoal':
+          slotPrompt = buildStretchGoalPrompt(context);
+          break;
+        case 'fastApply':
+          slotPrompt = buildQuickWinPrompt(context);
+          break;
+        case 'resumeBuilder':
+          slotPrompt = buildConfidenceBuilderPrompt(context);
+          break;
+        default:
+          slotPrompt = buildFeaturedPrompt(context);
+      }
+
       return {
         slot,
-        opportunity: context.opportunity,
-        matchAnalysis: context.matchAnalysis,
-        insights: context.insights,
-        matchSummary: context.humanReadableSummary,
+        personaInstructions: slotPrompt,
       };
     });
 
@@ -119,9 +145,9 @@ ${sampleContext.projects.map((p) => `- ${p.title}: ${p.description} (Tech: ${p.t
 
 ${formattedContext}
 
-========== Top Opportunities ==========
+========== Top Opportunities (Specialized Personas) ==========
 ${JSON.stringify(opportunityContexts, null, 2)}
-======================================
+==============================================================
 
 Provide recommendationsBySlot matching the slots specified above:
 ${slotNames.slice(0, Math.min(5, topCandidates.length)).join(', ')}`;
