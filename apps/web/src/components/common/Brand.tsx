@@ -66,8 +66,8 @@ export const Brand: React.FC<BrandProps> = ({
         <div
           className="w-full h-full bg-primary dark:bg-[#A8C3B3] transition-colors duration-200"
           style={{
-            WebkitMaskImage: 'url(/Logo/scout_v2_logo.png)',
-            maskImage: 'url(/Logo/scout_v2_logo.png)',
+            WebkitMaskImage: 'url(/Logo/scout_v2_logo.svg)',
+            maskImage: 'url(/Logo/scout_v2_logo.svg)',
             WebkitMaskSize: 'contain',
             maskSize: 'contain',
             WebkitMaskRepeat: 'no-repeat',

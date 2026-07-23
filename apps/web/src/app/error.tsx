@@ -35,7 +35,7 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
         {/* Illustration */}
         <div className="relative w-full max-w-[280px] sm:max-w-[420px] aspect-[4/3] mx-auto flex items-center justify-center">
           <img
-            src="/Illustrations/error.png"
+            src="/Illustrations/error.webp"
             alt="Application Error"
             className="w-full h-full object-contain pointer-events-none drop-shadow-xs"
           />

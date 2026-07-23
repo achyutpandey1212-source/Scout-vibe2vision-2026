@@ -2,12 +2,12 @@ import type { Metadata } from 'next';
 import { createPageMetadata, privateRobots } from '@/lib/metadata';
 
 export const metadata: Metadata = createPageMetadata({
-  title: 'Admin portal',
-  path: '/admin',
-  description: 'Scout administration portal.',
+  title: 'Saved opportunities',
+  path: '/bookmarks',
+  description: 'Review the opportunities you have saved in Scout.',
   robots: privateRobots,
 });
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default function BookmarksLayout({ children }: { children: React.ReactNode }) {
   return children;
 }

@@ -100,7 +100,7 @@ export const FounderCard: React.FC = () => {
         {/* Founder Header */}
         <div className="flex items-center gap-3.5 pr-6">
           <img
-            src="/Founder card/founder.png"
+            src="/Founder card/founder.webp"
             alt="Achyut Pandey"
             className="w-12 h-12 rounded-full object-cover ring-2 ring-primary/20 shrink-0"
           />
