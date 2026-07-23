@@ -37,10 +37,18 @@ function getRelativeTimeString(dateString?: string | Date): string {
   return 'today';
 }
 
+const getInitialProfileName = () => {
+  if (typeof window !== 'undefined') {
+    const cached = localStorage.getItem('scout_v2_profile_name');
+    if (cached) return cached;
+  }
+  return '';
+};
+
 export default function DashboardPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const [profileName, setProfileName] = useState<string>('');
+  const [profileName, setProfileName] = useState<string>(getInitialProfileName);
   const [pageLoading, setPageLoading] = useState(true);
 
   // Recommendation Engine State
@@ -56,8 +64,16 @@ export default function DashboardPage() {
       const [recRes, bookmarkRes, profileRes] = await Promise.all([
         recommendationsApi.list(),
         bookmarksApi.list(),
-        profileApi.get(),
+        profileApi.getV2(),
       ]);
+
+      if (profileRes.data?.success && profileRes.data.data?.profile?.fullName) {
+        const name = profileRes.data.data.profile.fullName.trim();
+        setProfileName(name);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('scout_v2_profile_name', name);
+        }
+      }
 
       if (recRes.data?.success) {
         const rawData = recRes.data.data;
@@ -101,13 +117,6 @@ export default function DashboardPage() {
       if (bookmarkRes.data?.success) {
         const bookmarkedList: Opportunity[] = bookmarkRes.data.data;
         setBookmarkedIds(new Set(bookmarkedList.map((opp) => opp._id)));
-      }
-
-      if (profileRes && profileRes.data?.success) {
-        const p = profileRes.data.data;
-        if (p?.identity?.preferredName) {
-          setProfileName(p.identity.preferredName);
-        }
       }
       setPageLoading(false);
     } catch (err: any) {

@@ -194,10 +194,12 @@ export default function OnboardingPage() {
             setReadinessData(readiness);
           }
 
-          const savedStep = localStorage.getItem('scout_onboarding_v2_step');
+          const urlParams = new URLSearchParams(window.location.search);
+          const queryStep = urlParams.get('step');
+          const savedStep = queryStep || localStorage.getItem('scout_onboarding_v2_step');
           if (savedStep) {
             const parsedStep = parseInt(savedStep, 10);
-            if (parsedStep <= TOTAL_STEPS) {
+            if (parsedStep >= 1 && parsedStep <= TOTAL_STEPS) {
               setStep(parsedStep);
             }
           }

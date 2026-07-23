@@ -95,21 +95,6 @@ export const TopBar: React.FC<TopBarProps> = ({ title, subtitle, onSearchClick }
           <div className="md:hidden">
             <ThemeToggle />
           </div>
-
-          {/* Profile Avatar (Top Right shortcut on desktop & mobile) */}
-          <Link
-            href={ROUTES.PROFILE}
-            className="flex items-center gap-2 p-1 border border-border/60 hover:border-primary/40 rounded-full bg-card transition-all outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            aria-label="User profile settings"
-          >
-            {userPicture ? (
-              <img src={userPicture} alt={userName} className="w-7 h-7 rounded-full object-cover" />
-            ) : (
-              <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-medium text-xs">
-                {userName.charAt(0).toUpperCase()}
-              </div>
-            )}
-          </Link>
         </div>
       </div>
     </header>

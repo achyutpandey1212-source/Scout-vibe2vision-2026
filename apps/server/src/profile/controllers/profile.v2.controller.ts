@@ -128,12 +128,14 @@ export class ProfileV2Controller {
       }
 
       const readiness = calculateCareerReadiness(profile);
+      const resume = await ResumeModel.findOne({ userId });
 
       return res.json({
         success: true,
         data: {
           profile,
           readiness,
+          resume,
         },
       });
     } catch (error: unknown) {

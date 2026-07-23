@@ -7,13 +7,14 @@
  * Refined authenticated application sidebar
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Compass, Bookmark } from 'lucide-react';
 import { ThemeToggle } from '../theme-toggle';
 import { BrandLogo } from '../branding';
 import { useAuth } from '@/context/auth-context';
+import { profileApi } from '@/lib/api';
 import { ROUTES } from '@/lib/constants/routes';
 
 interface NavItem {
@@ -28,12 +29,35 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Saved', href: ROUTES.BOOKMARKS, icon: Bookmark },
 ];
 
+const getInitialProfileName = () => {
+  if (typeof window !== 'undefined') {
+    const cached = localStorage.getItem('scout_v2_profile_name');
+    if (cached) return cached;
+  }
+  return '';
+};
+
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
   const { user } = useAuth();
+  const [profileName, setProfileName] = useState<string>(getInitialProfileName);
 
-  const userName = user?.name || 'Scout User';
+  useEffect(() => {
+    profileApi
+      .getV2()
+      .then((res) => {
+        if (res.data?.success && res.data.data.profile?.fullName) {
+          const name = res.data.data.profile.fullName.trim();
+          setProfileName(name);
+          localStorage.setItem('scout_v2_profile_name', name);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const userName = profileName || user?.displayName || user?.name || 'Student';
   const userPicture = user?.picture;
+  const initial = userName.charAt(0).toUpperCase();
 
   return (
     <aside
@@ -97,7 +121,7 @@ export const Sidebar: React.FC = () => {
             />
           ) : (
             <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-medium text-xs shrink-0">
-              {userName.charAt(0).toUpperCase()}
+              {initial}
             </div>
           )}
           <div className="flex flex-col truncate">
