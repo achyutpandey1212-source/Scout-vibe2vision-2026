@@ -19,7 +19,7 @@ export class FallbackPersonalization {
     const resumeContextBuilder = new ResumeContextBuilder();
     const resumeContext = resumeContextBuilder.build(snapshot);
 
-    const slotNames = ['perfectMatch', 'hiddenGem', 'fastApply', 'resumeBuilder', 'stretchGoal'];
+    const slotNames = ['perfectMatch', 'hiddenGem', 'quickWin', 'confidenceBuilder', 'stretchGoal'];
     const recommendationsBySlot: Record<string, IAIPersonalizationItem> = {};
 
     const primaryProj = resumeContext.topProjects[0] || {

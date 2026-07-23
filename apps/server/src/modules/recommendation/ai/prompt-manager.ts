@@ -107,7 +107,7 @@ Return ONLY a valid JSON object. No markdown, no code fences, no preamble.
     const snapshot = existingSnapshot || new CandidateSnapshotBuilder().build(profile, resume);
     const builder = new RecommendationContextBuilder();
 
-    const slotNames = ['perfectMatch', 'hiddenGem', 'fastApply', 'resumeBuilder', 'stretchGoal'];
+    const slotNames = ['perfectMatch', 'hiddenGem', 'quickWin', 'confidenceBuilder', 'stretchGoal'];
 
     const sampleCand = topCandidates[0] || { opportunity: {} };
     const sampleContext = builder.build(profile, resume, sampleCand, snapshot);
@@ -127,10 +127,10 @@ Return ONLY a valid JSON object. No markdown, no code fences, no preamble.
         case 'stretchGoal':
           slotPrompt = buildStretchGoalPrompt(context);
           break;
-        case 'fastApply':
+        case 'quickWin':
           slotPrompt = buildQuickWinPrompt(context);
           break;
-        case 'resumeBuilder':
+        case 'confidenceBuilder':
           slotPrompt = buildConfidenceBuilderPrompt(context);
           break;
         default:

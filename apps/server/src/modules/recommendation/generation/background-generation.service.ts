@@ -333,8 +333,8 @@ Portfolio Diversity Score: ${portfolio.portfolioDiversityScore}/100
       const requiredSlots = [
         'perfectMatch',
         'hiddenGem',
-        'fastApply',
-        'resumeBuilder',
+        'quickWin',
+        'confidenceBuilder',
         'stretchGoal',
       ];
       requiredSlots.forEach((slotKey, idx) => {
@@ -389,6 +389,42 @@ Overall Quality Score:        ${qualityScore}
       // 8. Building & Persisting Pack
       currentStage = 'SAVE_RECOMMENDATION_PACK';
       await RecommendationRepository.updateProgressPhase(packId, 'BUILDING_PACK');
+      // ──── DIAGNOSTIC: STAGE 3 — AI RESPONSE BEFORE PACKBUILDER ──────────────
+      const _diagSlot3 = aiResponse?.recommendationsBySlot?.['perfectMatch'] as any;
+      if (_diagSlot3) {
+        const _fieldSt3 = (f: string) => {
+          const v = _diagSlot3[f];
+          if (v === undefined || v === null) return '❌ MISSING';
+          if (Array.isArray(v))
+            return v.length === 0
+              ? '⚠ EMPTY ARRAY'
+              : `✅ [${v.length} items] "${String(v[0]).slice(0, 50)}"`;
+          if (typeof v === 'object')
+            return JSON.stringify(v).length < 5
+              ? '⚠ EMPTY OBJECT'
+              : `✅ ${JSON.stringify(v).slice(0, 80)}`;
+          return String(v).length === 0 ? '⚠ EMPTY STRING' : `✅ "${String(v).slice(0, 80)}"`;
+        };
+        console.log(`
+════════════════════════════════════════
+[CAREER REPORT DIAGNOSTIC] STAGE 3 — AI RESPONSE BEFORE PACKBUILDER (slot: perfectMatch)
+════════════════════════════════════════
+executiveSummary:      ${_fieldSt3('executiveSummary')}
+whyScoutPickedThis:    ${_fieldSt3('whyScoutPickedThis')}
+strongestStrengths:    ${_fieldSt3('strongestStrengths')}
+missingSkills:         ${_fieldSt3('missingSkills')}
+resumeImprovements:    ${_fieldSt3('resumeImprovements')}
+interviewPrep:         ${_fieldSt3('interviewPrep')}
+applicationConfidence: ${_fieldSt3('applicationConfidence')}
+nextAction:            ${_fieldSt3('nextAction')}
+scoutVerdict:          ${_fieldSt3('scoutVerdict')}
+applicationStrategy:   ${_fieldSt3('applicationStrategy')}
+preparationChecklist:  ${_fieldSt3('preparationChecklist')}
+strengths:             ${_fieldSt3('strengths')}
+challenges:            ${_fieldSt3('challenges')}
+════════════════════════════════════════`);
+      }
+      // ───────────────────────────────────────────────────────────────────────────
       const finalPackFields = RecommendationPackBuilder.build(
         userId,
         profileHash,
@@ -399,6 +435,43 @@ Overall Quality Score:        ${qualityScore}
         experimentGroup,
         qualityScore,
       );
+
+      // ──── DIAGNOSTIC: STAGE 4 — PACKBUILDER OUTPUT BEFORE MONGODB ───────────
+      const _diagSlot4 = (finalPackFields as any)?.perfectMatch;
+      if (_diagSlot4) {
+        const _fieldSt4 = (f: string) => {
+          const v = _diagSlot4[f];
+          if (v === undefined || v === null) return '❌ MISSING';
+          if (Array.isArray(v))
+            return v.length === 0
+              ? '⚠ EMPTY ARRAY'
+              : `✅ [${v.length} items] "${String(v[0]).slice(0, 50)}"`;
+          if (typeof v === 'object')
+            return JSON.stringify(v).length < 5
+              ? '⚠ EMPTY OBJECT'
+              : `✅ ${JSON.stringify(v).slice(0, 80)}`;
+          return String(v).length === 0 ? '⚠ EMPTY STRING' : `✅ "${String(v).slice(0, 80)}"`;
+        };
+        console.log(`
+════════════════════════════════════════
+[CAREER REPORT DIAGNOSTIC] STAGE 4 — PACKBUILDER OUTPUT (slot: perfectMatch) BEFORE MONGODB
+════════════════════════════════════════
+executiveSummary:      ${_fieldSt4('executiveSummary')}
+whyScoutPickedThis:    ${_fieldSt4('whyScoutPickedThis')}
+strongestStrengths:    ${_fieldSt4('strongestStrengths')}
+missingSkills:         ${_fieldSt4('missingSkills')}
+resumeImprovements:    ${_fieldSt4('resumeImprovements')}
+interviewPrep:         ${_fieldSt4('interviewPrep')}
+applicationConfidence: ${_fieldSt4('applicationConfidence')}
+nextAction:            ${_fieldSt4('nextAction')}
+scoutVerdict:          ${_fieldSt4('scoutVerdict')}
+applicationStrategy:   ${_fieldSt4('applicationStrategy')}
+preparationChecklist:  ${_fieldSt4('preparationChecklist')}
+strengths:             ${_fieldSt4('strengths')}
+challenges:            ${_fieldSt4('challenges')}
+════════════════════════════════════════`);
+      }
+      // ───────────────────────────────────────────────────────────────────────────
 
       const durationMs = Date.now() - startTime;
       if (finalPackFields.metadata) {

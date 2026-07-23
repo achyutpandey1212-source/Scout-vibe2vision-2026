@@ -3,19 +3,23 @@ import { z } from 'zod';
 export const SingleCareerReportSchema = z.object({
   executiveSummary: z.string().max(500),
   whyScoutPickedThis: z.string().max(950),
-  strongestStrengths: z.array(z.string()).max(5),
+  strongestStrengths: z.array(z.string()).max(5).optional(),
   missingSkills: z.array(z.string()).max(5),
-  resumeImprovements: z.array(z.string()).max(5),
-  interviewPrep: z.array(z.string()).max(5),
-  applicationConfidence: z.object({
-    level: z.string(),
-    explanation: z.string().max(380),
-  }),
+  resumeImprovements: z.array(z.string()).max(5).optional(),
+  interviewPrep: z.array(z.string()).max(5).optional(),
+  applicationConfidence: z
+    .object({
+      level: z.string(),
+      explanation: z.string().max(380),
+    })
+    .optional(),
   nextAction: z.string().max(350),
-  scoutVerdict: z.object({
-    verdict: z.string(),
-    explanation: z.string().max(380),
-  }),
+  scoutVerdict: z
+    .object({
+      verdict: z.string(),
+      explanation: z.string().max(380),
+    })
+    .optional(),
   personalizedReason: z.string().max(250),
   whyNow: z.string().max(150),
   firstAction: z.string().max(150),

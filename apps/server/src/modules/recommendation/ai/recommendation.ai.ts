@@ -14,7 +14,7 @@ export class RecommendationAI {
       prompt,
       context: 'recommendation',
       systemInstruction,
-      temperature: 0.1, // low temperature to ensure strict JSON schemas compliance
+      temperature: 0.3, // low temperature to ensure strict JSON schemas compliance but raised slightly for richness
       timeoutMs: AI_TIMEOUT_MS,
     });
   }
