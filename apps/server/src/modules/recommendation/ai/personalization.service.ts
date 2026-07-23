@@ -1,6 +1,6 @@
 import { IProfile } from '../../../profile/models/profile.model';
 import { CandidateSnapshotBuilder } from '../../../recommendation/engine/candidate-snapshot';
-import { ResumeContextBuilder } from '../../../recommendation/engine/resume-context-builder';
+import { RecommendationContextBuilder } from '../../../intelligence/recommendation/context/recommendation-context-builder';
 import { PromptManager } from './prompt-manager';
 import { RecommendationAI } from './recommendation.ai';
 import { ResponseValidator } from './response-validator';
@@ -22,8 +22,9 @@ export class PersonalizationService {
   ): Promise<{ response: IAIPersonalizationResponse; metadata: IAIPersonalizationMetadata }> {
     const startTime = Date.now();
     const snapshot = existingSnapshot || new CandidateSnapshotBuilder().build(profile, resume);
-    const resumeContextBuilder = new ResumeContextBuilder();
-    const resumeContext = resumeContextBuilder.build(snapshot);
+    const builder = new RecommendationContextBuilder();
+    const sampleCand = top5[0] || { opportunity: {} };
+    const sampleContext = builder.build(profile, resume, sampleCand, snapshot);
 
     const prompt = PromptManager.buildPrompt(profile, resume, top5, snapshot);
     const promptHash = PromptManager.hashPrompt(prompt);
@@ -92,10 +93,10 @@ export class PersonalizationService {
 Recommendation Personalization Report
 ========================================
 
-Candidate Summary Size:      ${resumeContext.formattedContext.length} chars
-Projects Referenced:         ${resumeContext.topProjects.length}
-Experience Referenced:       ${resumeContext.experienceHighlights.length}
-Strongest Technologies:      ${resumeContext.topTechnologies.join(', ')}
+Candidate Summary Size:      ${sampleContext.humanReadableSummary.length} chars
+Projects Referenced:         ${sampleContext.projects.length}
+Experience Referenced:       ${sampleContext.experienceSummary.internships.length + sampleContext.experienceSummary.leadership.length}
+Strongest Technologies:      ${sampleContext.technicalProfile.languages.concat(sampleContext.technicalProfile.frameworks).slice(0, 5).join(', ')}
 
 Prompt Length:               ${prompt.length} chars
 Response Length:             ${responseText.length} chars

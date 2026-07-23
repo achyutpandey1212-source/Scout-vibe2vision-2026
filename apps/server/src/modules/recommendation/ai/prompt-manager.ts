@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { IProfile } from '../../../profile/models/profile.model';
 import { CandidateSnapshotBuilder } from '../../../recommendation/engine/candidate-snapshot';
-import { ResumeContextBuilder } from '../../../recommendation/engine/resume-context-builder';
+import { RecommendationContextBuilder } from '../../../intelligence/recommendation/context/recommendation-context-builder';
 
 export class PromptManager {
   /**
@@ -53,7 +53,7 @@ Return ONLY a valid JSON object matching this schema:
   }
 
   /**
-   * Builds the prompt string combining structured Resume Context and Top Opportunities.
+   * Builds the prompt string combining structured Recommendation Context and Top Opportunities.
    */
   static buildPrompt(
     profile: IProfile,
@@ -62,35 +62,65 @@ Return ONLY a valid JSON object matching this schema:
     existingSnapshot?: any,
   ): string {
     const snapshot = existingSnapshot || new CandidateSnapshotBuilder().build(profile, resume);
-    const resumeContextBuilder = new ResumeContextBuilder();
-    const resumeContext = resumeContextBuilder.build(snapshot);
+    const builder = new RecommendationContextBuilder();
 
     const slotNames = ['perfectMatch', 'hiddenGem', 'fastApply', 'resumeBuilder', 'stretchGoal'];
 
-    const opportunityList = topCandidates.slice(0, 5).map((cand, idx) => {
+    const sampleCand = topCandidates[0] || { opportunity: {} };
+    const sampleContext = builder.build(profile, resume, sampleCand, snapshot);
+
+    const opportunityContexts = topCandidates.slice(0, 5).map((cand, idx) => {
       const slot = slotNames[idx] || `match_${idx}`;
-      const opp = (cand && (cand.opportunity || cand)) || {};
+      const context = builder.build(profile, resume, cand, snapshot);
       return {
         slot,
-        title: opp.title || 'Software Engineering Opportunity',
-        organization: opp.organization || opp.company || 'Hiring Company',
-        type: opp.opportunityType || 'INTERNSHIP',
-        description: opp.summary || (opp.description ? opp.description.slice(0, 300) : '') + '...',
-        skillsRequired: opp.skills || opp.requiredSkills || [],
-        score: cand.score || cand.totalScore || cand.finalScore || 85,
-        matchedSkills: cand.matchedSkills || [],
-        matchedProjects: cand.matchedProjects || [],
-        reasons: cand.reasons || [],
-        recommendationStrength: cand.recommendationStrength || 'strong',
+        opportunity: context.opportunity,
+        matchAnalysis: context.matchAnalysis,
+        insights: context.insights,
+        matchSummary: context.humanReadableSummary,
       };
     });
 
-    return `Please generate personalized mentoring explanations for these opportunities using the candidate's structured resume context.
+    const formattedContext = `========== Candidate Summary ==========
+Candidate Profile:
+- Name: ${sampleContext.userProfile.name}
+- Current Status: ${sampleContext.userProfile.currentStatus} (${sampleContext.userProfile.educationLevel} of ${sampleContext.userProfile.degree} in ${sampleContext.userProfile.branch} at ${sampleContext.userProfile.college})
+- Location: ${sampleContext.userProfile.location} (Preferred: ${sampleContext.userProfile.preferredLocations.join(', ')})
 
-${resumeContext.formattedContext}
+Career Goals:
+- Roles: ${sampleContext.careerGoals.preferredRoles.join(', ')}
+- Domains: ${sampleContext.careerGoals.interestedDomains.join(', ')}
+- Work Mode: ${sampleContext.careerGoals.workModePreferences.join(', ')}
+- Type: ${sampleContext.careerGoals.internshipVsFullTimePreference}
+
+Technical Profile:
+- Languages: ${sampleContext.technicalProfile.languages.join(', ')}
+- Frameworks: ${sampleContext.technicalProfile.frameworks.join(', ')}
+- Backend: ${sampleContext.technicalProfile.backend.join(', ')}
+- Frontend: ${sampleContext.technicalProfile.frontend.join(', ')}
+- Databases: ${sampleContext.technicalProfile.databases.join(', ')}
+- Cloud: ${sampleContext.technicalProfile.cloud.join(', ')}
+- AI/ML: ${sampleContext.technicalProfile.aiMl.join(', ')}
+- Tools: ${sampleContext.technicalProfile.tools.join(', ')}
+
+Experience Summary:
+- Internships: ${sampleContext.experienceSummary.internships.join('; ')}
+- Leadership: ${sampleContext.experienceSummary.leadership.join('; ')}
+- Research: ${sampleContext.experienceSummary.research.join('; ')}
+
+Resume Strengths:
+${sampleContext.resumeStrength.bulletPoints.map((b) => `- ${b}`).join('\n')}
+
+Top Projects:
+${sampleContext.projects.map((p) => `- ${p.title}: ${p.description} (Tech: ${p.technologies.join(', ')}) [Learning: ${p.mostRelevantLearning}]`).join('\n')}
+======================================`;
+
+    return `Please generate personalized mentoring explanations for these opportunities using the candidate's structured recommendation context.
+
+${formattedContext}
 
 ========== Top Opportunities ==========
-${JSON.stringify(opportunityList, null, 2)}
+${JSON.stringify(opportunityContexts, null, 2)}
 ======================================
 
 Provide recommendationsBySlot matching the slots specified above:

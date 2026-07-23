@@ -351,7 +351,9 @@ export class CandidateSnapshotBuilder {
       const title = p.title || 'Project';
       const rawTechs = Array.isArray(p.technologies) ? p.technologies : [];
       const technologies = Array.from(
-        new Set(rawTechs.map((t: string) => this.normalizeTechToken(t)).filter(Boolean)),
+        new Set(
+          rawTechs.map((t: any) => this.normalizeTechToken(String(t))).filter(Boolean) as string[],
+        ),
       );
       const summary = p.description || p.summary || '';
       const category = this.inferProjectCategory(title, technologies, summary);

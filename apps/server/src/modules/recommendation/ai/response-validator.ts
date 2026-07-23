@@ -24,11 +24,13 @@ export class ResponseValidator {
     const trimmed = str.trim();
     if (trimmed.length <= maxLen) return trimmed;
 
-    const sliceCandidate = trimmed.slice(0, maxLen);
+    // Reserve 1 character for the potential appended period
+    const limit = maxLen - 1;
+    const sliceCandidate = trimmed.slice(0, limit);
     const lastPeriod = sliceCandidate.lastIndexOf('.');
 
-    // If a sentence end exists after 40% of maxLen, cut cleanly at sentence end
-    if (lastPeriod > maxLen * 0.4) {
+    // If a sentence end exists after 40% of limit, cut cleanly at sentence end
+    if (lastPeriod > limit * 0.4) {
       return sliceCandidate.slice(0, lastPeriod + 1);
     }
 
