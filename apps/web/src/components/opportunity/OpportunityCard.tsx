@@ -37,7 +37,7 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
   deadline,
   description,
   tags = [],
-  matchScore = 75,
+  matchScore,
   explanation,
   whyNow,
   slotLabel,

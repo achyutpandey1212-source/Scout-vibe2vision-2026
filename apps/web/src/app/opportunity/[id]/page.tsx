@@ -232,6 +232,13 @@ export default function OpportunityDetailsPage() {
   const hasScoutVerdict = Boolean(recommendationItem?.scoutVerdict?.explanation);
   const hasApplicationConfidence = Boolean(recommendationItem?.applicationConfidence?.level);
   const hasNextAction = Boolean(recommendationItem?.nextAction);
+  const isTop5Recommended = Boolean(
+    recommendationItem &&
+    recommendationItem.slot &&
+    ['perfectMatch', 'hiddenGem', 'quickWin', 'confidenceBuilder', 'stretchGoal'].includes(
+      recommendationItem.slot,
+    ),
+  );
 
   return (
     <ProtectedRoute>
@@ -389,229 +396,319 @@ export default function OpportunityDetailsPage() {
 
                 {/* ── Right Column: Scout AI Career Report Sidebar (4 cols) ── */}
                 <div className="md:col-span-4 space-y-6">
-                  <div className="p-6 border border-primary/30 bg-primary/[0.02] rounded-3xl space-y-5 shadow-sm text-left">
-                    <div className="flex items-center gap-2 border-b border-border/50 pb-3">
-                      <Sparkles className="w-4 h-4 text-primary shrink-0 animate-pulse" />
-                      <div>
-                        <span className="text-[10px] font-semibold tracking-widest uppercase text-primary block">
-                          Scout AI Career Coach
-                        </span>
-                        <h3 className="text-sm font-medium text-foreground">
-                          Personalized Career Report
-                        </h3>
-                      </div>
-                    </div>
-
-                    {/* Section 1: Executive Summary */}
-                    {hasExecutiveSummary && (
-                      <div className="space-y-1 text-xs">
-                        <span className="text-[10px] font-semibold tracking-widest uppercase text-primary block">
-                          Executive Summary
-                        </span>
-                        <p className="text-foreground/90 font-light leading-relaxed">
-                          {cleanTruncatedText(
-                            recommendationItem?.executiveSummary ||
-                              recommendationItem?.personalizedReason ||
-                              'Scout selected this opportunity based on your core engineering projects and technical skills.',
-                          )}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Section 2: Why Scout Picked This */}
-                    {hasWhyScout && (
-                      <div className="space-y-1 text-xs pt-2 border-t border-border/40">
-                        <span className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground block">
-                          Why Scout Picked This
-                        </span>
-                        <p className="text-muted-foreground font-light leading-relaxed">
-                          {cleanTruncatedText(recommendationItem.whyScoutPickedThis)}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Section 3: Strongest Strengths */}
-                    {hasStrengths && (
-                      <div className="space-y-1.5 pt-2 border-t border-border/40 text-xs">
-                        <span className="text-[10px] font-semibold tracking-widest uppercase text-emerald-600 dark:text-emerald-400 block">
-                          Your Strongest Strengths
-                        </span>
-                        <div className="space-y-1 text-muted-foreground font-light">
-                          {recommendationItem.strongestStrengths.map(
-                            (strength: string, idx: number) => (
-                              <div key={idx} className="flex items-start gap-2">
-                                <Target className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                                <span className="leading-relaxed">
-                                  {cleanTruncatedText(strength)}
-                                </span>
-                              </div>
-                            ),
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Section 4: Dynamic Skill Gap Guidance */}
-                    {hasSkillGaps && (
-                      <div className="space-y-1.5 pt-2 border-t border-border/40 text-xs">
-                        <span className="text-[10px] font-semibold tracking-widest uppercase text-amber-600 dark:text-amber-400 block">
-                          Skill Gap Guidance
-                        </span>
-                        <div className="space-y-2 text-muted-foreground font-light">
-                          {recommendationItem.missingSkills.map((gap: string, idx: number) => (
-                            <div key={idx} className="flex items-start gap-2">
-                              <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-                              <span className="leading-relaxed">{cleanTruncatedText(gap)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Section 5: Dynamic Resume Improvements */}
-                    {hasResumeImprovements && (
-                      <div className="space-y-1.5 pt-2 border-t border-border/40 text-xs">
-                        <span className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground block">
-                          Resume Improvements
-                        </span>
-                        <div className="space-y-1.5 text-muted-foreground font-light">
-                          {recommendationItem.resumeImprovements.map((tip: string, idx: number) => (
-                            <div key={idx} className="flex items-start gap-2">
-                              <CheckSquare className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
-                              <span className="leading-relaxed">{cleanTruncatedText(tip)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Section 6: Dynamic Interview Preparation */}
-                    {hasInterviewPrep && (
-                      <div className="space-y-1.5 pt-2 border-t border-border/40 text-xs">
-                        <span className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground block">
-                          Likely Interview Topics
-                        </span>
-                        <div className="space-y-1.5 text-muted-foreground font-light">
-                          {recommendationItem.interviewPrep.map((topic: string, idx: number) => (
-                            <div key={idx} className="flex items-start gap-2">
-                              <HelpCircle className="w-3.5 h-3.5 text-muted-foreground/70 shrink-0 mt-0.5" />
-                              <span className="leading-relaxed">{cleanTruncatedText(topic)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Section 7: Application Strategy */}
-                    {hasApplicationStrategy && (
-                      <div className="space-y-1 pt-2 border-t border-border/40 text-xs">
-                        <span className="text-[10px] font-semibold tracking-widest uppercase text-primary block">
-                          Application Strategy
-                        </span>
-                        <p className="text-muted-foreground font-light leading-relaxed">
-                          {cleanTruncatedText(recommendationItem.applicationStrategy)}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Section 8: Preparation Checklist */}
-                    {hasPreparationChecklist && (
-                      <div className="space-y-1.5 pt-2 border-t border-border/40 text-xs">
-                        <span className="text-[10px] font-semibold tracking-widest uppercase text-primary block">
-                          Preparation Checklist
-                        </span>
-                        <div className="space-y-1 text-muted-foreground font-light">
-                          {recommendationItem.preparationChecklist.map(
-                            (item: string, idx: number) => (
-                              <div key={idx} className="flex items-start gap-2">
-                                <CheckSquare className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
-                                <span className="leading-relaxed">{cleanTruncatedText(item)}</span>
-                              </div>
-                            ),
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Section 9: Application Confidence */}
-                    {hasApplicationConfidence && (
-                      <div className="pt-2 border-t border-border/40 text-xs">
-                        <span className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground block mb-1.5">
-                          Application Confidence
-                        </span>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                              recommendationItem.applicationConfidence.level === 'Very Competitive'
-                                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                                : recommendationItem.applicationConfidence.level === 'Competitive'
-                                  ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
-                                  : recommendationItem.applicationConfidence.level ===
-                                      'Moderate Match'
-                                    ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-                                    : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
-                            }`}
-                          >
-                            {recommendationItem.applicationConfidence.level}
+                  {isTop5Recommended ? (
+                    <div className="p-6 border border-primary/30 bg-primary/[0.02] rounded-3xl space-y-5 shadow-sm text-left">
+                      <div className="flex items-center gap-2 border-b border-border/50 pb-3">
+                        <Sparkles className="w-4 h-4 text-primary shrink-0 animate-pulse" />
+                        <div>
+                          <span className="text-[10px] font-semibold tracking-widest uppercase text-primary block">
+                            Scout AI Career Coach
                           </span>
+                          <h3 className="text-sm font-medium text-foreground">
+                            Personalized Career Report
+                          </h3>
                         </div>
-                        {recommendationItem.applicationConfidence.explanation && (
-                          <p className="text-muted-foreground font-light leading-relaxed mt-1.5">
+                      </div>
+
+                      {/* Section 1: Executive Summary */}
+                      {hasExecutiveSummary && (
+                        <div className="space-y-1 text-xs">
+                          <span className="text-[10px] font-semibold tracking-widest uppercase text-primary block">
+                            Executive Summary
+                          </span>
+                          <p className="text-foreground/90 font-light leading-relaxed">
                             {cleanTruncatedText(
-                              recommendationItem.applicationConfidence.explanation,
+                              recommendationItem?.executiveSummary ||
+                                recommendationItem?.personalizedReason ||
+                                'Scout selected this opportunity based on your core engineering projects and technical skills.',
                             )}
                           </p>
-                        )}
-                      </div>
-                    )}
+                        </div>
+                      )}
 
-                    {/* Section 10: Next Action */}
-                    {hasNextAction && (
-                      <div className="pt-2 border-t border-border/40 text-xs">
-                        <span className="text-[10px] font-semibold tracking-widest uppercase text-amber-600 dark:text-amber-400 block mb-1.5">
-                          Your Next Step
-                        </span>
-                        <p className="text-foreground/90 font-medium leading-relaxed bg-amber-500/[0.06] border border-amber-500/20 rounded-xl px-3 py-2">
-                          {cleanTruncatedText(recommendationItem.nextAction)}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Section 11: Scout Verdict */}
-                    {hasScoutVerdict && (
-                      <div className="pt-2 border-t border-border/40 text-xs">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
-                          <span className="text-[10px] font-semibold tracking-widest uppercase text-primary">
-                            Scout Verdict
+                      {/* Section 2: Why Scout Picked This */}
+                      {hasWhyScout && (
+                        <div className="space-y-1 text-xs pt-2 border-t border-border/40">
+                          <span className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground block">
+                            Why Scout Picked This
                           </span>
-                          {recommendationItem.scoutVerdict?.verdict && (
-                            <span className="ml-auto inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary/10 text-primary">
-                              {recommendationItem.scoutVerdict.verdict}
+                          <p className="text-muted-foreground font-light leading-relaxed">
+                            {cleanTruncatedText(recommendationItem.whyScoutPickedThis)}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Section 3: Strongest Strengths */}
+                      {hasStrengths && (
+                        <div className="space-y-1.5 pt-2 border-t border-border/40 text-xs">
+                          <span className="text-[10px] font-semibold tracking-widest uppercase text-emerald-600 dark:text-emerald-400 block">
+                            Your Strongest Strengths
+                          </span>
+                          <div className="space-y-1 text-muted-foreground font-light">
+                            {recommendationItem.strongestStrengths.map(
+                              (strength: string, idx: number) => (
+                                <div key={idx} className="flex items-start gap-2">
+                                  <Target className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                                  <span className="leading-relaxed">
+                                    {cleanTruncatedText(strength)}
+                                  </span>
+                                </div>
+                              ),
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Section 4: Dynamic Skill Gap Guidance */}
+                      {hasSkillGaps && (
+                        <div className="space-y-1.5 pt-2 border-t border-border/40 text-xs">
+                          <span className="text-[10px] font-semibold tracking-widest uppercase text-amber-600 dark:text-amber-400 block">
+                            Skill Gap Guidance
+                          </span>
+                          <div className="space-y-2 text-muted-foreground font-light">
+                            {recommendationItem.missingSkills.map((gap: string, idx: number) => (
+                              <div key={idx} className="flex items-start gap-2">
+                                <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                                <span className="leading-relaxed">{cleanTruncatedText(gap)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Section 5: Dynamic Resume Improvements */}
+                      {hasResumeImprovements && (
+                        <div className="space-y-1.5 pt-2 border-t border-border/40 text-xs">
+                          <span className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground block">
+                            Resume Improvements
+                          </span>
+                          <div className="space-y-1.5 text-muted-foreground font-light">
+                            {recommendationItem.resumeImprovements.map(
+                              (tip: string, idx: number) => (
+                                <div key={idx} className="flex items-start gap-2">
+                                  <CheckSquare className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                                  <span className="leading-relaxed">{cleanTruncatedText(tip)}</span>
+                                </div>
+                              ),
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Section 6: Dynamic Interview Preparation */}
+                      {hasInterviewPrep && (
+                        <div className="space-y-1.5 pt-2 border-t border-border/40 text-xs">
+                          <span className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground block">
+                            Likely Interview Topics
+                          </span>
+                          <div className="space-y-1.5 text-muted-foreground font-light">
+                            {recommendationItem.interviewPrep.map((topic: string, idx: number) => (
+                              <div key={idx} className="flex items-start gap-2">
+                                <HelpCircle className="w-3.5 h-3.5 text-muted-foreground/70 shrink-0 mt-0.5" />
+                                <span className="leading-relaxed">{cleanTruncatedText(topic)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Section 7: Application Strategy */}
+                      {hasApplicationStrategy && (
+                        <div className="space-y-1 pt-2 border-t border-border/40 text-xs">
+                          <span className="text-[10px] font-semibold tracking-widest uppercase text-primary block">
+                            Application Strategy
+                          </span>
+                          <p className="text-muted-foreground font-light leading-relaxed">
+                            {cleanTruncatedText(recommendationItem.applicationStrategy)}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Section 8: Preparation Checklist */}
+                      {hasPreparationChecklist && (
+                        <div className="space-y-1.5 pt-2 border-t border-border/40 text-xs">
+                          <span className="text-[10px] font-semibold tracking-widest uppercase text-primary block">
+                            Preparation Checklist
+                          </span>
+                          <div className="space-y-1 text-muted-foreground font-light">
+                            {recommendationItem.preparationChecklist.map(
+                              (item: string, idx: number) => (
+                                <div key={idx} className="flex items-start gap-2">
+                                  <CheckSquare className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                                  <span className="leading-relaxed">
+                                    {cleanTruncatedText(item)}
+                                  </span>
+                                </div>
+                              ),
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Section 9: Application Confidence */}
+                      {hasApplicationConfidence && (
+                        <div className="pt-2 border-t border-border/40 text-xs">
+                          <span className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground block mb-1.5">
+                            Application Confidence
+                          </span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                recommendationItem.applicationConfidence.level ===
+                                'Very Competitive'
+                                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                                  : recommendationItem.applicationConfidence.level === 'Competitive'
+                                    ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
+                                    : recommendationItem.applicationConfidence.level ===
+                                        'Moderate Match'
+                                      ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                                      : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
+                              }`}
+                            >
+                              {recommendationItem.applicationConfidence.level}
                             </span>
+                          </div>
+                          {recommendationItem.applicationConfidence.explanation && (
+                            <p className="text-muted-foreground font-light leading-relaxed mt-1.5">
+                              {cleanTruncatedText(
+                                recommendationItem.applicationConfidence.explanation,
+                              )}
+                            </p>
                           )}
                         </div>
+                      )}
+
+                      {/* Section 10: Next Action */}
+                      {hasNextAction && (
+                        <div className="pt-2 border-t border-border/40 text-xs">
+                          <span className="text-[10px] font-semibold tracking-widest uppercase text-amber-600 dark:text-amber-400 block mb-1.5">
+                            Your Next Step
+                          </span>
+                          <p className="text-foreground/90 font-medium leading-relaxed bg-amber-500/[0.06] border border-amber-500/20 rounded-xl px-3 py-2">
+                            {cleanTruncatedText(recommendationItem.nextAction)}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Section 11: Scout Verdict */}
+                      {hasScoutVerdict && (
+                        <div className="pt-2 border-t border-border/40 text-xs">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
+                            <span className="text-[10px] font-semibold tracking-widest uppercase text-primary">
+                              Scout Verdict
+                            </span>
+                            {recommendationItem.scoutVerdict?.verdict && (
+                              <span className="ml-auto inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary/10 text-primary">
+                                {recommendationItem.scoutVerdict.verdict}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-muted-foreground font-light leading-relaxed">
+                            {cleanTruncatedText(recommendationItem.scoutVerdict.explanation)}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Action Button */}
+                      <div className="pt-2">
+                        <button
+                          onClick={() => {
+                            const url = opportunity.applicationUrl || opportunity.sourceURL;
+                            if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                          }}
+                          disabled={!opportunity.applicationUrl && !opportunity.sourceURL}
+                          className="w-full py-2.5 px-4 bg-primary text-primary-foreground text-xs font-medium rounded-xl hover:opacity-90 transition-opacity shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          <span>Apply on Official Portal</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Honest AI Career Report Fallback Panel */
+                    <div className="p-6 border border-primary/30 bg-primary/[0.02] rounded-3xl space-y-5 shadow-sm text-left">
+                      <div className="flex items-center gap-2 border-b border-border/50 pb-3">
+                        <Sparkles className="w-4 h-4 text-primary shrink-0" />
+                        <div>
+                          <span className="text-[10px] font-semibold tracking-widest uppercase text-primary block">
+                            Scout AI Career Coach
+                          </span>
+                          <h3 className="text-sm font-medium text-foreground">
+                            Personalized Career Report
+                          </h3>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2.5 text-xs">
+                        <h4 className="font-medium text-foreground text-sm leading-snug">
+                          AI Reports Are Currently Generated for Your Top 5 Recommendations
+                        </h4>
                         <p className="text-muted-foreground font-light leading-relaxed">
-                          {cleanTruncatedText(recommendationItem.scoutVerdict.explanation)}
+                          Scout analyzes hundreds of opportunities to identify the five
+                          opportunities most aligned with your profile.
+                        </p>
+                        <p className="text-muted-foreground font-light leading-relaxed">
+                          Since Scout is currently built and operated entirely on free
+                          infrastructure, we focus our AI resources on generating detailed career
+                          reports only for those highest-value recommendations.
+                        </p>
+                        <p className="text-muted-foreground font-light leading-relaxed">
+                          This helps us deliver higher-quality insights while keeping the platform
+                          accessible to everyone.
                         </p>
                       </div>
-                    )}
 
-                    {/* Action Button */}
-                    <div className="pt-2">
-                      <button
-                        onClick={() => {
-                          const url = opportunity.applicationUrl || opportunity.sourceURL;
-                          if (url) window.open(url, '_blank', 'noopener,noreferrer');
-                        }}
-                        disabled={!opportunity.applicationUrl && !opportunity.sourceURL}
-                        className="w-full py-2.5 px-4 bg-primary text-primary-foreground text-xs font-medium rounded-xl hover:opacity-90 transition-opacity shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
-                      >
-                        <span>Apply on Official Portal</span>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="border-t border-border/40 pt-4 space-y-2 text-xs">
+                        <h4 className="font-medium text-foreground text-sm leading-snug">
+                          Help Shape Scout
+                        </h4>
+                        <p className="text-muted-foreground font-light leading-relaxed">
+                          If you've found Scout useful—or even have ideas on how it could
+                          improve—we'd genuinely love to hear from you.
+                        </p>
+                        <p className="text-muted-foreground font-light leading-relaxed">
+                          Whether it's feedback, bug reports, feature ideas, or simply saying hello,
+                          every conversation helps make Scout better.
+                        </p>
+                      </div>
+
+                      <div className="pt-2 space-y-3">
+                        <a
+                          href="https://www.linkedin.com/in/achyut-pandey-122a87323/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() =>
+                            track('founder_connect_clicked', { source: 'fallback_panel' })
+                          }
+                          className="w-full py-2.5 px-4 bg-primary text-primary-foreground text-xs font-medium rounded-xl hover:opacity-90 transition-opacity shadow-sm flex items-center justify-center gap-2"
+                        >
+                          <span>Connect on LinkedIn</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                        <p className="text-[11px] text-muted-foreground/60 font-light leading-relaxed text-center">
+                          Built independently using free resources.
+                          <br />
+                          Thank you for helping Scout grow.
+                        </p>
+                      </div>
+
+                      {/* Official Portal Apply Button */}
+                      <div className="pt-2 border-t border-border/40">
+                        <button
+                          onClick={() => {
+                            const url = opportunity.applicationUrl || opportunity.sourceURL;
+                            if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                          }}
+                          disabled={!opportunity.applicationUrl && !opportunity.sourceURL}
+                          className="w-full py-2.5 px-4 bg-card border border-border/80 text-foreground hover:bg-muted/50 text-xs font-medium rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          <span>Apply on Official Portal</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             )}
