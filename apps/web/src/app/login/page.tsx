@@ -15,6 +15,7 @@ import {
   OrigamiDecoration,
 } from '@/components/ui';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { track } from '@/lib/analytics';
 import { ROUTES } from '@/lib/constants/routes';
 import { Mail, Lock, ShieldAlert, ArrowRight, UserPlus } from 'lucide-react';
 
@@ -41,6 +42,7 @@ export default function LoginPage() {
     setError(null);
     try {
       await signInWithEmail(email, password);
+      track('login_completed', { provider: 'email', guest: false });
       router.push(ROUTES.DASHBOARD);
     } catch (err: any) {
       console.error(err);
@@ -55,6 +57,7 @@ export default function LoginPage() {
     setError(null);
     try {
       await signInWithGoogle();
+      track('login_completed', { provider: 'google', guest: false });
       router.push(ROUTES.DASHBOARD);
     } catch (err: any) {
       console.error(err);
@@ -69,6 +72,7 @@ export default function LoginPage() {
     setError(null);
     try {
       await signInAsGuest();
+      track('login_completed', { provider: 'guest', guest: true });
       router.push(ROUTES.DASHBOARD);
     } catch (err: any) {
       console.error(err);

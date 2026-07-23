@@ -15,6 +15,7 @@ import {
   OrigamiDecoration,
 } from '@/components/ui';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { track } from '@/lib/analytics';
 import { ROUTES } from '@/lib/constants/routes';
 import { Mail, Lock, ShieldAlert, ArrowRight, UserCheck, KeyRound } from 'lucide-react';
 
@@ -51,6 +52,7 @@ export default function SignupPage() {
     setError(null);
     try {
       await signUpWithEmail(email, password, name);
+      track('signup_completed', { provider: 'email', guest: false });
       router.push(ROUTES.ONBOARDING);
     } catch (err: any) {
       console.error(err);

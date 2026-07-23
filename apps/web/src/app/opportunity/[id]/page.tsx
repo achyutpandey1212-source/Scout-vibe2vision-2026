@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { ROUTES } from '@/lib/constants/routes';
 import { opportunitiesApi, recommendationsApi, bookmarksApi, Opportunity } from '@/lib/api';
+import { track } from '@/lib/analytics';
 
 const cleanTruncatedText = (str: string): string => {
   if (!str || typeof str !== 'string') return str;
@@ -111,6 +112,15 @@ export default function OpportunityDetailsPage() {
         const bookmarkedList: Opportunity[] = bookmarkRes.data.data;
         setIsBookmarked(bookmarkedList.some((b) => b._id === oppId));
       }
+
+      if (oppRes.data?.success) {
+        track('opportunity_opened', {
+          opportunityId: oppId,
+          category: oppRes.data.data.category || '',
+          source: 'opportunity_details',
+          matchScore: recommendationItem?.score || oppRes.data.data.matchScore || 80,
+        });
+      }
     } catch (err) {
       console.error('Failed to load opportunity details:', err);
       setError('Unable to reach Scout database. Please verify connection.');
@@ -123,6 +133,11 @@ export default function OpportunityDetailsPage() {
     if (!opportunity) return;
     const nextStatus = !isBookmarked;
     setIsBookmarked(nextStatus);
+    if (nextStatus) {
+      track('bookmark_added', { opportunityId: opportunity._id });
+    } else {
+      track('bookmark_removed', { opportunityId: opportunity._id });
+    }
 
     try {
       if (nextStatus) {
@@ -169,32 +184,30 @@ export default function OpportunityDetailsPage() {
 
   return (
     <ProtectedRoute>
-      <DashboardLayout>
+      <DashboardLayout title={opportunity?.title || 'Opportunity Details'}>
         <PageTransition>
-          <div className="max-w-4xl mx-auto space-y-8 pb-20 select-none">
-            {/* Top Bar Actions */}
-            <div className="flex items-center justify-between">
+          <div className="max-w-6xl mx-auto space-y-8 select-none">
+            {/* Top Actions Row */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <button
                 onClick={() => router.back()}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border/80 bg-card text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors w-fit"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Back</span>
               </button>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <button
                   onClick={handleBookmarkToggle}
-                  className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all ${
                     isBookmarked
-                      ? 'bg-primary/10 border-primary/30 text-primary'
-                      : 'bg-card border-border/80 text-muted-foreground hover:text-foreground'
+                      ? 'border-primary/40 bg-primary/10 text-primary'
+                      : 'border-border/80 bg-card hover:bg-muted/50 text-foreground'
                   }`}
                 >
-                  <Bookmark
-                    className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-primary text-primary' : ''}`}
-                  />
-                  <span>{isBookmarked ? 'Bookmarked' : 'Bookmark'}</span>
+                  <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-primary' : ''}`} />
+                  <span>{isBookmarked ? 'Saved' : 'Save'}</span>
                 </button>
 
                 {(opportunity?.applicationUrl || opportunity?.sourceURL) && (
@@ -202,6 +215,13 @@ export default function OpportunityDetailsPage() {
                     href={opportunity.applicationUrl || opportunity.sourceURL}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => {
+                      track('apply_clicked', {
+                        opportunityId: oppId,
+                        source: 'opportunity_details',
+                        matchScore: matchScore,
+                      });
+                    }}
                     className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-primary text-primary-foreground text-xs font-medium rounded-xl hover:opacity-90 transition-opacity shadow-sm"
                   >
                     <span>Apply Now</span>

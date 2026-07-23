@@ -11,6 +11,7 @@ import { SourceMarquee, DashboardPreviewMockup } from '@/components/landing';
 import { Brand } from '@/components/common/Brand';
 import { Footer } from '@/components/layout/Footer';
 import { FounderCard } from '@/components/engagement/FounderCard';
+import { track } from '@/lib/analytics';
 import { ROUTES } from '@/lib/constants/routes';
 import { opportunitiesApi, sourcesApi } from '@/lib/api';
 import { ArrowRight, Compass, Sparkles, ShieldCheck } from 'lucide-react';
@@ -22,6 +23,15 @@ export default function Home() {
   const [scrolled, setScrolled] = useState(false);
   const [liveOpportunityCount, setLiveOpportunityCount] = useState<number | null>(null);
   const [liveSourceCount, setLiveSourceCount] = useState<number | null>(null);
+
+  // Track landing page viewed
+  useEffect(() => {
+    track('landing_viewed', {
+      source: 'landing_page',
+      referrer: typeof document !== 'undefined' ? document.referrer : '',
+      authenticated: Boolean(user),
+    });
+  }, [user]);
 
   // Splash opening sequence once per session
   useEffect(() => {
@@ -74,6 +84,10 @@ export default function Home() {
   };
 
   const handleCTA = () => {
+    track('cta_clicked', {
+      cta: user ? 'Go to Dashboard' : 'Get Started',
+      location: 'Hero',
+    });
     if (user) {
       router.push(ROUTES.DASHBOARD);
     } else {

@@ -16,6 +16,7 @@ import { SectionHeader } from '@/components/dashboard';
 import { SKILLS_TAXONOMY } from '@scout/shared';
 import { useAuth } from '@/context/auth-context';
 import { profileApi } from '@/lib/api';
+import { track } from '@/lib/analytics';
 import {
   Mail,
   MapPin,
@@ -150,6 +151,12 @@ export default function ProfilePage() {
           projectsCount,
           experienceCount,
           educationCount,
+        });
+
+        track('profile_updated', {
+          updatedResume: true,
+          updatedSkills: skillsCount,
+          updatedGoals: profileData?.careerGoals?.length || 0,
         });
 
         // Re-fetch profile in background

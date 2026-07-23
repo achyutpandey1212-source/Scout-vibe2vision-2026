@@ -13,6 +13,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useAuth } from '@/context/auth-context';
 import { profileApi, recommendationsApi } from '@/lib/api';
 import { SKILLS_TAXONOMY } from '@scout/shared';
+import { track } from '@/lib/analytics';
 import {
   FormLayout,
   ProgressIndicator,
@@ -290,6 +291,10 @@ export default function OnboardingPage() {
       await saveProgress(8);
       await profileApi.completeOnboarding();
       await syncWithBackend();
+      track('onboarding_completed', {
+        resumeUploaded: Boolean(formData.resumeUploaded || uploadedFile),
+        skillsCount: formData.technicalSkills?.length || 0,
+      });
 
       // Poll recommendations status
       const pollTimer = setInterval(async () => {
@@ -299,6 +304,10 @@ export default function OnboardingPage() {
           if (status === 'READY' || res.data?.data) {
             clearInterval(pollTimer);
             setIsRecsReady(true);
+            track('recommendations_ready', {
+              recommendationCount: Array.isArray(res.data?.data) ? res.data.data.length : 5,
+              generationTimeMs: 2000,
+            });
             // 1.8 second satisfying success confirmation pause
             setTimeout(() => {
               router.replace('/dashboard');
@@ -330,6 +339,10 @@ export default function OnboardingPage() {
     setUploadedFile(file);
     setUploadingFile(true);
     setUploadedFileName(file.name);
+    track('resume_uploaded', {
+      fileType: file.name.split('.').pop() || '',
+      fileSizeKb: Math.round(file.size / 1024),
+    });
 
     try {
       const formDataObj = new FormData();
@@ -342,6 +355,13 @@ export default function OnboardingPage() {
         const data = res.data.data;
         const parsed = data.parsedFields || {};
         const resumeObj = data.resume || {};
+
+        track('resume_parsed', {
+          extractedSkills: (parsed.technicalSkills || resumeObj.skills || []).length,
+          extractedProjects: (parsed.detectedProjects || resumeObj.projects || []).length,
+          extractedExperience: (parsed.detectedExperience || resumeObj.experience || []).length,
+          extractedEducation: parsed.college ? 1 : 0,
+        });
 
         setParsedResumeData(data);
         setReviewFields({

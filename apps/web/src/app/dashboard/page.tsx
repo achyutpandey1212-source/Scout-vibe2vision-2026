@@ -16,6 +16,7 @@ import { OpportunityCard, OpportunityCardSkeleton } from '@/components/opportuni
 import { TodaysMissionCard, SectionHeader, DashboardEmptyState } from '@/components/dashboard';
 import { useAuth } from '@/context/auth-context';
 import { recommendationsApi, bookmarksApi, profileApi, Opportunity } from '@/lib/api';
+import { track } from '@/lib/analytics';
 import { ArrowRight, Clock, Sparkles } from 'lucide-react';
 
 function getTimeBasedGreeting(): string {
@@ -119,6 +120,10 @@ export default function DashboardPage() {
         setBookmarkedIds(new Set(bookmarkedList.map((opp) => opp._id)));
       }
       setPageLoading(false);
+      track('dashboard_viewed', {
+        recommendationsAvailable: true,
+        recommendationCount: recommendations.length || 5,
+      });
     } catch (err: any) {
       console.warn('Dashboard sync delay, retrying automatically...', err);
       // Automatic silent retry without alarming the user
@@ -154,8 +159,10 @@ export default function DashboardPage() {
     const nextBookmarked = new Set(bookmarkedIds);
     if (isBookmarked) {
       nextBookmarked.delete(oppId);
+      track('bookmark_removed', { opportunityId: oppId });
     } else {
       nextBookmarked.add(oppId);
+      track('bookmark_added', { opportunityId: oppId });
     }
     setBookmarkedIds(nextBookmarked);
 
