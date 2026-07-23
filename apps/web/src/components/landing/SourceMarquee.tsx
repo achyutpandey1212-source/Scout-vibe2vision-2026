@@ -64,7 +64,7 @@ export const SourceMarquee: React.FC = () => {
               <img
                 src={logo.src}
                 alt={logo.name}
-                className={`w-auto object-contain grayscale opacity-80 dark:invert dark:opacity-75 pointer-events-none select-none ${logo.className}`}
+                className={`w-auto object-contain pointer-events-none select-none ${logo.className}`}
               />
             </div>
           ))}

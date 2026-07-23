@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /bookmarks
+Disallow: /notifications
+Disallow: /onboarding
+Disallow: /admin
+
+Sitemap: https://scout.app/sitemap.xml
