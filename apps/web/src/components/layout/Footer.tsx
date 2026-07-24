@@ -39,7 +39,7 @@ export const Footer: React.FC = () => {
               </li>
               <li>
                 <a
-                  href="https://chat.whatsapp.com/G3E6G6X2B9y3X3"
+                  href="https://chat.whatsapp.com/KA7o5Z40G1f6z1mas8hx41"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-foreground transition-colors"
@@ -58,7 +58,7 @@ export const Footer: React.FC = () => {
             <ul className="space-y-2 text-xs text-muted-foreground font-light">
               <li>
                 <a
-                  href="https://www.linkedin.com/in/achyut-pandey-6593b4256"
+                  href="https://www.linkedin.com/in/achyut-pandey-122a87323/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-foreground transition-colors"
@@ -68,7 +68,7 @@ export const Footer: React.FC = () => {
               </li>
               <li>
                 <a
-                  href="https://chat.whatsapp.com/G3E6G6X2B9y3X3"
+                  href="https://chat.whatsapp.com/KA7o5Z40G1f6z1mas8hx41"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-foreground transition-colors"

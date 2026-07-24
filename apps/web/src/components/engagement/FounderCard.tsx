@@ -108,7 +108,7 @@ export const FounderCard: React.FC = () => {
             <h3 className="text-base font-display font-medium leading-tight">
               Hi, I&apos;m Achyut.
             </h3>
-            <p className="text-[11px] text-muted-foreground font-light">Built by Achyut Pandey</p>
+            <p className="text-[11px] text-muted-foreground font-light">Founder | Scout</p>
           </div>
         </div>
 
@@ -129,7 +129,7 @@ export const FounderCard: React.FC = () => {
         <div className="space-y-2 pt-1">
           <div className="flex items-center gap-2">
             <a
-              href="https://www.linkedin.com/in/achyut-pandey-6593b4256"
+              href="https://www.linkedin.com/in/achyut-pandey-122a87323/"
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => {
@@ -142,7 +142,7 @@ export const FounderCard: React.FC = () => {
               <span>LinkedIn</span>
             </a>
             <a
-              href="https://chat.whatsapp.com/G3E6G6X2B9y3X3"
+              href="https://chat.whatsapp.com/KA7o5Z40G1f6z1mas8hx41"
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => {

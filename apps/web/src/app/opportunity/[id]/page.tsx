@@ -242,7 +242,7 @@ export default function OpportunityDetailsPage() {
 
   return (
     <ProtectedRoute>
-      <DashboardLayout title={opportunity?.title || 'Opportunity Details'}>
+      <DashboardLayout title="Opportunity Details">
         <PageTransition>
           <div className="max-w-6xl mx-auto space-y-8 select-none">
             {/* Top Actions Row */}
@@ -675,7 +675,7 @@ export default function OpportunityDetailsPage() {
 
                       <div className="pt-2 space-y-3">
                         <a
-                          href="https://www.linkedin.com/in/achyut-pandey-122a87323/"
+                          href="https://https://www.linkedin.com/in/achyut-pandey-122a87323//"
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={() =>

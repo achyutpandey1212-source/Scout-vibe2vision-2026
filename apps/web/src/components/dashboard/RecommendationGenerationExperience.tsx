@@ -146,7 +146,7 @@ export const RecommendationGenerationExperience: React.FC<
       onShareFeedback();
     } else {
       window.open(
-        'https://www.linkedin.com/in/achyut-pandey-122a87323/',
+        'https://https://www.linkedin.com/in/achyut-pandey-122a87323//',
         '_blank',
         'noopener,noreferrer',
       );
