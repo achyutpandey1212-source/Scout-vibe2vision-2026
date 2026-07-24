@@ -79,7 +79,11 @@ export default function LoginPage() {
       router.push(ROUTES.DASHBOARD);
     } catch (err: any) {
       console.error(err);
-      setError('Unable to log in as Guest. Please verify server connection.');
+      setError(
+        `Guest mode is currently unavailable.\n\n` +
+          `To provide the best experience and protect Scout's resources, guest access is temporarily disabled.\n\n` +
+          `Continue with Google or Email to discover personalized opportunities.`,
+      );
     } finally {
       setGuestLoading(false);
     }
@@ -119,7 +123,7 @@ export default function LoginPage() {
                     <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
                     <Typography
                       variant="body"
-                      className="text-xs text-rose-600 dark:text-rose-400 font-light leading-relaxed"
+                      className="text-xs text-rose-600 dark:text-rose-400 font-light leading-relaxed whitespace-pre-line"
                     >
                       {error}
                     </Typography>

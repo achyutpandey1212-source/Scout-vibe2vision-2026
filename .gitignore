@@ -127,3 +127,10 @@ test-data/resumes/**/*
 # Planner output logs
 planner-logs/
 
+# Internal Admin Portal (Local Development Only)
+apps/web/src/app/admin/
+apps/web/src/components/admin/
+apps/server/src/discovery/routes/admin.routes.ts
+apps/server/src/modules/admin/
+
+

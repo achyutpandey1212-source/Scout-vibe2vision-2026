@@ -40,15 +40,19 @@ import {
   Check,
 } from 'lucide-react';
 
-const VOTE_COUNT_BASE = 42;
-
 export default function ProfilePage() {
   const { user, signOut } = useAuth();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [hasVoted, setHasVoted] = useState(false);
-  const [voteCount, setVoteCount] = useState(VOTE_COUNT_BASE);
+  const [voteCount, setVoteCount] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('scout_companion_vote_count');
+      if (saved) return Number(saved);
+    }
+    return 42;
+  });
 
   // Profile V2 & Hydrated Resume state
   const [profileData, setProfileData] = useState<any>(null);
@@ -67,11 +71,9 @@ export default function ProfilePage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check local storage for feature vote
     const voted = localStorage.getItem('scout_companion_voted');
     if (voted === 'true') {
       setHasVoted(true);
-      setVoteCount(VOTE_COUNT_BASE + 1);
     }
   }, []);
 
@@ -122,7 +124,9 @@ export default function ProfilePage() {
     track('feature_vote_clicked', { feature_name: 'companion_preferences' });
     localStorage.setItem('scout_companion_voted', 'true');
     setHasVoted(true);
-    setVoteCount((prev) => prev + 1);
+    const nextCount = voteCount + 1;
+    setVoteCount(nextCount);
+    localStorage.setItem('scout_companion_vote_count', String(nextCount));
     track('feature_vote_completed', { feature_name: 'companion_preferences' });
   };
 
