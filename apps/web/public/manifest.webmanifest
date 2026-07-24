@@ -1,7 +1,7 @@
 {
-  "name": "Scout — Every Meaningful Opportunity for Women",
+  "name": "Scout — Discover Opportunities You'd Otherwise Miss",
   "short_name": "Scout",
-  "description": "Discover meaningful opportunities personalized for your goals.",
+  "description": "Discover internships, hackathons, fellowships, jobs, scholarships and more from across the web—personalized to your profile in one place.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#FAF8F5",

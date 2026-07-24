@@ -40,7 +40,7 @@ export const metadata: Metadata = {
   metadataBase: siteUrl,
   applicationName: siteName,
   title: {
-    default: 'Scout — Every Meaningful Opportunity for Women',
+    default: "Scout — Discover Opportunities You'd Otherwise Miss",
     template: '%s | Scout',
   },
   description: defaultDescription,
@@ -55,15 +55,22 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: '/',
     siteName,
-    title: 'Scout — Every Meaningful Opportunity for Women',
+    title: "Scout — Discover Opportunities You'd Otherwise Miss",
     description: defaultDescription,
-    images: [{ url: '/og/og-default.png', width: 1200, height: 630, alt: 'Scout' }],
+    images: [
+      {
+        url: new URL('/og/og-default.png', siteUrl).toString(),
+        width: 1200,
+        height: 630,
+        alt: 'Scout',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Scout — Every Meaningful Opportunity for Women',
+    title: "Scout — Discover Opportunities You'd Otherwise Miss",
     description: defaultDescription,
-    images: ['/og/og-default.png'],
+    images: [new URL('/og/og-default.png', siteUrl).toString()],
   },
   icons: {
     icon: [

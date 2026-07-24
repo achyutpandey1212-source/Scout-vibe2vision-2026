@@ -13,16 +13,20 @@ const getSiteUrl = () => {
 export const siteUrl = new URL(getSiteUrl());
 export const siteName = 'Scout';
 export const defaultDescription =
-  'Scout helps women discover internships, scholarships, hackathons, fellowships, grants, returnships, jobs and hidden opportunities personalized for their goals.';
+  'Discover internships, hackathons, fellowships, jobs, scholarships and more from across the web—personalized to your profile in one place.';
 export const defaultKeywords = [
-  'opportunities for women',
   'internships',
-  'scholarships',
-  'fellowships',
-  'grants',
-  'jobs',
   'hackathons',
+  'fellowships',
+  'scholarships',
+  'jobs',
   'career opportunities',
+  'student opportunities',
+  'software engineering internships',
+  'AI internships',
+  'personalized recommendations',
+  'opportunity discovery',
+  'Scout',
 ];
 
 const defaultImage = new URL('/og/og-default.png', siteUrl).toString();
