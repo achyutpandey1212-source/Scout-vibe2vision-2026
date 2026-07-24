@@ -1,6 +1,16 @@
 import type { Metadata } from 'next';
 
-export const siteUrl = new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://scout.app');
+const getSiteUrl = () => {
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    return process.env.NEXT_PUBLIC_SITE_URL;
+  }
+  if (process.env.NEXT_PUBLIC_VERCEL_URL) {
+    return `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`;
+  }
+  return 'https://scout.app';
+};
+
+export const siteUrl = new URL(getSiteUrl());
 export const siteName = 'Scout';
 export const defaultDescription =
   'Scout helps women discover internships, scholarships, hackathons, fellowships, grants, returnships, jobs and hidden opportunities personalized for their goals.';
@@ -15,7 +25,7 @@ export const defaultKeywords = [
   'career opportunities',
 ];
 
-const defaultImage = '/og/og-default.png';
+const defaultImage = new URL('/og/og-default.png', siteUrl).toString();
 
 type PageMetadataOptions = {
   title: string;
