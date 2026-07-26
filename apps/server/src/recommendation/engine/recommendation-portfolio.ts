@@ -140,7 +140,7 @@ export class RecommendationPortfolioBuilder {
     if (text.includes('research') || text.includes('lab') || text.includes('postdoc'))
       return 'Research';
     if (text.includes('hackathon') || opp.opportunityType === 'HACKATHON') return 'Hackathon';
-    if (text.includes('competition') || opp.opportunityType === 'COMPETITION') return 'Competition';
+    if (text.includes('competition') || opp.opportunityType === 'COMPETITION') return 'Hackathon';
     if (
       text.includes('fellowship') ||
       text.includes('scholarship') ||

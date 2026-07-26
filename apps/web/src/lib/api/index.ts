@@ -56,6 +56,7 @@ export const opportunitiesApi = {
     sortBy?: string;
   }) => api.get('/api/v1/opportunities', { params }),
   getById: (id: string) => api.get(`/api/v1/opportunities/${id}`),
+  counts: () => api.get('/api/v1/opportunities/counts'),
 };
 
 export const recommendationsApi = {

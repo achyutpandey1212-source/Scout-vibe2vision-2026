@@ -18,6 +18,22 @@ const CATEGORY_RECLASSIFICATION: Record<string, string> = {
   RESEARCH: 'RESEARCH_INTERNSHIP',
 };
 
+const TYPE_TO_CATEGORY: Record<string, string> = {
+  INTERNSHIP: 'INTERNSHIPS',
+  STARTUP_INTERNSHIP: 'STARTUP_INTERNSHIPS',
+  GOVERNMENT_INTERNSHIP: 'GOVERNMENT_INTERNSHIP',
+  RESEARCH_INTERNSHIP: 'RESEARCH_INTERNSHIP',
+  HACKATHON: 'HACKATHONS',
+  COMPETITION: 'HACKATHONS',
+  OPEN_SOURCE_PROGRAM: 'OPEN_SOURCE_PROGRAM',
+  CAMPUS_AMBASSADOR: 'CAMPUS_AMBASSADOR',
+  SCHOLARSHIP: 'SCHOLARSHIPS',
+  SUMMER_SCHOOL: 'SUMMER_SCHOOL',
+  BOOTCAMP: 'BOOTCAMP',
+  FELLOWSHIP: 'FELLOWSHIPS',
+  WOMEN_IN_TECH: 'WOMEN_IN_TECH',
+};
+
 export async function migrateCategories(): Promise<{
   opportunitiesUpdated: number;
   sourcesUpdated: number;
@@ -35,6 +51,18 @@ export async function migrateCategories(): Promise<{
     const result = await mongoose.connection.db
       ?.collection('opportunities')
       .updateMany({ category: oldCat }, { $set: { category: newCat } });
+
+    opportunitiesUpdated += result?.modifiedCount || 0;
+  }
+
+  // Fix mismatched category/opportunityType pairs
+  for (const [oppType, expectedCategory] of Object.entries(TYPE_TO_CATEGORY)) {
+    const result = await mongoose.connection.db
+      ?.collection('opportunities')
+      .updateMany(
+        { opportunityType: oppType, category: { $ne: expectedCategory } },
+        { $set: { category: expectedCategory } },
+      );
 
     opportunitiesUpdated += result?.modifiedCount || 0;
   }

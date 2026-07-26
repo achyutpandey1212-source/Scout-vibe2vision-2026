@@ -9,7 +9,7 @@ const EMOJI_TYPE_MAP: Record<string, OpportunityType> = {
   '🏛️ Government Internship': 'GOVERNMENT_INTERNSHIP',
   '🔬 Research Internship': 'RESEARCH_INTERNSHIP',
   '💻 Hackathon': 'HACKATHON',
-  '🏆 Competition': 'COMPETITION',
+  '🏆 Hackathon': 'HACKATHON',
   '🌐 Open Source': 'OPEN_SOURCE_PROGRAM',
   '📢 Campus Ambassador': 'CAMPUS_AMBASSADOR',
   '🎓 Scholarship': 'SCHOLARSHIP',

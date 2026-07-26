@@ -419,7 +419,7 @@ Duration:               ${(report.durationMs / 1000).toFixed(1)}s
         confidence: 100,
         reason: 'Deterministic reputation override for Kaggle.',
         suggestedSourceType: 'Platform',
-        suggestedCategory: 'STUDENT_COMPETITION',
+        suggestedCategory: 'HACKATHONS',
         suggestedTrustScore: 95,
         suggestedPriority: 'medium',
         suggestedCrawlFrequency: 'weekly',

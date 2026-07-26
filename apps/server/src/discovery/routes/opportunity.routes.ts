@@ -3,6 +3,23 @@ import { AuthenticatedRequest } from '../../auth/types/auth.types';
 import { requireAuth } from '../../middleware/auth';
 import { OpportunityModel } from '../extraction/models/opportunity.model';
 
+const CATEGORY_VARIANTS: Record<string, string[]> = {
+  INTERNSHIPS: ['INTERNSHIPS', 'INTERNSHIP'],
+  STARTUP_INTERNSHIPS: ['STARTUP_INTERNSHIPS', 'STARTUP_INTERNSHIP'],
+  GOVERNMENT_INTERNSHIP: ['GOVERNMENT_INTERNSHIP'],
+  RESEARCH_INTERNSHIP: ['RESEARCH_INTERNSHIP'],
+  HACKATHONS: ['HACKATHONS', 'HACKATHON'],
+  SCHOLARSHIPS: ['SCHOLARSHIPS', 'SCHOLARSHIP'],
+  FELLOWSHIPS: ['FELLOWSHIPS', 'FELLOWSHIP'],
+  OPEN_SOURCE_PROGRAM: ['OPEN_SOURCE_PROGRAM'],
+  CAMPUS_AMBASSADOR: ['CAMPUS_AMBASSADOR'],
+  SUMMER_SCHOOL: ['SUMMER_SCHOOL'],
+  BOOTCAMP: ['BOOTCAMP'],
+  WOMEN_IN_TECH: ['WOMEN_IN_TECH'],
+  JOB: ['JOB'],
+  EVENT: ['EVENT'],
+};
+
 const router = Router();
 
 router.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
@@ -13,7 +30,16 @@ router.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) =>
     if (opportunityType && opportunityType !== 'ALL') {
       query.opportunityType = opportunityType;
     } else if (category && category !== 'ALL') {
-      query.category = category;
+      if (category === 'HACKATHONS') {
+        query.$or = [
+          { category: { $in: CATEGORY_VARIANTS['HACKATHONS'] } },
+          { opportunityType: { $in: ['HACKATHON', 'COMPETITION'] } },
+        ];
+      } else {
+        const catKey = String(category);
+        const variants = CATEGORY_VARIANTS[catKey] || [catKey];
+        query.category = { $in: variants };
+      }
     }
     if (q) {
       query.$or = [
@@ -49,6 +75,28 @@ router.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) =>
   } catch (error) {
     console.error('Opportunities list API error:', error);
     return res.status(500).json({ success: false, error: { message: 'Failed to search catalog' } });
+  }
+});
+
+router.get('/counts', requireAuth, async (_req: AuthenticatedRequest, res: Response) => {
+  try {
+    const baseQuery = { 'intelligence.expired': { $ne: true } };
+    const total = await OpportunityModel.countDocuments(baseQuery);
+
+    const counts: Record<string, number> = { ALL: total };
+
+    for (const [key, variants] of Object.entries(CATEGORY_VARIANTS)) {
+      const count = await OpportunityModel.countDocuments({
+        ...baseQuery,
+        category: { $in: variants },
+      });
+      counts[key] = count;
+    }
+
+    return res.json({ success: true, data: counts });
+  } catch (error) {
+    console.error('Opportunity counts API error:', error);
+    return res.status(500).json({ success: false, error: { message: 'Failed to fetch counts' } });
   }
 });
 

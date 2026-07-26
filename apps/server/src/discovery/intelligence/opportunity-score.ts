@@ -5,6 +5,7 @@ export interface OpportunityScoreBreakdown {
   freshness: number;
   company: number;
   internship: number;
+  hackathon: number;
   deadline: number;
   remote: number;
   application: number;
@@ -30,7 +31,7 @@ export class OpportunityScorer {
     if (isTechDomain) engineering += 10;
     if (opp.skills && opp.skills.length > 2) engineering += 5;
 
-    // 2. Internship Confidence (Max 20)
+    // 2. Internship / Hackathon Confidence (Max 20)
     // Matches if specifically internship type and mentions student/placement eligibility
     let internship = 10;
     if (String(opp.opportunityType).toUpperCase() === 'INTERNSHIP') {
@@ -39,6 +40,22 @@ export class OpportunityScorer {
     const lowerTitle = opp.title.toLowerCase();
     if (lowerTitle.includes('intern') || lowerTitle.includes('sde')) {
       internship += 5;
+    }
+
+    let hackathon = 0;
+    if (
+      String(opp.opportunityType).toUpperCase() === 'HACKATHON' ||
+      String(opp.opportunityType).toUpperCase() === 'COMPETITION'
+    ) {
+      hackathon += 5;
+    }
+    if (
+      lowerTitle.includes('hackathon') ||
+      lowerTitle.includes('competition') ||
+      lowerTitle.includes('challenge') ||
+      lowerTitle.includes('athon')
+    ) {
+      hackathon += 5;
     }
 
     // 3. Freshness (Max 15)
@@ -83,6 +100,7 @@ export class OpportunityScorer {
       freshness,
       company,
       internship,
+      hackathon,
       deadline,
       remote,
       application,
@@ -90,7 +108,15 @@ export class OpportunityScorer {
 
     const overall = Math.min(
       100,
-      engineering + freshness + company + internship + deadline + remote + application + location,
+      engineering +
+        freshness +
+        company +
+        internship +
+        hackathon +
+        deadline +
+        remote +
+        application +
+        location,
     );
 
     return {

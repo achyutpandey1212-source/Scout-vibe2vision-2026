@@ -154,7 +154,7 @@ export class AffiliateQueueProcessor {
         confidence: 100,
         reason: 'Deterministic reputation override for Kaggle.',
         suggestedSourceType: 'Platform',
-        suggestedCategory: 'STUDENT_COMPETITION',
+        suggestedCategory: 'HACKATHONS',
         suggestedTrustScore: 95,
         suggestedPriority: 'medium',
         suggestedCrawlFrequency: 'weekly',

@@ -308,26 +308,37 @@ export class Stage4QualityAcceptance implements IPipelineStage<
         opp.title &&
         opp.title.trim().length >= 3;
 
-      const isTargetTechRole = [
-        'intern',
-        'internship',
-        'software',
-        'sde',
-        'developer',
-        'engineer',
-        'backend',
-        'frontend',
-        'full stack',
-        'fullstack',
-        'ai',
-        'ml',
-        'machine learning',
-        'data science',
-        'devops',
-        'cloud',
-        'product',
-        'trainee',
-      ].some((kw) => (opp.title || '').toLowerCase().includes(kw));
+      const isTargetTechRole =
+        [
+          'intern',
+          'internship',
+          'software',
+          'sde',
+          'developer',
+          'engineer',
+          'backend',
+          'frontend',
+          'full stack',
+          'fullstack',
+          'ai',
+          'ml',
+          'machine learning',
+          'data science',
+          'devops',
+          'cloud',
+          'product',
+          'trainee',
+          'hackathon',
+          'competition',
+          'challenge',
+          'athon',
+          'code',
+          'coding',
+          'participate',
+          'build',
+          'innovation',
+        ].some((kw) => (opp.title || '').toLowerCase().includes(kw)) ||
+        ['HACKATHON', 'COMPETITION', 'OPEN_SOURCE_PROGRAM'].includes(opp.opportunityType);
 
       if (isDataValid && hasCoreSignal && isTargetTechRole && finalScore >= 60) {
         decision = 'ACCEPT';

@@ -4,7 +4,23 @@ export interface MockOpportunity {
   organization: string;
   description: string;
   summary: string;
-  category: 'JOB' | 'INTERNSHIP' | 'SCHOLARSHIP' | 'FELLOWSHIP' | 'GRANT' | 'FREELANCE';
+  category:
+    | 'JOB'
+    | 'INTERNSHIPS'
+    | 'SCHOLARSHIPS'
+    | 'FELLOWSHIPS'
+    | 'HACKATHONS'
+    | 'GRANT'
+    | 'FREELANCE'
+    | 'STARTUP_INTERNSHIPS'
+    | 'GOVERNMENT_INTERNSHIP'
+    | 'RESEARCH_INTERNSHIP'
+    | 'CAMPUS_AMBASSADOR'
+    | 'OPEN_SOURCE_PROGRAM'
+    | 'SUMMER_SCHOOL'
+    | 'BOOTCAMP'
+    | 'WOMEN_IN_TECH'
+    | 'EVENT';
   deadline: string;
   matchScore: number;
   tags: string[];
@@ -29,7 +45,7 @@ export const mockOpportunities: MockOpportunity[] = [
       'Google Women Techmakers Scholars receive academic financial support to cover tuition fees, participate in professional developer workshops, and receive direct mentorship from Google engineers to accelerate their coding careers.',
     summary:
       'A prestigious global scholarship and mentorship program providing financial aid and career guidance to outstanding women in computing fields.',
-    category: 'SCHOLARSHIP',
+    category: 'SCHOLARSHIPS',
     deadline: 'July 25, 2026',
     matchScore: 96,
     tags: ['Engineering', 'Scholarship', 'Mentorship'],
@@ -61,7 +77,7 @@ export const mockOpportunities: MockOpportunity[] = [
       'This program awards scholarships to female students in India pursuing engineering and technology degrees, providing them with financial aid and six months of 1-to-1 mentorship with a senior engineer from Qualcomm.',
     summary:
       'A selective scholarship for female engineering students combining financial funding and Qualcomm career mentorship.',
-    category: 'SCHOLARSHIP',
+    category: 'SCHOLARSHIPS',
     deadline: 'July 31, 2026',
     matchScore: 91,
     tags: ['Qualcomm', 'Engineering', 'Mentorship'],
@@ -91,7 +107,7 @@ export const mockOpportunities: MockOpportunity[] = [
       'Join Zenkai Labs as a MERN stack engineering intern to help build the next generation of Opportunity Intelligence tools. You will work closely with senior engineers to deploy user-facing web applications using React, Node.js, and MongoDB.',
     summary:
       'A 6-month remote developer internship working on production React/Node.js products with modern engineering pipelines.',
-    category: 'INTERNSHIP',
+    category: 'INTERNSHIPS',
     deadline: 'August 12, 2026',
     matchScore: 89,
     tags: ['React', 'NodeJS', 'Remote'],
@@ -148,7 +164,7 @@ export const mockOpportunities: MockOpportunity[] = [
       'Notion is offering a 3-month Product Management Fellowship. Fellows will own a product vertical, conduct user research, write spec documents, and collaborate with design and engineering teams to launch a feature.',
     summary:
       'A fast-paced PM fellowship at Notion for aspiring product leads to own and launch consumer-facing editor features.',
-    category: 'FELLOWSHIP',
+    category: 'FELLOWSHIPS',
     deadline: 'July 31, 2026',
     matchScore: 82,
     tags: ['Product', 'Remote'],
@@ -176,7 +192,7 @@ export const mockOpportunities: MockOpportunity[] = [
       'Microsoft Research India is looking for Research Fellows. Fellows work on cutting-edge computer science research, collaborating with world-class researchers on projects spanning systems, algorithms, AI, and technology for emerging markets.',
     summary:
       'A 1-to-2 year research fellowship for graduates to collaborate on deep technical problems at Microsoft Research.',
-    category: 'FELLOWSHIP',
+    category: 'FELLOWSHIPS',
     deadline: 'August 24, 2026',
     matchScore: 78,
     tags: ['AI Research', 'Python', 'Machine Learning'],

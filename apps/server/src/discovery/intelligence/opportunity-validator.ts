@@ -92,6 +92,14 @@ export class OpportunityValidator {
       lowerTitle.includes('developer') ||
       lowerTitle.includes('engineer') ||
       lowerTitle.includes('analyst') ||
+      lowerTitle.includes('hackathon') ||
+      lowerTitle.includes('competition') ||
+      lowerTitle.includes('challenge') ||
+      lowerTitle.includes('athon') ||
+      lowerTitle.includes('code') ||
+      ['HACKATHON', 'COMPETITION', 'OPEN_SOURCE_PROGRAM', 'CAMPUS_AMBASSADOR'].includes(
+        String(opp.opportunityType).toUpperCase(),
+      ) ||
       opp.professionalDomains?.some((d) =>
         ['SOFTWARE', 'DATA_SCIENCE', 'AI_ML', 'INFRASTRUCTURE'].includes(String(d).toUpperCase()),
       );

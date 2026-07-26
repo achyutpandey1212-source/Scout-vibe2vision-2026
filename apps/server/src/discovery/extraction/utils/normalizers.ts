@@ -41,6 +41,26 @@ const CORPORATE_SUFFIXES = [
   /\bPortal\b/gi,
 ];
 
+const OPPORTUNITY_TYPE_TO_CATEGORY: Record<string, string> = {
+  INTERNSHIP: 'INTERNSHIPS',
+  STARTUP_INTERNSHIP: 'STARTUP_INTERNSHIPS',
+  GOVERNMENT_INTERNSHIP: 'GOVERNMENT_INTERNSHIP',
+  RESEARCH_INTERNSHIP: 'RESEARCH_INTERNSHIP',
+  HACKATHON: 'HACKATHONS',
+  COMPETITION: 'HACKATHONS',
+  OPEN_SOURCE_PROGRAM: 'OPEN_SOURCE_PROGRAM',
+  CAMPUS_AMBASSADOR: 'CAMPUS_AMBASSADOR',
+  SCHOLARSHIP: 'SCHOLARSHIPS',
+  SUMMER_SCHOOL: 'SUMMER_SCHOOL',
+  BOOTCAMP: 'BOOTCAMP',
+  FELLOWSHIP: 'FELLOWSHIPS',
+  WOMEN_IN_TECH: 'WOMEN_IN_TECH',
+};
+
+function deriveCategory(opportunityType: string): string {
+  return OPPORTUNITY_TYPE_TO_CATEGORY[opportunityType] || 'INTERNSHIPS';
+}
+
 /**
  * Recursively cleans raw JSON extracted from LLM model output.
  * Normalizes string literals "null", "NULL", "None", "N/A", "na", "", "undefined" to actual null.
@@ -399,6 +419,8 @@ export function normalizeOpportunity(opp: any): any {
     'INTERNSHIP',
   );
 
+  const category = normalizeString(opp.category) || deriveCategory(opportunityType);
+
   const sourceType = normalizeEnum(
     opp.sourceType,
     ['GOVERNMENT', 'COMPANY', 'UNIVERSITY', 'NGO', 'FOUNDATION', 'COMMUNITY', 'OTHER'],
@@ -455,7 +477,7 @@ export function normalizeOpportunity(opp: any): any {
     summary: normalizeString(opp.summary) || '',
     organization,
     opportunityType,
-    category: normalizeString(opp.category) || 'INTERNSHIPS',
+    category,
     country: normalizeCountry(opp.country),
     state: normalizeString(opp.state),
     city: normalizeString(opp.city),

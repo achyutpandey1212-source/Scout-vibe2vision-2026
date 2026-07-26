@@ -24,17 +24,12 @@ const PAGE_SIZE = 24;
 
 const CATEGORIES = [
   { label: 'All', value: 'ALL' },
-  { label: 'Internship', value: 'INTERNSHIP' },
-  { label: 'Fellowship', value: 'FELLOWSHIP' },
-  { label: 'Scholarship', value: 'SCHOLARSHIP' },
-  { label: 'Competition', value: 'COMPETITION' },
-  { label: 'Bootcamp', value: 'BOOTCAMP' },
-  { label: 'Grant', value: 'GRANT' },
+  { label: 'Internship', value: 'INTERNSHIPS' },
+  { label: 'Fellowship', value: 'FELLOWSHIPS' },
+  { label: 'Scholarship', value: 'SCHOLARSHIPS' },
+  { label: 'Hackathons', value: 'HACKATHONS' },
   { label: 'Job', value: 'JOB' },
-  { label: 'Program', value: 'PROGRAM' },
   { label: 'Event', value: 'EVENT' },
-  { label: 'Course', value: 'COURSE' },
-  { label: 'Volunteer', value: 'VOLUNTEER' },
 ];
 
 const SORT_OPTIONS = [
@@ -50,6 +45,7 @@ export default function ExplorePage() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
   const [totalCount, setTotalCount] = useState(0);
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
 
   // Pagination state
   const [page, setPage] = useState(1);
@@ -66,6 +62,17 @@ export default function ExplorePage() {
   // Sentinel ref for infinite scroll
   const sentinelRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const loadCounts = useCallback(async () => {
+    try {
+      const res = await opportunitiesApi.counts();
+      if (res.data?.success && typeof res.data.data === 'object') {
+        setCategoryCounts(res.data.data as Record<string, number>);
+      }
+    } catch {
+      // Silent fail for counts — filters still work without counts
+    }
+  }, []);
 
   // Debounce search query by 400ms
   useEffect(() => {
@@ -95,13 +102,18 @@ export default function ExplorePage() {
       .catch(() => {});
   }, []);
 
+  // Fetch category counts once on mount
+  useEffect(() => {
+    loadCounts();
+  }, [loadCounts]);
+
   const loadPage = useCallback(
     async (pageNum: number, append: boolean) => {
       try {
         const res = await opportunitiesApi.list({
           page: pageNum,
           limit: PAGE_SIZE,
-          opportunityType: category === 'ALL' ? undefined : category,
+          category: category === 'ALL' ? undefined : category,
           q: debouncedQuery || undefined,
           sortBy,
         });
@@ -257,6 +269,12 @@ export default function ExplorePage() {
                 })}
               </div>
             </div>
+
+            {!initialLoading && totalCount !== undefined && (
+              <p className="text-xs text-muted-foreground/70 font-light pt-0.5">
+                {totalCount.toLocaleString()}+ opportunities
+              </p>
+            )}
 
             {/* ── Content Grid / Skeletons / Empty State ── */}
             {initialLoading ? (

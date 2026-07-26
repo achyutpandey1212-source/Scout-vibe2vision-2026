@@ -4,7 +4,23 @@ export interface Opportunity {
   organization: string;
   description: string;
   summary?: string;
-  category: 'JOB' | 'INTERNSHIP' | 'SCHOLARSHIP' | 'FELLOWSHIP' | 'GRANT' | 'FREELANCE';
+  category:
+    | 'JOB'
+    | 'INTERNSHIPS'
+    | 'SCHOLARSHIPS'
+    | 'FELLOWSHIPS'
+    | 'HACKATHONS'
+    | 'GRANT'
+    | 'FREELANCE'
+    | 'STARTUP_INTERNSHIPS'
+    | 'GOVERNMENT_INTERNSHIP'
+    | 'RESEARCH_INTERNSHIP'
+    | 'CAMPUS_AMBASSADOR'
+    | 'OPEN_SOURCE_PROGRAM'
+    | 'SUMMER_SCHOOL'
+    | 'BOOTCAMP'
+    | 'WOMEN_IN_TECH'
+    | 'EVENT';
   opportunityType?: string;
   deadline: string | null;
   startDate?: string | null;

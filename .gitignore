@@ -134,3 +134,4 @@ apps/server/src/discovery/routes/admin.routes.ts
 apps/server/src/modules/admin/
 
 
+apps/web/emails/

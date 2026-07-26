@@ -37,6 +37,18 @@ const STRONG_KEYWORDS = [
   'requisition id',
   'application deadline',
   'submit application',
+  'hackathon',
+  'hackathons',
+  'competition',
+  'challenge',
+  'athon',
+  'code',
+  'register now',
+  'participate',
+  'submission',
+  'build',
+  'innovation challenge',
+  'coding competition',
 ];
 
 // Deprecated or weak signals we want to penalize or ignore to reduce false positives
@@ -140,7 +152,17 @@ export class OpportunityDetector {
     });
 
     // 1. URL Path Checks (Weight: 20%)
-    const urlPositiveTerms = ['intern', 'job', 'scholar', 'fellow', 'apply'];
+    const urlPositiveTerms = [
+      'intern',
+      'job',
+      'scholar',
+      'fellow',
+      'apply',
+      'hackathon',
+      'competition',
+      'challenge',
+      'code',
+    ];
     urlPositiveTerms.forEach((term) => {
       if (urlLower.includes(term)) {
         score += 20;
