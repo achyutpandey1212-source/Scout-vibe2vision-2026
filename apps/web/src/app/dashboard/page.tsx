@@ -60,7 +60,7 @@ const getInitialProfileName = () => {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [profileName, setProfileName] = useState<string>(getInitialProfileName);
   const [pageLoading, setPageLoading] = useState(true);
 
@@ -69,6 +69,7 @@ export default function DashboardPage() {
   const [generatedAt, setGeneratedAt] = useState<string | Date | undefined>(undefined);
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
   const [isCapacityExhausted, setIsCapacityExhausted] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // New opportunities state
   const [newOppsData, setNewOppsData] = useState<{
@@ -85,13 +86,37 @@ export default function DashboardPage() {
 
   const loadDashboardData = async (retryCount = 0) => {
     try {
+      // Fetch each endpoint individually to handle 401 errors gracefully without rejecting the entire dashboard
+      const fetchWithAuthHandler = async (apiCall: () => Promise<any>) => {
+        try {
+          return await apiCall();
+        } catch (e: any) {
+          if (e?.response?.status === 401) {
+            return { data: { success: false, unauthorized: true } };
+          }
+          throw e;
+        }
+      };
+
       const [recRes, bookmarkRes, profileRes, newRes, recentRes] = await Promise.all([
-        recommendationsApi.list(),
-        bookmarksApi.list(),
-        profileApi.getV2(),
-        opportunitiesApi.newOpportunities(),
-        opportunitiesApi.listRecent(),
+        fetchWithAuthHandler(() => recommendationsApi.list()),
+        fetchWithAuthHandler(() => bookmarksApi.list()),
+        fetchWithAuthHandler(() => profileApi.getV2()),
+        fetchWithAuthHandler(() => opportunitiesApi.newOpportunities()),
+        fetchWithAuthHandler(() => opportunitiesApi.listRecent()),
       ]);
+
+      // If unauthorized response is received, stop loading and return early (let auth-context redirect)
+      if (
+        recRes.data?.unauthorized ||
+        bookmarkRes.data?.unauthorized ||
+        profileRes.data?.unauthorized ||
+        newRes.data?.unauthorized ||
+        recentRes.data?.unauthorized
+      ) {
+        setPageLoading(false);
+        return;
+      }
 
       if (profileRes.data?.success && profileRes.data.data?.profile?.fullName) {
         const name = profileRes.data.data.profile.fullName.trim();
@@ -111,9 +136,23 @@ export default function DashboardPage() {
 
       if (recRes.data?.status === 'AI_CAPACITY_EXHAUSTED') {
         setIsCapacityExhausted(true);
+        setIsGenerating(false);
         setPageLoading(false);
         return;
       }
+
+      if (recRes.data?.status === 'GENERATING') {
+        setIsGenerating(true);
+        setPageLoading(false);
+        // Start polling until READY
+        if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = setTimeout(() => {
+          loadDashboardData(retryCount + 1);
+        }, 3000);
+        return;
+      }
+
+      setIsGenerating(false);
 
       if (recRes.data?.success) {
         const rawData = recRes.data.data;
@@ -180,6 +219,10 @@ export default function DashboardPage() {
       });
     } catch (err: any) {
       console.warn('Dashboard sync delay, retrying automatically...', err);
+      if (err?.response?.status === 401 || err?.message?.includes('401')) {
+        setPageLoading(false);
+        return;
+      }
       // Automatic silent retry without alarming the user
       const nextDelay = Math.min(2000 * Math.pow(1.5, retryCount), 10000);
       retryTimerRef.current = setTimeout(() => {
@@ -194,8 +237,19 @@ export default function DashboardPage() {
   const cardsClickedRef = useRef<number>(0);
 
   useEffect(() => {
-    loadDashboardData();
+    // Wait for Firebase auth to resolve before making authenticated API calls.
+    // auth.currentUser is null during the initial hydration window — calling
+    // loadDashboardData before this resolves causes all requests to go out
+    // without a Bearer token, resulting in 401 Unauthorized errors.
+    if (authLoading) return;
+    if (!user) {
+      setPageLoading(false);
+      return;
+    }
+
     mountTimeRef.current = Date.now();
+    loadDashboardData();
+
     return () => {
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
       const timeSpentSeconds = Math.round((Date.now() - mountTimeRef.current) / 1000);
@@ -205,7 +259,7 @@ export default function DashboardPage() {
         cardsClicked: cardsClickedRef.current,
       });
     };
-  }, []);
+  }, [authLoading, user]);
 
   // Restore scroll position after navigation
   useEffect(() => {
@@ -334,9 +388,18 @@ export default function DashboardPage() {
               </div>
             ) : isCapacityExhausted ? (
               <AICapacityExhaustedScreen onRetry={() => loadDashboardData()} />
-            ) : recommendations.length === 0 ? (
-              /* EMPTY STATE */
+            ) : isGenerating ? (
+              /* ACTIVE GENERATION LOADING STATE */
               <DashboardEmptyState
+                title="Scout is preparing today's recommendations."
+                description="We're putting together opportunities that best match your profile. This shouldn't take long."
+                onRefreshClick={() => loadDashboardData()}
+              />
+            ) : recommendations.length === 0 ? (
+              /* NO PACK OR NOT ONBOARDED EMPTY STATE */
+              <DashboardEmptyState
+                title="No recommendations found."
+                description="Complete onboarding or update your profile details to generate personalized recommendations."
                 onDiscoverClick={() => router.push('/explore')}
                 onRefreshClick={() => loadDashboardData()}
               />

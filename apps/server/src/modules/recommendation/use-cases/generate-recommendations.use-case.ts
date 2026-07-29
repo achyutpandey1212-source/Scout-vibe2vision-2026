@@ -28,7 +28,19 @@ export class GenerateRecommendationsUseCase {
 
     // 1. If currently generating, return PENDING immediately (never launch duplicate worker)
     if (latestPack && latestPack.status === 'GENERATING') {
-      return { status: 'PENDING', pack: latestPack };
+      const startTime = new Date(latestPack.generatedAt).getTime();
+      const durationMs = Date.now() - startTime;
+      if (durationMs > 5 * 60 * 1000) {
+        console.warn(
+          `[Recommendation Engine] Detected stalled generation task for user ${userId} (running for ${Math.round(durationMs / 1000)}s). Resetting status to FAILED.`,
+        );
+        const { RecommendationRepository } =
+          await import('../repository/recommendation.repository');
+        await RecommendationRepository.markFailed(latestPack._id.toString());
+        latestPack.status = 'FAILED';
+      } else {
+        return { status: 'PENDING', pack: latestPack };
+      }
     }
 
     // 2. Evaluate if regeneration is required (expiration or hash change)
