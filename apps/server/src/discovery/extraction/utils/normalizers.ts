@@ -1,4 +1,5 @@
 import { ExperienceRequired } from '../types/opportunity.types';
+import { parseDeadline } from './deadline-parser';
 
 // Deterministic organization mapping for known domain blocks
 const KNOWN_ORGANIZATIONS: Record<string, string> = {
@@ -382,6 +383,13 @@ export function normalizeOpportunity(opp: any): any {
   // Store changes directly as a transient array for diagnostics checks
   opp._normalizationChanges = normalizationChangesApplied;
 
+  // Process structured deadlineIntelligence before normal normalizeDate transforms the deadline field
+  const rawDeadlineText = opp.deadline;
+  const deadlineIntel = parseDeadline(rawDeadlineText);
+
+  // Preserve original extracted deadline text, and map normalizedDate to deadline
+  const deadline = deadlineIntel.normalizedDate || normalizeDate(opp.deadline);
+
   // Eliminate "Untitled Opportunity" or placeholder titles by returning empty string (fails Zod schema validation)
   const rawTitle = normalizeString(opp.title) || '';
   const isPlaceholderTitle =
@@ -484,7 +492,7 @@ export function normalizeOpportunity(opp: any): any {
     remote: opp.remote === true || String(opp.remote).toLowerCase() === 'true',
     applicationUrl: normalizeString(opp.applicationUrl),
     officialWebsite: normalizeString(opp.officialWebsite),
-    deadline: normalizeDate(opp.deadline),
+    deadline: deadline,
     startDate: normalizeDate(opp.startDate),
     endDate: normalizeDate(opp.endDate),
     salary:
@@ -529,5 +537,16 @@ export function normalizeOpportunity(opp: any): any {
     estimatedCompetition,
     organizationType,
     applicationDifficulty,
+
+    deadlineIntelligence: {
+      rawText: rawDeadlineText || null,
+      type: deadlineIntel.type,
+      normalizedDate: deadlineIntel.normalizedDate,
+      timezone: deadlineIntel.timezone,
+      confidence: deadlineIntel.confidence,
+      daysRemaining: deadlineIntel.daysRemaining,
+      expired: deadlineIntel.expired,
+      displayLabel: deadlineIntel.displayLabel,
+    },
   };
 }

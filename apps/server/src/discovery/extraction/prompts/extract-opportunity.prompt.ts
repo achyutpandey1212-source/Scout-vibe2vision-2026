@@ -43,7 +43,13 @@ CRITICAL SCHEMA CONSTRAINTS:
 5. DUAL DESCRIPTIONS:
    - "description": Comprehensive extraction of rules, timelines, eligibility, and components.
    - "summary": A brief, high-impact 2-3 sentence overview for card previews, explaining why this opportunity is valuable for Indian engineering college students (e.g. career path relevance, internship readiness, tech stack exposure, or academic profile enhancement).
-6. ENUMS:
+6. DEADLINE INTELLIGENCE CONSTRAINTS:
+   - "deadlineIntelligence": A structured object containing:
+     - "rawText": The exact, raw extracted deadline text from the page (e.g. "Applications close on Aug 15", "Apply before 15 August", "Rolling Applications", "Open Until Filled", "Immediate Hiring", etc.) before any normalization. Never overwrite or skip this.
+     - "type": Classify into one of: "FIXED_DATE", "ROLLING", "UNTIL_FILLED", "IMMEDIATE", "ONGOING", "UNKNOWN".
+     - "normalizedDate": ISO YYYY-MM-DD string representation of the date if FIXED_DATE (e.g. "2026-08-15"), otherwise null.
+     - "confidence": Float score representing extraction confidence: 0.98 if explicitly/clearly mentioned, 0.70 if inferred/vague, 0.20 if unknown/no evidence.
+7. ENUMS:
    - "opportunityType": Choose exactly one: INTERNSHIP, STARTUP_INTERNSHIP, GOVERNMENT_INTERNSHIP, RESEARCH_INTERNSHIP, HACKATHON, COMPETITION, OPEN_SOURCE_PROGRAM, CAMPUS_AMBASSADOR, SCHOLARSHIP, SUMMER_SCHOOL, BOOTCAMP, FELLOWSHIP, WOMEN_IN_TECH.
    - "sourceType": Choose exactly one: GOVERNMENT, COMPANY, UNIVERSITY, NGO, FOUNDATION, COMMUNITY, OTHER.
    - "genderEligibility": Choose exactly one: FEMALE, ALL, OTHER, or null.

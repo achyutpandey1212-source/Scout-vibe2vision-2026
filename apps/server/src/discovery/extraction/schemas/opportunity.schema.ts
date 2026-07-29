@@ -210,6 +210,23 @@ export const OpportunitySchema = z
     eligibleYears: z.array(z.string()).default([]),
     womenFocused: z.boolean().default(false),
 
+    deadlineIntelligence: z
+      .object({
+        rawText: z.string().nullable().default(null),
+        type: z
+          .enum(['FIXED_DATE', 'ROLLING', 'UNTIL_FILLED', 'IMMEDIATE', 'ONGOING', 'UNKNOWN'])
+          .default('UNKNOWN'),
+        normalizedDate: z.string().nullable().default(null),
+        timezone: z.string().nullable().default(null),
+        confidence: z.number().default(0.2),
+        daysRemaining: z.number().nullable().default(null),
+        expired: z.boolean().default(false),
+        displayLabel: z.string().default('Deadline Unknown'),
+      })
+      .nullable()
+      .optional()
+      .default(null),
+
     intelligence: z
       .object({
         normalizedOrganization: z.string().nullable().default(null),

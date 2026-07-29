@@ -110,6 +110,24 @@ const OpportunitySchema = new Schema<IOpportunity>(
     visaSponsored: { type: Boolean, default: false },
     travelFunded: { type: Boolean, default: false },
 
+    deadlineIntelligence: {
+      type: {
+        rawText: { type: String, default: null },
+        type: {
+          type: String,
+          enum: ['FIXED_DATE', 'ROLLING', 'UNTIL_FILLED', 'IMMEDIATE', 'ONGOING', 'UNKNOWN'],
+          default: 'UNKNOWN',
+        },
+        normalizedDate: { type: String, default: null },
+        timezone: { type: String, default: null },
+        confidence: { type: Number, default: 0.2 },
+        daysRemaining: { type: Number, default: null },
+        expired: { type: Boolean, default: false },
+        displayLabel: { type: String, default: 'Deadline Unknown' },
+      },
+      default: null,
+    },
+
     intelligence: {
       type: {
         normalizedOrganization: { type: String, default: null },

@@ -40,6 +40,17 @@ export interface AIMetadata {
   extractionVersion: string;
 }
 
+export interface DeadlineIntelligence {
+  rawText: string | null;
+  type: 'FIXED_DATE' | 'ROLLING' | 'UNTIL_FILLED' | 'IMMEDIATE' | 'ONGOING' | 'UNKNOWN';
+  normalizedDate: string | null;
+  timezone: string | null;
+  confidence: number;
+  daysRemaining: number | null;
+  expired: boolean;
+  displayLabel: string;
+}
+
 export interface Opportunity {
   title: string;
   description: string;
@@ -113,6 +124,7 @@ export interface Opportunity {
   travelFunded?: boolean;
 
   intelligence?: OpportunityIntelligence | null;
+  deadlineIntelligence?: DeadlineIntelligence | null;
   createdAt?: string;
   updatedAt?: string;
 
