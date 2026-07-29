@@ -15,12 +15,6 @@ interface DashboardLayoutProps {
 }
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, title, subtitle }) => {
-  const handleSearchClick = () => {
-    // Simulated Search trigger
-    const event = new CustomEvent('scout-search-trigger');
-    window.dispatchEvent(event);
-  };
-
   return (
     <AppLayout showAccents={false}>
       <div className="flex min-h-screen w-full bg-background text-foreground">
@@ -30,7 +24,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, titl
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col min-w-0 relative">
           {/* Top Bar Header */}
-          <TopBar title={title} subtitle={subtitle} onSearchClick={handleSearchClick} />
+          <TopBar title={title} subtitle={subtitle} />
 
           {/* Main Page View Container */}
           <main className="flex-1 w-full pb-24 md:pb-12">

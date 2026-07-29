@@ -513,6 +513,20 @@ export class JobBoardExtractor {
       const path = url.pathname.toLowerCase();
       const search = url.search.toLowerCase();
 
+      // Special classification rule for Devfolio subdomains:
+      // If host is <subdomain>.devfolio.co (excluding devfolio.co, www.devfolio.co, assets.devfolio.co, api.devfolio.co)
+      // it is a JOB_DETAIL page.
+      if (host.endsWith('devfolio.co')) {
+        const isMainDomain =
+          host === 'devfolio.co' ||
+          host === 'www.devfolio.co' ||
+          host === 'api.devfolio.co' ||
+          host.startsWith('assets.');
+        if (!isMainDomain) {
+          return 'JOB_DETAIL';
+        }
+      }
+
       // Check pagination patterns -> LISTING_PAGE
       const hasPageParam =
         url.searchParams.has('page') ||
@@ -720,6 +734,14 @@ export class JobBoardExtractor {
       }
     }
 
+    // Intercept Devfolio listing pages with domain-specific adapter
+    if (baseUrl && baseUrl.includes('devfolio.co')) {
+      const devfolioBlocks = DevfolioAdapter.splitIntoCardBlocks(markdown, baseUrl);
+      if (devfolioBlocks.length > 0) {
+        return devfolioBlocks;
+      }
+    }
+
     // Intercept Internshala listing pages with domain-specific adapter
     if (baseUrl && baseUrl.includes('internshala.com')) {
       const internshalaBlocks = InternshalaAdapter.splitIntoCardBlocks(markdown, baseUrl);
@@ -806,6 +828,14 @@ export class JobBoardExtractor {
       const unstopListings = UnstopAdapter.extractListings(markdown, url);
       if (unstopListings.length > 0) {
         return unstopListings;
+      }
+    }
+
+    // Intercept Devfolio listing pages with domain-specific adapter
+    if (url && url.includes('devfolio.co')) {
+      const devfolioListings = DevfolioAdapter.extractListings(markdown, url);
+      if (devfolioListings.length > 0) {
+        return devfolioListings;
       }
     }
 
@@ -1505,6 +1535,161 @@ export class GlassdoorAdapter {
         resolvedLogs.push(diagLines.join('\n'));
       } else {
         diagLines.push(`Rejected: duplicate URL`);
+        cardsMissingDestination++;
+        unresolvedLogs.push(diagLines.join('\n'));
+      }
+    }
+
+    console.log(`
+Platform:                        ${sourceDomain}
+Cards Found:                     ${cardsFound}
+Cards Successfully Resolved:     ${cardsSuccessfullyResolved}
+Cards Missing Destination:       ${cardsMissingDestination}
+
+Resolved Cards Detail:
+--------------------------------
+${resolvedLogs.slice(0, 5).join('\n---\n') || 'None'}
+
+Unresolved Cards Detail:
+--------------------------------
+${unresolvedLogs.slice(0, 5).join('\n---\n') || 'None'}
+`);
+
+    return listings.slice(0, JobBoardExtractor['MAX_LISTINGS_PER_BOARD_PAGE']);
+  }
+}
+
+export class DevfolioAdapter {
+  /**
+   * Splits Devfolio page markdown into raw card blocks.
+   * Devfolio cards contain links to subdomains or hackathon slug paths.
+   */
+  public static splitIntoCardBlocks(markdown: string, baseUrl?: string): string[] {
+    const blocks: string[] = [];
+    // Match standard markdown links to devfolio hackathons (subdomains or main domain paths)
+    const regex =
+      /\[([^\]]+)\]\((https?:\/\/[a-zA-Z0-9.-]+\.devfolio\.co\/?|https?:\/\/devfolio\.co\/hackathons\/[\w-]+|https?:\/\/devfolio\.co\/hackathon\/[\w-]+|\/(?:hackathons|hackathon)\/[\w-]+)\)/g;
+
+    const lines = markdown.split('\n');
+    let currentBlock: string[] = [];
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      const hasCardLink = regex.test(trimmed);
+      regex.lastIndex = 0; // reset regex state
+
+      if (hasCardLink) {
+        if (currentBlock.length > 0) {
+          blocks.push(currentBlock.join('\n'));
+        }
+        currentBlock = [trimmed];
+      } else if (currentBlock.length > 0) {
+        currentBlock.push(trimmed);
+      }
+    }
+
+    if (currentBlock.length > 0) {
+      blocks.push(currentBlock.join('\n'));
+    }
+
+    return blocks;
+  }
+
+  /**
+   * Extracts listings from Devfolio page markdown.
+   */
+  public static extractListings(markdown: string, url: string): ExtractedListing[] {
+    const listings: ExtractedListing[] = [];
+    const seenUrls = new Set<string>();
+    const sourceDomain = JobBoardExtractor.getBoardIdentifier(url);
+
+    const cards = this.splitIntoCardBlocks(markdown, url);
+
+    let cardsFound = 0;
+    let cardsSuccessfullyResolved = 0;
+    let cardsMissingDestination = 0;
+
+    const resolvedLogs: string[] = [];
+    const unresolvedLogs: string[] = [];
+
+    const regex =
+      /\[([^\]]+)\]\((https?:\/\/[a-zA-Z0-9.-]+\.devfolio\.co\/?|https?:\/\/devfolio\.co\/hackathons\/[\w-]+|https?:\/\/devfolio\.co\/hackathon\/[\w-]+|\/(?:hackathons|hackathon)\/[\w-]+)\)/;
+
+    for (const card of cards) {
+      const match = card.match(regex);
+      if (!match) continue;
+
+      cardsFound++;
+      const title = match[1].trim();
+      let rawUrl = match[2].trim();
+
+      if (rawUrl.startsWith('/') && url) {
+        try {
+          rawUrl = new URL(rawUrl, url).toString();
+        } catch {
+          // ignore
+        }
+      }
+
+      const cleanUrl = JobBoardExtractor.cleanUrl(rawUrl);
+      const classification = JobBoardExtractor.classifyUrl(cleanUrl);
+      const isDetail = classification === 'JOB_DETAIL';
+
+      const diagLines: string[] = [];
+      diagLines.push(`Card ${cardsFound}`);
+      diagLines.push(`Title: ${title}`);
+      diagLines.push(`URL: ${cleanUrl}`);
+
+      if (!isDetail) {
+        diagLines.push(`Rejected: ${classification}`);
+        cardsMissingDestination++;
+        unresolvedLogs.push(diagLines.join('\n'));
+        continue;
+      }
+
+      // Extract organizer / host: first few lines of card body
+      const bodyLines = card
+        .split('\n')
+        .slice(1)
+        .map((l) => l.trim())
+        .filter(
+          (l) =>
+            l.length > 0 &&
+            !l.startsWith('![') &&
+            !l.toLowerCase().includes('hackathon') &&
+            !l.toLowerCase().includes('apply') &&
+            !l.toLowerCase().includes('submit'),
+        );
+
+      let company = bodyLines[0] || 'Devfolio Partner';
+      if (company.toLowerCase().startsWith('organized by')) {
+        company = company.slice(12).trim();
+      }
+
+      // Look for location keywords
+      let locationLine = bodyLines.find((l) => /online|remote|hybrid|india/i.test(l)) || 'Online';
+      if (locationLine.toLowerCase().startsWith('location:')) {
+        locationLine = locationLine.slice(9).trim();
+      }
+
+      diagLines.push(`Company: ${company}`);
+      diagLines.push(`Location: ${locationLine}`);
+
+      const cleanUrlLower = cleanUrl.toLowerCase();
+      if (!seenUrls.has(cleanUrlLower)) {
+        seenUrls.add(cleanUrlLower);
+        cardsSuccessfullyResolved++;
+        listings.push({
+          title,
+          company,
+          listingUrl: cleanUrl,
+          location: locationLine,
+          source: sourceDomain,
+        });
+        resolvedLogs.push(diagLines.join('\n'));
+      } else {
         cardsMissingDestination++;
         unresolvedLogs.push(diagLines.join('\n'));
       }

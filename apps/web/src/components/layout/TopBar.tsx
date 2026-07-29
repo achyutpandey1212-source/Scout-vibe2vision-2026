@@ -1,8 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { Search } from 'lucide-react';
+import { Bell } from 'lucide-react';
 import { ThemeToggle } from '../theme-toggle';
 import { Brand } from '../common/Brand';
 import { useAuth } from '@/context/auth-context';
@@ -37,9 +37,10 @@ const ROUTE_TITLES: Record<string, { title: string; subtitle?: string }> = {
   },
 };
 
-export const TopBar: React.FC<TopBarProps> = ({ title, subtitle, onSearchClick }) => {
+export const TopBar: React.FC<TopBarProps> = ({ title, subtitle }) => {
   const pathname = usePathname();
   const { user } = useAuth();
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const routeInfo = ROUTE_TITLES[pathname] || {
     title: title || 'Scout',
@@ -48,9 +49,6 @@ export const TopBar: React.FC<TopBarProps> = ({ title, subtitle, onSearchClick }
 
   const currentTitle = title || routeInfo.title;
   const currentSubtitle = subtitle !== undefined ? subtitle : routeInfo.subtitle;
-
-  const userName = user?.name || 'Scout User';
-  const userPicture = user?.picture;
 
   return (
     <header className="sticky top-0 z-20 w-full bg-background/80 backdrop-blur-md border-b border-border/60 transition-colors duration-200">
@@ -74,21 +72,34 @@ export const TopBar: React.FC<TopBarProps> = ({ title, subtitle, onSearchClick }
           </div>
         </div>
 
-        {/* Right: Actions (Search, Theme Toggle, Profile Avatar) */}
+        {/* Right: Actions (Notifications, Theme Toggle) */}
         <div className="flex items-center gap-2 md:gap-3">
-          {onSearchClick && (
+          <div className="relative">
             <button
-              onClick={onSearchClick}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-border/60 bg-muted/30 hover:bg-muted/60 text-muted-foreground hover:text-foreground text-xs transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              aria-label="Search opportunities"
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="flex items-center justify-center w-8 h-8 rounded-full border border-border/60 bg-muted/30 hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              aria-label="Notifications - Coming soon"
+              title="Notifications - Coming soon."
             >
-              <Search className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Search...</span>
-              <kbd className="hidden md:inline-block text-[10px] bg-card border border-border px-1.5 py-0.5 rounded font-mono text-muted-foreground">
-                ⌘K
-              </kbd>
+              <Bell className="w-4 h-4" />
             </button>
-          )}
+            {showNotifications && (
+              <div className="absolute right-0 mt-2 w-64 bg-card border border-border shadow-lg rounded-xl p-4 z-50">
+                <h3 className="font-medium text-sm mb-2 text-foreground">Notifications</h3>
+                <p className="text-xs text-muted-foreground mb-3">
+                  This feature is currently under development.
+                </p>
+                <p className="text-xs text-foreground mb-2">Scout will notify you about:</p>
+                <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-1 mb-3">
+                  <li>New matching opportunities</li>
+                  <li>Upcoming deadlines</li>
+                  <li>Saved opportunity reminders</li>
+                  <li>New recommendations</li>
+                </ul>
+                <p className="text-xs font-medium text-primary">Coming soon.</p>
+              </div>
+            )}
+          </div>
 
           {/* Theme Switcher for mobile or quick desktop access */}
           <div className="md:hidden">

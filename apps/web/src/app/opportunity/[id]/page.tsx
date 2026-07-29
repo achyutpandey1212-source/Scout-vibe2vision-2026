@@ -30,6 +30,8 @@ import { ROUTES } from '@/lib/constants/routes';
 import { opportunitiesApi, recommendationsApi, bookmarksApi, Opportunity } from '@/lib/api';
 import { track } from '@/lib/analytics';
 import { useScrollDepth } from '@/hooks/useScrollDepth';
+import { getPlatformFromDomain } from '@scout/shared';
+import Image from 'next/image';
 
 const cleanTruncatedText = (str: string): string => {
   if (!str || typeof str !== 'string') return str;
@@ -240,6 +242,11 @@ export default function OpportunityDetailsPage() {
     ),
   );
 
+  const platform = getPlatformFromDomain(
+    (opportunity as any)?.sourceDomain ||
+      (opportunity?.sourceURL ? new URL(opportunity.sourceURL).hostname : ''),
+  );
+
   return (
     <ProtectedRoute>
       <DashboardLayout title="Opportunity Details">
@@ -319,6 +326,20 @@ export default function OpportunityDetailsPage() {
                       <h1 className="text-2xl md:text-3xl font-display font-medium text-foreground leading-tight">
                         {opportunity.title}
                       </h1>
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1 pb-2">
+                        {platform.id === 'external' ? (
+                          <span className="text-[14px]">🌐</span>
+                        ) : (
+                          <Image
+                            src={platform.logo}
+                            alt={platform.name}
+                            width={14}
+                            height={14}
+                            className="rounded-sm"
+                          />
+                        )}
+                        <span className="font-medium">Found on {platform.name}</span>
+                      </div>
                     </div>
 
                     {/* Badges Row */}

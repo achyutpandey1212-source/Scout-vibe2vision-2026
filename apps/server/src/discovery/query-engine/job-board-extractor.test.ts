@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { JobBoardExtractor, InternshalaAdapter, GlassdoorAdapter } from './job-board-extractor';
+import {
+  JobBoardExtractor,
+  InternshalaAdapter,
+  GlassdoorAdapter,
+  DevfolioAdapter,
+} from './job-board-extractor';
 
 describe('JobBoardExtractor', () => {
   describe('isBoardPage', () => {
@@ -584,6 +589,54 @@ Show more jobs
       for (const listing of listings) {
         expect(JobBoardExtractor.classifyUrl(listing.listingUrl)).toBe('JOB_DETAIL');
       }
+    });
+  });
+
+  describe('DevfolioAdapter', () => {
+    it('should split Devfolio page markdown into card blocks', () => {
+      const markdown = `
+        Search hackathons...
+        [Agentic Commerce Hackathon](https://agentic-commerce.devfolio.co/)
+        Organized by Prava Space
+        Theme: AI, Commerce
+        Location: Online
+
+        [NexHack 2.0](https://nexhack-2.devfolio.co/)
+        Organized by NexGen Community
+        Theme: Web3, Solidity
+        Location: Bengaluru, India
+      `;
+      const blocks = DevfolioAdapter.splitIntoCardBlocks(
+        markdown,
+        'https://devfolio.co/hackathons',
+      );
+      expect(blocks.length).toBe(2);
+      expect(blocks[0]).toContain('Agentic Commerce Hackathon');
+      expect(blocks[1]).toContain('NexHack 2.0');
+    });
+
+    it('should extract listings and resolve company and location', () => {
+      const markdown = `
+        [Agentic Commerce Hackathon](https://agentic-commerce.devfolio.co/)
+        Prava Space
+        Theme: AI
+        Location: Online
+
+        [NexHack 2.0](https://nexhack-2.devfolio.co/)
+        NexGen Community
+        Location: Hybrid
+      `;
+      const listings = DevfolioAdapter.extractListings(markdown, 'https://devfolio.co/hackathons');
+      expect(listings.length).toBe(2);
+      expect(listings[0].title).toBe('Agentic Commerce Hackathon');
+      expect(listings[0].company).toBe('Prava Space');
+      expect(listings[0].location).toBe('Online');
+      expect(listings[0].listingUrl).toBe('https://agentic-commerce.devfolio.co');
+
+      expect(listings[1].title).toBe('NexHack 2.0');
+      expect(listings[1].company).toBe('NexGen Community');
+      expect(listings[1].location).toBe('Hybrid');
+      expect(listings[1].listingUrl).toBe('https://nexhack-2.devfolio.co');
     });
   });
 

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Menu, Bell, Search } from 'lucide-react';
+import { Menu, Bell } from 'lucide-react';
 import { ThemeToggle } from '../theme-toggle';
 import { Button } from './button';
 import { Drawer } from './modal';
@@ -11,7 +11,6 @@ import { usePathname } from 'next/navigation';
 interface NavProps {
   userName?: string;
   userPicture?: string;
-  onSearchClick?: () => void;
   onNotificationsClick?: () => void;
   onProfileClick?: () => void;
   isAuthenticated?: boolean;
@@ -20,7 +19,6 @@ interface NavProps {
 export const TopNavigation: React.FC<NavProps> = ({
   userName = 'Scout User',
   userPicture,
-  onSearchClick,
   onNotificationsClick,
   onProfileClick,
   isAuthenticated = false,
@@ -100,20 +98,6 @@ export const TopNavigation: React.FC<NavProps> = ({
 
         {/* Right Side: Interactive Controls */}
         <div className="flex items-center gap-2 md:gap-4">
-          {/* Mock Search trigger bar */}
-          {isAuthenticated && (
-            <button
-              onClick={onSearchClick}
-              className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border border-border/60 bg-accent/20 text-secondary/60 hover:bg-accent/40 text-xs font-light transition-all duration-200 outline-none"
-            >
-              <Search className="w-3.5 h-3.5" />
-              <span>Search opportunities...</span>
-              <kbd className="text-[10px] bg-card border border-border px-1.5 py-0.5 rounded ml-2">
-                ⌘K
-              </kbd>
-            </button>
-          )}
-
           {/* Theme Switcher */}
           <ThemeToggle />
 

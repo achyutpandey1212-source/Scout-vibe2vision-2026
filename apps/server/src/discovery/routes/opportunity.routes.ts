@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { AuthenticatedRequest } from '../../auth/types/auth.types';
 import { requireAuth } from '../../middleware/auth';
 import { OpportunityModel } from '../extraction/models/opportunity.model';
+import { PlatformRegistry } from '@scout/shared';
 
 const CATEGORY_VARIANTS: Record<string, string[]> = {
   INTERNSHIPS: ['INTERNSHIPS', 'INTERNSHIP'],
@@ -24,8 +25,18 @@ const router = Router();
 
 router.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { page = 1, limit = 12, q, category, opportunityType, sortBy } = req.query;
+    const { page = 1, limit = 12, q, category, opportunityType, sortBy, platform } = req.query;
     const query: any = { 'intelligence.expired': { $ne: true } };
+
+    if (platform && platform !== 'ALL') {
+      const domains = Object.keys(PlatformRegistry).filter(
+        (domain) => PlatformRegistry[domain].id === platform,
+      );
+      if (domains.length > 0) {
+        const domainRegex = new RegExp(domains.join('|').replace(/\./g, '\\.'), 'i');
+        query.sourceDomain = { $regex: domainRegex };
+      }
+    }
 
     if (opportunityType && opportunityType !== 'ALL') {
       query.opportunityType = opportunityType;
@@ -80,7 +91,19 @@ router.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) =>
 
 router.get('/counts', requireAuth, async (_req: AuthenticatedRequest, res: Response) => {
   try {
-    const baseQuery = { 'intelligence.expired': { $ne: true } };
+    const baseQuery: any = { 'intelligence.expired': { $ne: true } };
+
+    const { platform } = _req.query;
+    if (platform && platform !== 'ALL') {
+      const domains = Object.keys(PlatformRegistry).filter(
+        (domain) => PlatformRegistry[domain].id === platform,
+      );
+      if (domains.length > 0) {
+        const domainRegex = new RegExp(domains.join('|').replace(/\./g, '\\.'), 'i');
+        baseQuery.sourceDomain = { $regex: domainRegex };
+      }
+    }
+
     const total = await OpportunityModel.countDocuments(baseQuery);
 
     const counts: Record<string, number> = { ALL: total };

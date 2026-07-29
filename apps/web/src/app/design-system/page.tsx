@@ -94,7 +94,6 @@ export default function DesignSystemPlayground() {
       <TopNavigation
         userName="Maya Sharma"
         isAuthenticated={true}
-        onSearchClick={() => addToast('Search Palette trigger simulation', 'info')}
         onNotificationsClick={() => addToast('Notifications panel simulation', 'success')}
         onProfileClick={() => addToast('Profile overlay settings', 'info')}
       />

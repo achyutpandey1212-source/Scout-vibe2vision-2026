@@ -12,3 +12,4 @@ export * from './opportunity-types';
 export * from './engineering-domains';
 export * from './target-audience';
 export * from './constants';
+export * from './platforms';

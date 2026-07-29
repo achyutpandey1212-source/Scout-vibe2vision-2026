@@ -6,6 +6,8 @@ import { Card, CardTitle, CardContent, Typography, Button, Stack, Grid } from '.
 import { MatchScore } from './MatchScore';
 import { RecommendationBadge, RecommendationType } from './RecommendationBadge';
 import { OpportunityMetadata } from './OpportunityMetadata';
+import { getPlatformFromDomain } from '@scout/shared';
+import Image from 'next/image';
 
 export interface OpportunityCardProps {
   title: string;
@@ -13,6 +15,7 @@ export interface OpportunityCardProps {
   deadline?: string;
   description?: string;
   tags?: string[];
+  sourceDomain?: string;
   matchScore?: number;
   explanation?: string;
   whyNow?: string;
@@ -49,6 +52,7 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
   opportunityType,
   location,
   stipend,
+  sourceDomain,
   variant = 'default',
   onBookmarkToggle,
   onApplyClick,
@@ -57,6 +61,8 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
   const recType = (slot as RecommendationType) || undefined;
   const isFeatured = variant === 'featured';
   const isCompact = variant === 'compact';
+
+  const platform = getPlatformFromDomain(sourceDomain);
 
   const handleClick = (e: React.MouseEvent) => {
     if (onCardClick) onCardClick();
@@ -93,6 +99,22 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
               <Typography variant="body" className="text-muted-foreground font-light">
                 {organization}
               </Typography>
+
+              {/* Platform Badge */}
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1">
+                {platform.id === 'external' ? (
+                  <span className="text-[14px]">🌐</span>
+                ) : (
+                  <Image
+                    src={platform.logo}
+                    alt={platform.name}
+                    width={14}
+                    height={14}
+                    className="rounded-sm"
+                  />
+                )}
+                <span className="font-medium">Found on {platform.name}</span>
+              </div>
             </div>
 
             {description && (
@@ -226,6 +248,22 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
             <CardTitle className="pr-4 text-base md:text-lg font-medium leading-snug group-hover:text-primary transition-colors line-clamp-2">
               {title}
             </CardTitle>
+
+            {/* Platform Badge */}
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1">
+              {platform.id === 'external' ? (
+                <span className="text-[12px]">🌐</span>
+              ) : (
+                <Image
+                  src={platform.logo}
+                  alt={platform.name}
+                  width={12}
+                  height={12}
+                  className="rounded-sm"
+                />
+              )}
+              <span className="font-medium">Found on {platform.name}</span>
+            </div>
           </div>
 
           <button
