@@ -55,9 +55,11 @@ export const opportunitiesApi = {
     q?: string;
     sortBy?: string;
     platform?: string;
+    new?: boolean;
   }) => api.get('/api/v1/opportunities', { params }),
   getById: (id: string) => api.get(`/api/v1/opportunities/${id}`),
   counts: (params?: { platform?: string }) => api.get('/api/v1/opportunities/counts', { params }),
+  newOpportunities: () => api.get('/api/v1/dashboard/new-opportunities'),
 };
 
 export const recommendationsApi = {

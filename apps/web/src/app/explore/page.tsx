@@ -91,6 +91,8 @@ function ExploreContent() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const gridTopRef = useRef<HTMLDivElement>(null);
 
+  const showNewOnly = searchParams.get('new') === 'true';
+
   const loadCounts = useCallback(async () => {
     try {
       const res = await opportunitiesApi.counts();
@@ -104,10 +106,10 @@ function ExploreContent() {
 
   // Update URL params
   const updateQueryParams = useCallback(
-    (newParams: Record<string, string | number>) => {
+    (newParams: Record<string, string | number | boolean | null>) => {
       const params = new URLSearchParams(searchParams.toString());
       Object.entries(newParams).forEach(([key, value]) => {
-        if (value === 'ALL' || value === '' || (key === 'page' && value === 1)) {
+        if (value === 'ALL' || value === '' || value === null || (key === 'page' && value === 1)) {
           params.delete(key);
         } else {
           params.set(key, String(value));
@@ -143,6 +145,13 @@ function ExploreContent() {
     setPage(1);
   };
 
+  const removeNewFilter = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('new');
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    setPage(1);
+  };
+
   // Sync state to URL and fetch
   useEffect(() => {
     updateQueryParams({
@@ -151,6 +160,7 @@ function ExploreContent() {
       platform,
       sortBy,
       page,
+      new: showNewOnly ? 'true' : null,
     });
 
     let isMounted = true;
@@ -164,6 +174,7 @@ function ExploreContent() {
         platform: platform === 'ALL' ? undefined : platform,
         q: debouncedQuery || undefined,
         sortBy,
+        new: showNewOnly ? true : undefined,
       })
       .then((res) => {
         if (!isMounted) return;
@@ -197,7 +208,7 @@ function ExploreContent() {
     return () => {
       isMounted = false;
     };
-  }, [debouncedQuery, category, platform, sortBy, page, updateQueryParams]);
+  }, [debouncedQuery, category, platform, sortBy, page, showNewOnly, updateQueryParams]);
 
   // Fetch bookmarks once on mount
   useEffect(() => {
@@ -428,6 +439,22 @@ function ExploreContent() {
             );
           })}
         </div>
+
+        {/* Showing new opportunities active filter chip */}
+        {showNewOnly && (
+          <div className="flex items-center gap-2 pt-1">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary/10 border border-primary/30 text-primary text-xs font-medium rounded-full">
+              <span>Showing new opportunities</span>
+              <button
+                onClick={removeNewFilter}
+                className="hover:text-primary/70 transition-colors focus:outline-none"
+                aria-label="Remove new filter"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </span>
+          </div>
+        )}
       </div>
 
       {!isLoading && totalCount !== undefined && (

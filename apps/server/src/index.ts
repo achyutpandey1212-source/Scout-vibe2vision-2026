@@ -97,6 +97,7 @@ app.use('/api/v1/recommendations', recommendationRouter);
 
 // Register Opportunities Router
 app.use('/api/v1/opportunities', opportunityRouter);
+app.use('/api/v1/dashboard', opportunityRouter);
 
 // Register Discovery Dashboard Router
 import { discoveryDashboardRouter } from './discovery/routes/discovery-dashboard.routes';

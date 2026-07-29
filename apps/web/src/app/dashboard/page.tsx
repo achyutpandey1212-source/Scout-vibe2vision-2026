@@ -20,7 +20,13 @@ import {
   AICapacityExhaustedScreen,
 } from '@/components/dashboard';
 import { useAuth } from '@/context/auth-context';
-import { recommendationsApi, bookmarksApi, profileApi, Opportunity } from '@/lib/api';
+import {
+  recommendationsApi,
+  bookmarksApi,
+  profileApi,
+  opportunitiesApi,
+  Opportunity,
+} from '@/lib/api';
 import { track } from '@/lib/analytics';
 import { useScrollDepth } from '@/hooks/useScrollDepth';
 import { ArrowRight, Clock, Sparkles } from 'lucide-react';
@@ -238,11 +244,64 @@ export default function DashboardPage() {
 
   const userNameDisplay = profileName || user?.name || user?.displayName || 'Student';
 
+  // New opportunities state
+  const [newOppsData, setNewOppsData] = useState<{
+    count: number | null;
+    lastVisitedAt: string | null;
+    latestOpportunityAt: string | null;
+  }>({ count: null, lastVisitedAt: null, latestOpportunityAt: null });
+
+  const fetchNewOpportunities = async () => {
+    try {
+      const res = await opportunitiesApi.newOpportunities();
+      if (res.data?.success) {
+        setNewOppsData(res.data.data);
+      }
+    } catch (err) {
+      console.error('Failed to retrieve new opportunities count:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchNewOpportunities();
+  }, []);
+
   return (
     <ProtectedRoute>
       <DashboardLayout>
         <PageTransition>
           <div className="max-w-4xl mx-auto space-y-12 pb-20 select-none">
+            {/* 0. NEW SINCE LAST VISIT BRIEFING CHIP */}
+            {!pageLoading && newOppsData.count !== null && (
+              <div className="p-4 border border-border/80 bg-card rounded-2xl flex items-center justify-between text-xs transition-all duration-200">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-sm">✨</span>
+                  <div>
+                    {newOppsData.count === 0 ? (
+                      <p className="text-foreground/90 font-medium">
+                        You&apos;re all caught up. No new opportunities since your last visit.
+                      </p>
+                    ) : (
+                      <p className="text-foreground/90 font-medium">
+                        {newOppsData.count} new{' '}
+                        {newOppsData.count === 1 ? 'opportunity' : 'opportunities'} since your last
+                        visit.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {newOppsData.count > 0 && (
+                  <button
+                    onClick={() => router.push('/explore?new=true')}
+                    className="text-primary hover:underline text-xs font-medium flex items-center gap-1 shrink-0"
+                  >
+                    <span>Explore what&apos;s new</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* INITIAL LOADING SKELETON (ZERO LAYOUT SHIFT) */}
             {pageLoading ? (
               <div className="space-y-12 animate-pulse">

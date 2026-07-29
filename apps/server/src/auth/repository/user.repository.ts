@@ -22,6 +22,24 @@ export class UserRepository {
     );
   }
 
+  static async updateLastVisited(uid: string): Promise<IUser | null> {
+    const user = await UserModel.findOne({ firebaseUid: uid });
+    if (!user) return null;
+
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    if (user.lastVisitedAt && user.lastVisitedAt > fiveMinutesAgo) {
+      // Skip excessive writes if visited recently
+      return user;
+    }
+
+    const now = new Date();
+    return await UserModel.findOneAndUpdate(
+      { firebaseUid: uid },
+      { $set: { lastVisitedAt: now } },
+      { returnDocument: 'after' },
+    );
+  }
+
   /**
    * Performs an atomic or clean upsert of a user based on Firebase claims.
    * If user doesn't exist, they are created. Otherwise, display name, photo,

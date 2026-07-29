@@ -24,6 +24,7 @@ export interface ScoutUser {
   updatedAt?: Date;
   lastLoginAt?: Date;
   lastSeenAt?: Date;
+  lastVisitedAt?: Date | null;
 }
 
 export interface AuthenticatedRequest extends Request {

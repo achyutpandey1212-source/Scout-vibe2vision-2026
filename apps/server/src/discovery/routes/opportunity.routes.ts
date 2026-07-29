@@ -25,8 +25,25 @@ const router = Router();
 
 router.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { page = 1, limit = 12, q, category, opportunityType, sortBy, platform } = req.query;
-    const query: any = { 'intelligence.expired': { $ne: true } };
+    const {
+      page = 1,
+      limit = 12,
+      q,
+      category,
+      opportunityType,
+      sortBy,
+      platform,
+      new: showNewOnly,
+    } = req.query;
+    const query: any = {
+      'intelligence.expired': { $ne: true },
+      status: 'ACTIVE',
+      visibility: 'PUBLIC',
+    };
+
+    if (showNewOnly === 'true' && req.dbUser?.lastVisitedAt) {
+      query.createdAt = { $gt: new Date(req.dbUser.lastVisitedAt) };
+    }
 
     if (platform && platform !== 'ALL') {
       const domains = Object.keys(PlatformRegistry).filter(
@@ -135,6 +152,59 @@ router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
     return res
       .status(500)
       .json({ success: false, error: { message: 'Failed to retrieve opportunity' } });
+  }
+});
+
+router.get('/new-opportunities', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.dbUser) {
+      return res.status(401).json({ success: false, error: { message: 'Unauthorized' } });
+    }
+
+    const lastVisitedAt = req.dbUser.lastVisitedAt;
+    if (!lastVisitedAt) {
+      return res.json({
+        success: true,
+        data: {
+          count: null,
+          lastVisitedAt: null,
+          latestOpportunityAt: null,
+        },
+      });
+    }
+
+    const query = {
+      status: 'ACTIVE',
+      visibility: 'PUBLIC',
+      'intelligence.expired': { $ne: true },
+      archived: { $ne: true },
+      createdAt: { $gt: new Date(lastVisitedAt) },
+    };
+
+    const count = await OpportunityModel.countDocuments(query);
+    const latestOpp = await OpportunityModel.findOne({
+      status: 'ACTIVE',
+      visibility: 'PUBLIC',
+      'intelligence.expired': { $ne: true },
+      archived: { $ne: true },
+    })
+      .sort({ createdAt: -1 })
+      .select('createdAt')
+      .lean();
+
+    return res.json({
+      success: true,
+      data: {
+        count,
+        lastVisitedAt,
+        latestOpportunityAt: latestOpp ? latestOpp.createdAt : null,
+      },
+    });
+  } catch (error) {
+    console.error('New opportunities count API error:', error);
+    return res
+      .status(500)
+      .json({ success: false, error: { message: 'Failed to retrieve new opportunities count' } });
   }
 });
 

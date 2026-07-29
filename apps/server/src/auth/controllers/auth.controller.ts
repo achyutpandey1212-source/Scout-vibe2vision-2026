@@ -5,6 +5,7 @@ import { db } from '../../config/db';
 import { firebase } from '../../config';
 
 import { UserIntelligenceRepository } from '../../profile/repository/user-intelligence.repository';
+import { UserRepository } from '../repository/user.repository';
 
 export class AuthController {
   static async getCurrentUser(req: AuthenticatedRequest, res: Response) {
@@ -21,10 +22,15 @@ export class AuthController {
     try {
       const userId = req.dbUser._id.toString();
       const intelligence = await UserIntelligenceRepository.findOrCreateByUserId(userId);
+
+      // Update lastVisitedAt (throttled inside the repository)
+      const updatedUser = await UserRepository.updateLastVisited(req.dbUser.firebaseUid);
+      const userObj = updatedUser || req.dbUser;
+
       return res.json({
         success: true,
         data: {
-          ...req.dbUser.toJSON(),
+          ...userObj.toJSON(),
           onboardingCompleted: intelligence.onboarding.completed,
           onboardingStep: intelligence.onboarding.currentStep,
         },
