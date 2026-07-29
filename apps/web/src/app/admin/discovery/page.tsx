@@ -1975,6 +1975,110 @@ export default function AdminDiscoveryControlCenter() {
             </div>
           </div>
 
+          {/* DEADLINE INTELLIGENCE OPERATIONS MONITOR */}
+          <div className="border border-neutral-900 bg-neutral-950 p-6 rounded space-y-6">
+            <div className="flex items-center justify-between border-b border-neutral-900 pb-3">
+              <h3 className="text-xs uppercase tracking-wider font-semibold text-neutral-400 flex items-center gap-1.5">
+                <Activity className="h-4 w-4 text-purple-400" />
+                <span>Deadline Intelligence System Health</span>
+              </h3>
+              <span className="text-[10px] text-neutral-500 font-mono">DYNAMIC MONGO METRICS</span>
+            </div>
+
+            {metrics?.deadlineStats ? (
+              <div className="space-y-6">
+                {/* Highlight Stats Row */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                  <div className="p-3 bg-neutral-900/20 border border-neutral-900 rounded">
+                    <span className="text-neutral-500 text-[10px] uppercase">Avg Days Remaining</span>
+                    <span className="text-xl font-bold text-neutral-200 block mt-1">
+                      {metrics.deadlineStats.averageDaysRemaining} days
+                    </span>
+                  </div>
+                  <div className="p-3 bg-neutral-900/20 border border-neutral-900 rounded">
+                    <span className="text-neutral-500 text-[10px] uppercase">Rolling Applications</span>
+                    <span className="text-xl font-bold text-emerald-400 block mt-1">
+                      {metrics.deadlineStats.rollingPercentage}%
+                    </span>
+                  </div>
+                  <div className="p-3 bg-neutral-900/20 border border-neutral-900 rounded">
+                    <span className="text-neutral-500 text-[10px] uppercase">Unknown Deadlines</span>
+                    <span className="text-xl font-bold text-neutral-400 block mt-1">
+                      {metrics.deadlineStats.unknownPercentage}%
+                    </span>
+                  </div>
+                  <div className="p-3 bg-neutral-900/20 border border-neutral-900 rounded">
+                    <span className="text-neutral-500 text-[10px] uppercase">Expired Detected</span>
+                    <span className="text-xl font-bold text-rose-500 block mt-1">
+                      {metrics.deadlineStats.expired} opps
+                    </span>
+                  </div>
+                </div>
+
+                {/* Sub-counts grids */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Left Column: Classification Stats */}
+                  <div className="space-y-3 font-mono text-[11px]">
+                    <h4 className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider">Classification Breakdown</h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between border-b border-neutral-900/60 pb-1">
+                        <span>Fixed Deadlines:</span>
+                        <span className="text-neutral-200">{metrics.deadlineStats.fixed}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-neutral-900/60 pb-1">
+                        <span>Rolling Basis:</span>
+                        <span className="text-emerald-400">{metrics.deadlineStats.rolling}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-neutral-900/60 pb-1">
+                        <span>Until Filled:</span>
+                        <span className="text-blue-400">{metrics.deadlineStats.untilFilled}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-neutral-900/60 pb-1">
+                        <span>Always Open / Ongoing:</span>
+                        <span className="text-neutral-200">{metrics.deadlineStats.ongoing}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-neutral-900/60 pb-1">
+                        <span>Immediate Hiring:</span>
+                        <span className="text-amber-400">{metrics.deadlineStats.immediate}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-neutral-900/60 pb-1">
+                        <span>Unknown Deadlines:</span>
+                        <span className="text-neutral-450">{metrics.deadlineStats.unknown}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Urgency Window stats */}
+                  <div className="space-y-3 font-mono text-[11px]">
+                    <h4 className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider">Urgency Window Counts</h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between border-b border-neutral-900/60 pb-1">
+                        <span className="text-rose-500">Closing Today:</span>
+                        <span className="text-rose-500 font-bold">{metrics.deadlineStats.closingToday}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-neutral-900/60 pb-1">
+                        <span className="text-orange-400">Closing Tomorrow:</span>
+                        <span className="text-orange-400 font-bold">{metrics.deadlineStats.closingTomorrow}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-neutral-900/60 pb-1">
+                        <span className="text-amber-450">Closing Within 7 Days:</span>
+                        <span className="text-amber-400">{metrics.deadlineStats.closing7Days}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-neutral-900/60 pb-1">
+                        <span>Closing Within 30 Days:</span>
+                        <span className="text-neutral-200">{metrics.deadlineStats.closing30Days}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-6 text-neutral-500 font-mono text-xs">
+                Waiting for deadline stats to load...
+              </div>
+            )}
+          </div>
+
           {/* MISSION COMPARISON TABLE */}
           <div className="space-y-4 border-t border-neutral-900 pt-6">
             <h3 className="text-xs uppercase tracking-wider font-semibold text-neutral-400">

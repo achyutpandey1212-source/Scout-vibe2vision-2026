@@ -89,6 +89,14 @@ export const OpportunityMetadata: React.FC<OpportunityMetadataProps> = ({
       colorClass = 'text-green-600 dark:text-green-400 font-medium'; // Green -> Rolling / Always Open
     }
 
+    // Append normalized date in DD/MM/YYYY format inside parentheses if FIXED_DATE and available
+    if (type === 'FIXED_DATE' && deadlineIntelligence.normalizedDate) {
+      const formattedDate = formatDateFromAPI(deadlineIntelligence.normalizedDate);
+      if (formattedDate) {
+        labelText = `${labelText} (${formattedDate})`;
+      }
+    }
+
     items.push({
       id: 'deadline',
       icon: Calendar,

@@ -190,12 +190,10 @@ router.post('/run-affiliates', async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     console.error('[Dashboard Route] Unexpected error:', err);
-    return res
-      .status(500)
-      .json({
-        success: false,
-        error: { message: 'An unexpected error occurred. Please try again later.' },
-      });
+    return res.status(500).json({
+      success: false,
+      error: { message: 'An unexpected error occurred. Please try again later.' },
+    });
   }
 });
 
@@ -213,12 +211,10 @@ router.post('/reset-affiliates', async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     console.error('[Dashboard Route] Unexpected error:', err);
-    return res
-      .status(500)
-      .json({
-        success: false,
-        error: { message: 'An unexpected error occurred. Please try again later.' },
-      });
+    return res.status(500).json({
+      success: false,
+      error: { message: 'An unexpected error occurred. Please try again later.' },
+    });
   }
 });
 
@@ -250,12 +246,10 @@ router.post('/run-affiliate-retries', async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     console.error('[Dashboard Route] Unexpected error:', err);
-    return res
-      .status(500)
-      .json({
-        success: false,
-        error: { message: 'An unexpected error occurred. Please try again later.' },
-      });
+    return res.status(500).json({
+      success: false,
+      error: { message: 'An unexpected error occurred. Please try again later.' },
+    });
   }
 });
 
@@ -290,7 +284,102 @@ router.get('/metrics', async (req, res: Response) => {
     let engineeringDiversityScore = 88;
     let studentCoverageScore = 80;
 
+    // Compute deadline intelligence statistics dynamically
+    let deadlineStats = {
+      total: 0,
+      fixed: 0,
+      rolling: 0,
+      untilFilled: 0,
+      ongoing: 0,
+      immediate: 0,
+      unknown: 0,
+      expired: 0,
+      closingToday: 0,
+      closingTomorrow: 0,
+      closing7Days: 0,
+      closing30Days: 0,
+      averageDaysRemaining: 0,
+      rollingPercentage: 0,
+      unknownPercentage: 0,
+    };
+
     if (totalOpps > 0) {
+      const oppsCol = mongoose.connection.db?.collection('opportunities');
+      if (oppsCol) {
+        const [
+          total,
+          fixed,
+          rolling,
+          untilFilled,
+          ongoing,
+          immediate,
+          unknown,
+          expired,
+          closingToday,
+          closingTomorrow,
+          closing7Days,
+          closing30Days,
+          avgDaysRes,
+        ] = await Promise.all([
+          oppsCol.countDocuments(),
+          oppsCol.countDocuments({ 'deadlineIntelligence.type': 'FIXED_DATE' }),
+          oppsCol.countDocuments({ 'deadlineIntelligence.type': 'ROLLING' }),
+          oppsCol.countDocuments({ 'deadlineIntelligence.type': 'UNTIL_FILLED' }),
+          oppsCol.countDocuments({ 'deadlineIntelligence.type': 'ONGOING' }),
+          oppsCol.countDocuments({ 'deadlineIntelligence.type': 'IMMEDIATE' }),
+          oppsCol.countDocuments({ 'deadlineIntelligence.type': { $in: ['UNKNOWN', null] } }),
+          oppsCol.countDocuments({ 'deadlineIntelligence.expired': true }),
+          oppsCol.countDocuments({
+            'deadlineIntelligence.type': 'FIXED_DATE',
+            'deadlineIntelligence.daysRemaining': 0,
+          }),
+          oppsCol.countDocuments({
+            'deadlineIntelligence.type': 'FIXED_DATE',
+            'deadlineIntelligence.daysRemaining': 1,
+          }),
+          oppsCol.countDocuments({
+            'deadlineIntelligence.type': 'FIXED_DATE',
+            'deadlineIntelligence.daysRemaining': { $gte: 0, $lte: 7 },
+          }),
+          oppsCol.countDocuments({
+            'deadlineIntelligence.type': 'FIXED_DATE',
+            'deadlineIntelligence.daysRemaining': { $gte: 0, $lte: 30 },
+          }),
+          oppsCol
+            .aggregate([
+              {
+                $match: {
+                  'deadlineIntelligence.type': 'FIXED_DATE',
+                  'deadlineIntelligence.daysRemaining': { $ne: null },
+                },
+              },
+              { $group: { _id: null, avgDays: { $avg: '$deadlineIntelligence.daysRemaining' } } },
+            ])
+            .toArray(),
+        ]);
+
+        const avgDays =
+          avgDaysRes && avgDaysRes.length > 0 ? Math.round(avgDaysRes[0].avgDays * 10) / 10 : 0;
+
+        deadlineStats = {
+          total,
+          fixed,
+          rolling,
+          untilFilled,
+          ongoing,
+          immediate,
+          unknown,
+          expired,
+          closingToday,
+          closingTomorrow,
+          closing7Days,
+          closing30Days,
+          averageDaysRemaining: avgDays,
+          rollingPercentage: total > 0 ? Math.round((rolling / total) * 100) : 0,
+          unknownPercentage: total > 0 ? Math.round((unknown / total) * 100) : 0,
+        };
+      }
+
       const uniqueDomains =
         (await mongoose.connection.db?.collection('opportunities').distinct('sourceDomain')) || [];
       const uniqueLocations =
@@ -339,16 +428,15 @@ router.get('/metrics', async (req, res: Response) => {
           engineeringDiversityScore,
           studentCoverageScore,
         },
+        deadlineStats,
       },
     });
   } catch (err: any) {
     console.error('[Dashboard Route] Unexpected error:', err);
-    return res
-      .status(500)
-      .json({
-        success: false,
-        error: { message: 'An unexpected error occurred. Please try again later.' },
-      });
+    return res.status(500).json({
+      success: false,
+      error: { message: 'An unexpected error occurred. Please try again later.' },
+    });
   }
 });
 
@@ -405,12 +493,10 @@ router.get('/extraction-failures', async (req, res: Response) => {
     });
   } catch (err: any) {
     console.error('[Dashboard Route] Unexpected error:', err);
-    return res
-      .status(500)
-      .json({
-        success: false,
-        error: { message: 'An unexpected error occurred. Please try again later.' },
-      });
+    return res.status(500).json({
+      success: false,
+      error: { message: 'An unexpected error occurred. Please try again later.' },
+    });
   }
 });
 
@@ -483,12 +569,10 @@ router.get('/queries', async (req, res: Response) => {
     });
   } catch (err: any) {
     console.error('[Dashboard Route] Unexpected error:', err);
-    return res
-      .status(500)
-      .json({
-        success: false,
-        error: { message: 'An unexpected error occurred. Please try again later.' },
-      });
+    return res.status(500).json({
+      success: false,
+      error: { message: 'An unexpected error occurred. Please try again later.' },
+    });
   }
 });
 

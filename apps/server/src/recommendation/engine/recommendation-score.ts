@@ -230,8 +230,55 @@ export class RecommendationScorer {
 
     // 9. Deadline (Weight: 3)
     let deadlineScore = 2;
-    if (opportunity.deadline) {
+    const di = opportunity.deadlineIntelligence;
+    if (di && di.expired) {
+      // Defensive expired discard
+      return null;
+    }
+
+    if (di) {
+      const type = di.type;
+      const days = di.daysRemaining;
+
+      if (type === 'FIXED_DATE' && days !== null) {
+        if (days === 0) {
+          deadlineScore = 10; // Very high urgency bonus (closes today)
+          reasons.push('This opportunity closes today, so applying immediately is recommended.');
+        } else if (days === 1) {
+          deadlineScore = 8; // High urgency bonus (closes tomorrow)
+          reasons.push('Applications close tomorrow.');
+        } else if (days >= 2 && days <= 3) {
+          deadlineScore = 6; // Moderate urgency bonus
+          reasons.push(`This opportunity closes in ${days} days, so applying soon is recommended.`);
+        } else if (days >= 4 && days <= 7) {
+          deadlineScore = 4; // Small urgency bonus
+          reasons.push(`Applications close in ${days} days.`);
+        } else if (days >= 8 && days <= 21) {
+          deadlineScore = 2; // Neutral
+        } else {
+          deadlineScore = 2; // No urgency adjustment
+        }
+      } else if (type === 'ROLLING') {
+        deadlineScore = 3; // No penalty, small positive modifier
+        reasons.push('Applications are accepted on a rolling basis, giving you more flexibility.');
+      } else if (type === 'UNTIL_FILLED') {
+        deadlineScore = 3; // Tiny positive adjustment
+        reasons.push('Applications reviewed continuously until positions are filled.');
+      } else if (type === 'IMMEDIATE') {
+        deadlineScore = 4; // Tiny positive adjustment
+        reasons.push('Immediate hiring active for this role.');
+      } else if (type === 'ONGOING') {
+        deadlineScore = 2; // Neutral
+        reasons.push('Applications are always open.');
+      } else {
+        deadlineScore = 2; // Unknown/Neutral
+      }
+    } else if (opportunity.deadline) {
       const dl = new Date(opportunity.deadline);
+      if (!isNaN(dl.getTime()) && dl.getTime() < Date.now() - 86400000) {
+        // Defensive check
+        return null;
+      }
       const daysLeft = (dl.getTime() - Date.now()) / (1000 * 3600 * 24);
       if (daysLeft > 0 && daysLeft <= 14) deadlineScore = 3;
       else if (daysLeft > 14) deadlineScore = 2;
@@ -257,7 +304,10 @@ export class RecommendationScorer {
     if (!opportunity.stipend && !opportunity.salary && opportunity.fundingType === 'UNPAID') {
       softPenalties += 3;
     }
-    if (!opportunity.deadline) {
+    if (
+      !opportunity.deadline &&
+      !(di && ['ROLLING', 'ONGOING', 'IMMEDIATE', 'UNTIL_FILLED'].includes(di.type))
+    ) {
       softPenalties += 1;
     }
     if (snapshot.preferences.womenOnly && !isWomenFocused) {
