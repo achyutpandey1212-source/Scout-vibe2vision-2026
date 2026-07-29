@@ -7,6 +7,7 @@ import { Typography } from '../ui';
 import { useRouter } from 'next/navigation';
 import { ROUTES } from '@/lib/constants/routes';
 import { opportunitiesApi, Opportunity } from '@/lib/api';
+import { formatDateFromAPI } from '@/lib/utils';
 
 interface SpotlightSearchProps {
   isOpen: boolean;
@@ -142,7 +143,7 @@ export const SpotlightSearch: React.FC<SpotlightSearchProps> = ({ isOpen, onClos
                           variant="caption"
                           className="text-[10px] text-secondary/70 truncate"
                         >
-                          {opp.organization} • {opp.deadline || 'Flexible'}
+                          {opp.organization} • {formatDateFromAPI(opp.deadline) || 'Flexible'}
                         </Typography>
                       </div>
                       <div className="shrink-0 flex items-center gap-1.5 bg-primary/5 border border-primary/10 px-2 py-0.5 rounded-full">

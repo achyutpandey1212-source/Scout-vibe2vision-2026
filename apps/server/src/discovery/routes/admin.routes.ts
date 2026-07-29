@@ -153,10 +153,92 @@ router.post('/jobs/trigger', verifyAdminSession, (req, res: Response) => {
  * Admin User Management Routes
  */
 import { AdminUserController } from '../../modules/admin/controllers/admin-user.controller';
+import { parseDeadline } from '../extraction/utils/deadline-parser';
+import { OpportunityModel } from '../extraction/models/opportunity.model';
 
 router.get('/users', verifyAdminSession, AdminUserController.listUsers);
 router.get('/users/:id', verifyAdminSession, AdminUserController.getUserDetails);
 router.delete('/users/:id', verifyAdminSession, AdminUserController.deleteUser);
+
+/**
+ * POST /api/admin/backfill-deadlines
+ * Recomputes deadline intelligence for all existing opportunities
+ */
+router.post('/backfill-deadlines', verifyAdminSession, async (req, res: Response) => {
+  try {
+    const totalCount = await OpportunityModel.countDocuments();
+    let processed = 0;
+    let updated = 0;
+    const skipped = 0;
+    let failed = 0;
+    const batchSize = 50;
+
+    console.log(`[Admin Backfill] Starting deadline intelligence backfill for ${totalCount} documents...`);
+
+    while (processed < totalCount) {
+      const docs = await OpportunityModel.find()
+        .skip(processed)
+        .limit(batchSize);
+
+      if (docs.length === 0) break;
+
+      const bulkOps = [];
+
+      for (const doc of docs) {
+        try {
+          const deadlineText = doc.deadline || null;
+          const deadlineIntel = parseDeadline(deadlineText);
+
+          bulkOps.push({
+            updateOne: {
+              filter: { _id: doc._id },
+              update: {
+                $set: {
+                  deadlineIntelligence: {
+                    rawText: deadlineText,
+                    type: deadlineIntel.type,
+                    normalizedDate: deadlineIntel.normalizedDate,
+                    timezone: deadlineIntel.timezone,
+                    confidence: deadlineIntel.confidence,
+                    daysRemaining: deadlineIntel.daysRemaining,
+                    expired: deadlineIntel.expired,
+                    displayLabel: deadlineIntel.displayLabel,
+                  }
+                }
+              }
+            }
+          });
+          updated++;
+        } catch (err: any) {
+          failed++;
+          console.error(`[Admin Backfill] Error parsing doc ${doc._id}: ${err.message}`);
+        }
+      }
+
+      if (bulkOps.length > 0) {
+        await OpportunityModel.bulkWrite(bulkOps);
+      }
+
+      processed += docs.length;
+      console.log(`[Admin Backfill] Processed ${processed} / ${totalCount}`);
+    }
+
+    console.log(`[Admin Backfill] Completed. Total: ${processed}, Updated: ${updated}, Failed: ${failed}, Skipped: ${skipped}`);
+
+    return res.json({
+      success: true,
+      data: {
+        total: processed,
+        updated,
+        skipped,
+        failed
+      }
+    });
+  } catch (error: any) {
+    console.error(`[Admin Backfill] Critical failure: ${error.message}`);
+    return res.status(500).json({ success: false, error: { message: error.message } });
+  }
+});
 
 export const adminRouter = router;
 export default adminRouter;

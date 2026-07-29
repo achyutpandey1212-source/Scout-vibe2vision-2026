@@ -13,6 +13,14 @@ export interface OpportunityCardProps {
   title: string;
   organization: string;
   deadline?: string;
+  deadlineIntelligence?: {
+    rawText: string | null;
+    type: string;
+    normalizedDate: string | null;
+    daysRemaining: number | null;
+    expired: boolean;
+    displayLabel: string;
+  } | null;
   description?: string;
   tags?: string[];
   sourceDomain?: string;
@@ -38,6 +46,7 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
   title,
   organization,
   deadline,
+  deadlineIntelligence,
   description,
   tags = [],
   matchScore,
@@ -145,6 +154,7 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
               isRemote={isRemote}
               stipend={stipend}
               deadline={deadline}
+              deadlineIntelligence={deadlineIntelligence}
             />
           </div>
 
@@ -306,6 +316,7 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
             isRemote={isRemote}
             stipend={stipend}
             deadline={deadline}
+            deadlineIntelligence={deadlineIntelligence}
           />
         </CardContent>
       </div>

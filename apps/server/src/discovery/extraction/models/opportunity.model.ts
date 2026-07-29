@@ -125,7 +125,6 @@ const OpportunitySchema = new Schema<IOpportunity>(
         expired: { type: Boolean, default: false },
         displayLabel: { type: String, default: 'Deadline Unknown' },
       },
-      default: null,
     },
 
     intelligence: {
@@ -167,7 +166,6 @@ const OpportunitySchema = new Schema<IOpportunity>(
           qualityFactors: { type: Map, of: Number, default: {} },
         },
       },
-      default: null,
     },
 
     canonicalId: { type: String, default: null },

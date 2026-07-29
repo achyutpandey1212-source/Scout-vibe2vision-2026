@@ -31,6 +31,7 @@ import { opportunitiesApi, recommendationsApi, bookmarksApi, Opportunity } from 
 import { track } from '@/lib/analytics';
 import { useScrollDepth } from '@/hooks/useScrollDepth';
 import { getPlatformFromDomain } from '@scout/shared';
+import { formatDateFromAPI } from '@/lib/utils';
 import Image from 'next/image';
 
 const cleanTruncatedText = (str: string): string => {
@@ -395,7 +396,7 @@ export default function OpportunityDetailsPage() {
                         <span>
                           Deadline:{' '}
                           <strong className="font-medium text-foreground">
-                            {opportunity.deadline || 'Flexible'}
+                            {formatDateFromAPI(opportunity.deadline) || 'Flexible'}
                           </strong>
                         </span>
                       </div>
