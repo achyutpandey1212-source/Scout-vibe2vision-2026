@@ -70,15 +70,27 @@ export default function DashboardPage() {
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
   const [isCapacityExhausted, setIsCapacityExhausted] = useState(false);
 
+  // New opportunities state
+  const [newOppsData, setNewOppsData] = useState<{
+    count: number | null;
+    lastVisitedAt: string | null;
+    latestOpportunityAt: string | null;
+  }>({ count: null, lastVisitedAt: null, latestOpportunityAt: null });
+
+  // Recent opportunities state
+  const [recentOpps, setRecentOpps] = useState<any[]>([]);
+
   // Automatic retry ref
   const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const loadDashboardData = async (retryCount = 0) => {
     try {
-      const [recRes, bookmarkRes, profileRes] = await Promise.all([
+      const [recRes, bookmarkRes, profileRes, newRes, recentRes] = await Promise.all([
         recommendationsApi.list(),
         bookmarksApi.list(),
         profileApi.getV2(),
+        opportunitiesApi.newOpportunities(),
+        opportunitiesApi.listRecent(),
       ]);
 
       if (profileRes.data?.success && profileRes.data.data?.profile?.fullName) {
@@ -87,6 +99,14 @@ export default function DashboardPage() {
         if (typeof window !== 'undefined') {
           localStorage.setItem('scout_v2_profile_name', name);
         }
+      }
+
+      if (newRes.data?.success) {
+        setNewOppsData(newRes.data.data);
+      }
+
+      if (recentRes.data?.success) {
+        setRecentOpps(recentRes.data.data || []);
       }
 
       if (recRes.data?.status === 'AI_CAPACITY_EXHAUSTED') {
@@ -244,28 +264,6 @@ export default function DashboardPage() {
 
   const userNameDisplay = profileName || user?.name || user?.displayName || 'Student';
 
-  // New opportunities state
-  const [newOppsData, setNewOppsData] = useState<{
-    count: number | null;
-    lastVisitedAt: string | null;
-    latestOpportunityAt: string | null;
-  }>({ count: null, lastVisitedAt: null, latestOpportunityAt: null });
-
-  const fetchNewOpportunities = async () => {
-    try {
-      const res = await opportunitiesApi.newOpportunities();
-      if (res.data?.success) {
-        setNewOppsData(res.data.data);
-      }
-    } catch (err) {
-      console.error('Failed to retrieve new opportunities count:', err);
-    }
-  };
-
-  useEffect(() => {
-    fetchNewOpportunities();
-  }, []);
-
   return (
     <ProtectedRoute>
       <DashboardLayout>
@@ -347,6 +345,105 @@ export default function DashboardPage() {
               <div className="space-y-12">
                 {/* 1. TODAY'S MISSION CARD */}
                 <TodaysMissionCard userName={userNameDisplay} matchCount={recommendations.length} />
+
+                {/* 1.5 RECENTLY ADDED FEED STRIP */}
+                <section className="space-y-4 overflow-hidden">
+                  <SectionHeader
+                    title="Recently Added"
+                    description="Fresh opportunities discovered by Scout."
+                  />
+
+                  {recentOpps.length === 0 ? (
+                    <div className="p-6 border border-border/80 bg-card rounded-2xl text-center text-xs text-muted-foreground">
+                      Scout is preparing new discoveries. Check back soon.
+                    </div>
+                  ) : (
+                    <div className="flex gap-4 overflow-x-auto pb-4 pt-1 snap-x no-scrollbar scroll-smooth">
+                      {recentOpps.map((opp) => {
+                        const platform = (() => {
+                          if (opp.sourceDomain?.includes('internshala.com'))
+                            return { name: 'Internshala', logo: '/Sources/Internshala.svg' };
+                          if (opp.sourceDomain?.includes('unstop.com'))
+                            return { name: 'Unstop', logo: '/Sources/Unstop.svg' };
+                          if (opp.sourceDomain?.includes('linkedin.com'))
+                            return { name: 'LinkedIn', logo: '/Sources/Linkedin.svg' };
+                          if (opp.sourceDomain?.includes('indeed.com'))
+                            return { name: 'Indeed', logo: '/Sources/Indeed.svg' };
+                          if (opp.sourceDomain?.includes('glassdoor.com'))
+                            return { name: 'Glassdoor', logo: '/Sources/Glassdoor.svg' };
+                          if (opp.sourceDomain?.includes('google.com'))
+                            return { name: 'Google Careers', logo: '/Sources/Google.svg' };
+                          return { name: 'External Portal', logo: null };
+                        })();
+
+                        const addedText = (() => {
+                          const diffMs = Date.now() - new Date(opp.createdAt).getTime();
+                          const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+                          if (diffHrs < 1) return 'Just Now';
+                          if (diffHrs < 24) return `${diffHrs}h ago`;
+                          const diffDays = Math.floor(diffHrs / 24);
+                          if (diffDays === 1) return 'Yesterday';
+                          return `${diffDays} days ago`;
+                        })();
+
+                        return (
+                          <div
+                            key={opp._id}
+                            onClick={() => handleCardClick(opp._id)}
+                            className="w-[280px] shrink-0 snap-start border border-border/60 bg-card hover:border-primary/40 hover:-translate-y-0.5 rounded-2xl p-4 flex flex-col justify-between cursor-pointer transition-all duration-150 shadow-sm"
+                          >
+                            <div className="space-y-3">
+                              {/* Source Platform branding */}
+                              <div className="flex justify-between items-center gap-2">
+                                <span className="text-[10px] uppercase font-semibold text-muted-foreground/60 tracking-wider truncate">
+                                  {platform.name}
+                                </span>
+                                {platform.logo ? (
+                                  <img
+                                    src={platform.logo}
+                                    alt={platform.name}
+                                    width={14}
+                                    height={14}
+                                    className="rounded-sm shrink-0"
+                                  />
+                                ) : (
+                                  <span className="text-xs shrink-0">🌐</span>
+                                )}
+                              </div>
+
+                              <div className="space-y-1">
+                                <span className="text-[10px] text-muted-foreground/85 block truncate">
+                                  {opp.organization}
+                                </span>
+                                <h4 className="text-xs font-semibold leading-snug line-clamp-2 text-foreground hover:text-primary transition-colors">
+                                  {opp.title}
+                                </h4>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-2 pt-4 border-t border-border/30 mt-3 text-[10px] text-muted-foreground/75 font-light">
+                              <span className="bg-muted px-2 py-0.5 rounded-md text-[9px] font-semibold text-secondary-foreground uppercase">
+                                {opp.opportunityType}
+                              </span>
+                              <span>Added {addedText}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* View More Card */}
+                      <div
+                        onClick={() => router.push('/explore?sortBy=newest')}
+                        className="w-[180px] shrink-0 snap-start border border-dashed border-border/80 bg-card hover:bg-muted/30 rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all duration-150"
+                      >
+                        <span className="text-xs text-primary font-medium flex items-center gap-1">
+                          <span>View all</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </section>
 
                 {/* 2. FEATURED RECOMMENDATION (Today's Best Match) */}
                 {featuredOpp && (

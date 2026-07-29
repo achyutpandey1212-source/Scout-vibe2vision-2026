@@ -60,6 +60,7 @@ export const opportunitiesApi = {
   getById: (id: string) => api.get(`/api/v1/opportunities/${id}`),
   counts: (params?: { platform?: string }) => api.get('/api/v1/opportunities/counts', { params }),
   newOpportunities: () => api.get('/api/v1/dashboard/new-opportunities'),
+  listRecent: () => api.get('/api/v1/opportunities/recent-opportunities'),
 };
 
 export const recommendationsApi = {

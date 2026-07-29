@@ -140,21 +140,6 @@ router.get('/counts', requireAuth, async (_req: AuthenticatedRequest, res: Respo
   }
 });
 
-router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const opportunity = await OpportunityModel.findById(req.params.id);
-    if (!opportunity) {
-      return res.status(404).json({ success: false, error: { message: 'Opportunity not found' } });
-    }
-    return res.json({ success: true, data: opportunity });
-  } catch (error) {
-    console.error('Opportunity details API error:', error);
-    return res
-      .status(500)
-      .json({ success: false, error: { message: 'Failed to retrieve opportunity' } });
-  }
-});
-
 router.get('/new-opportunities', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.dbUser) {
@@ -205,6 +190,57 @@ router.get('/new-opportunities', requireAuth, async (req: AuthenticatedRequest, 
     return res
       .status(500)
       .json({ success: false, error: { message: 'Failed to retrieve new opportunities count' } });
+  }
+});
+
+router.get(
+  '/recent-opportunities',
+  requireAuth,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const query = {
+        status: 'ACTIVE',
+        visibility: 'PUBLIC',
+        'intelligence.expired': { $ne: true },
+        archived: { $ne: true },
+      };
+
+      const opportunities = await OpportunityModel.find(query)
+        .sort({ createdAt: -1 })
+        .limit(8)
+        .select(
+          'title organization opportunityType workMode sourceDomain createdAt deadlineIntelligence trustLevel hiddenGemScore',
+        )
+        .lean();
+
+      // Cache-Control: Cache locally for 30s, shared cache for 60s, background revalidation
+      res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=30');
+
+      return res.json({
+        success: true,
+        data: opportunities,
+      });
+    } catch (error) {
+      console.error('Recent opportunities API error:', error);
+      return res
+        .status(500)
+        .json({ success: false, error: { message: 'Failed to retrieve recent opportunities' } });
+    }
+  },
+);
+
+router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const opportunity = await OpportunityModel.findById(req.params.id);
+    if (!opportunity) {
+      return res.status(404).json({ success: false, error: { message: 'Opportunity not found' } });
+    }
+    return res.json({ success: true, data: opportunity });
+  } catch (error) {
+    console.error('Opportunity details API error:', error);
+    return res
+      .status(500)
+      .json({ success: false, error: { message: 'Failed to retrieve opportunity' } });
   }
 });
 
