@@ -13,7 +13,7 @@ const router = Router();
 
 // ─── Dev-only protection ─────────────────────────────────────────────────────
 router.use((_req, res, next) => {
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.NODE_ENV === 'production' && !_req.method.startsWith('GET')) {
     return res.status(403).json({
       success: false,
       error: { message: 'Source Registry management is restricted in production.' },

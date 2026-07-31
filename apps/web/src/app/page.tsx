@@ -81,8 +81,10 @@ export default function Home() {
         // Live totals are progressive enhancement; the landing page remains useful without them.
       }
     };
+
+    if (loading) return;
     fetchLiveStats();
-  }, []);
+  }, [loading]);
 
   const handleSplashComplete = () => {
     sessionStorage.setItem('scout-splash-played', 'true');
@@ -250,7 +252,7 @@ export default function Home() {
           <Grid cols={1} colsSm={3} gap="lg" className="max-w-3xl mx-auto text-center">
             <div className="p-6 rounded-2xl bg-card border border-border/80 space-y-2">
               <span className="text-3xl md:text-5xl font-mono font-medium text-foreground block">
-                {liveOpportunityCount ? `${liveOpportunityCount}+` : '172+'}
+                {liveOpportunityCount ? `${liveOpportunityCount}+` : '300+'}
               </span>
               <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium block">
                 Live Opportunities
